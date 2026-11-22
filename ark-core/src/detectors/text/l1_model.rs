@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! The optional L1 model of one analysis module: a text category model
-//! ([`CategoryModel`], K26 or fastText-type form) loaded once from a
-//! sha256-pinned release directory and run on the facts of a text. Off unless
-//! configured; no model ships with the runtime.
+//! ([`CategoryModel`], K26 or fastText-type form) loaded once, either built
+//! into Core by name ([`BUILTIN_L1_MODELS`], no download) or from a
+//! sha256-pinned release directory, and run on the facts of a text. Off
+//! unless configured.
 //!
 //! Bundle layout: `manifest.json` (sha256 of every file, itself pinned by
 //! [`L1ModelConfig::manifest_sha256`]), `config.json` (`{"model_file": ...}`)
@@ -25,14 +26,68 @@ use crate::{LayerResult, SecurityCategory};
 /// `layer_type` of the layer an [`L1ModelOutcome`] reports.
 pub const L1_MODEL_LAYER: &str = "l1_model";
 
-/// Where a module's L1 model is and which cuts it runs at.
+/// The L1 models built into Core, by name (the threat class), with the
+/// module each belongs to: packed fastText-type models
+/// ([`CategoryModel::from_packed`]) calibrated at 0.1 % (detect) and 1 %
+/// (clear) false positives on benign German and English text.
+pub const BUILTIN_L1_MODELS: &[(&str, SecurityCategory)] = &[
+    ("instruction_injection", SecurityCategory::Injection),
+    ("jailbreak", SecurityCategory::Jailbreak),
+    ("prompt_extraction", SecurityCategory::PromptExtraction),
+    ("tool_poisoning", SecurityCategory::ToolPoisoning),
+    (
+        "agent_config_tampering",
+        SecurityCategory::AgentConfigTampering,
+    ),
+    ("memory_poisoning", SecurityCategory::MemoryPoisoning),
+    ("exfiltration", SecurityCategory::Exfiltration),
+    ("unsafe_action", SecurityCategory::UnsafeAction),
+    ("resource_exhaustion", SecurityCategory::ResourceExhaustion),
+    ("harmful_content", SecurityCategory::HarmfulContent),
+    ("toxic_language", SecurityCategory::ToxicLanguage),
+];
+
+/// The packed bytes of a built-in model.
+fn builtin_bytes(name: &str) -> Option<&'static [u8]> {
+    macro_rules! packed {
+        ($($name:literal),*) => {
+            match name {
+                $($name => Some(include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"), "/models/l1/", $name, ".ftpack"
+                )).as_slice()),)*
+                _ => None,
+            }
+        };
+    }
+    packed!(
+        "instruction_injection",
+        "jailbreak",
+        "prompt_extraction",
+        "tool_poisoning",
+        "agent_config_tampering",
+        "memory_poisoning",
+        "exfiltration",
+        "unsafe_action",
+        "resource_exhaustion",
+        "harmful_content",
+        "toxic_language"
+    )
+}
+
+/// Where a module's L1 model is and which cuts it runs at: a built-in model
+/// (`builtin`) or a pinned release (`bundle_dir` with `manifest_sha256`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct L1ModelConfig {
+    /// Name of a model built into Core ([`BUILTIN_L1_MODELS`]) of the module.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub builtin: Option<String>,
     /// The downloaded model release directory.
-    pub bundle_dir: PathBuf,
-    /// sha256 of the bundle's `manifest.json`.
-    pub manifest_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bundle_dir: Option<PathBuf>,
+    /// sha256 of the bundle's `manifest.json`; required with `bundle_dir`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest_sha256: Option<String>,
     /// Detect cut on the decision score; default: the model's `0_1pct_fpr` cut.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detect_threshold: Option<f64>,
@@ -53,11 +108,58 @@ impl L1ModelConfig {
     /// The release in `bundle_dir` pinned by `manifest_sha256`, at the model's own cuts.
     pub fn new(bundle_dir: impl Into<PathBuf>, manifest_sha256: impl Into<String>) -> Self {
         Self {
-            bundle_dir: bundle_dir.into(),
-            manifest_sha256: manifest_sha256.into(),
+            builtin: None,
+            bundle_dir: Some(bundle_dir.into()),
+            manifest_sha256: Some(manifest_sha256.into()),
             detect_threshold: None,
             clear_threshold: None,
             clear_enabled: true,
+        }
+    }
+
+    /// The built-in model `name`, at its own cuts.
+    pub fn builtin(name: impl Into<String>) -> Self {
+        Self {
+            builtin: Some(name.into()),
+            bundle_dir: None,
+            manifest_sha256: None,
+            detect_threshold: None,
+            clear_threshold: None,
+            clear_enabled: true,
+        }
+    }
+
+    /// The model of `category`'s module this config names.
+    fn model(&self, category: SecurityCategory) -> Result<CategoryModel, String> {
+        match (&self.builtin, &self.bundle_dir, &self.manifest_sha256) {
+            (Some(name), None, None) => {
+                let module = BUILTIN_L1_MODELS
+                    .iter()
+                    .find(|(builtin, _)| builtin == name)
+                    .map(|(_, module)| *module);
+                let bytes = builtin_bytes(name).filter(|_| module.is_some());
+                match (module, bytes) {
+                    (Some(module), Some(bytes)) if module == category => {
+                        CategoryModel::from_packed(bytes)
+                    }
+                    (Some(module), Some(_)) => Err(format!(
+                        "built-in L1 model {name} belongs to the {} module, not {}",
+                        module.as_str(),
+                        category.as_str()
+                    )),
+                    _ => Err(format!("unknown built-in L1 model {name}")),
+                }
+            }
+            (None, Some(dir), Some(pin)) => {
+                let bundle = VerifiedBundle::open(dir, Some(pin))?;
+                let files: BundleConfig = serde_json::from_slice(&bundle.read("config.json")?)
+                    .map_err(|error| format!("invalid config.json: {error}"))?;
+                CategoryModel::from_json_slice(&bundle.read(&files.model_file)?)
+            }
+            _ => Err(format!(
+                "{} L1 model: set either builtin or bundle_dir with manifest_sha256",
+                category.as_str()
+            )),
         }
     }
 }
@@ -75,12 +177,10 @@ pub struct L1TextModel {
 }
 
 impl L1TextModel {
-    /// Load and verify the bundle of `config` for `category`'s module.
+    /// Load the built-in model or verify and load the bundle of `config`
+    /// for `category`'s module.
     pub fn load(category: SecurityCategory, config: &L1ModelConfig) -> Result<Self, String> {
-        let bundle = VerifiedBundle::open(&config.bundle_dir, Some(&config.manifest_sha256))?;
-        let files: BundleConfig = serde_json::from_slice(&bundle.read("config.json")?)
-            .map_err(|error| format!("invalid config.json: {error}"))?;
-        let model = CategoryModel::from_json_slice(&bundle.read(&files.model_file)?)?;
+        let model = config.model(category)?;
         let own = model.thresholds();
         let thresholds = L1Thresholds {
             detect_threshold: config.detect_threshold.unwrap_or(own.detect_threshold),
@@ -237,11 +337,11 @@ pub(crate) mod tests {
         assert_eq!(outcome.outcome, own.outcome(outcome.score));
         assert_eq!(outcome.model, "synthetic-text-tf1");
         let wrong_pin = L1ModelConfig {
-            manifest_sha256: "0".repeat(64),
+            manifest_sha256: Some("0".repeat(64)),
             ..config.clone()
         };
         assert!(L1TextModel::load(SecurityCategory::Injection, &wrong_pin).is_err());
-        std::fs::remove_dir_all(&config.bundle_dir).ok();
+        std::fs::remove_dir_all(config.bundle_dir.as_ref().unwrap()).ok();
     }
 
     #[test]
@@ -273,7 +373,7 @@ pub(crate) mod tests {
             let outcome = model.evaluate(TEXT, &[], &[]);
             assert_eq!(outcome.outcome, own.outcome(outcome.score));
             assert_eq!(outcome.category, category);
-            std::fs::remove_dir_all(&config.bundle_dir).ok();
+            std::fs::remove_dir_all(config.bundle_dir.as_ref().unwrap()).ok();
         }
     }
 
@@ -325,7 +425,49 @@ pub(crate) mod tests {
             ..config.clone()
         };
         assert!(L1TextModel::load(SecurityCategory::Jailbreak, &inverted).is_err());
-        std::fs::remove_dir_all(&config.bundle_dir).ok();
+        std::fs::remove_dir_all(config.bundle_dir.as_ref().unwrap()).ok();
+    }
+
+    #[test]
+    fn every_builtin_model_loads_by_name_for_its_module() {
+        for &(name, module) in BUILTIN_L1_MODELS {
+            let model = L1TextModel::load(module, &L1ModelConfig::builtin(name))
+                .unwrap_or_else(|error| panic!("{name}: {error}"));
+            let cuts = model.thresholds();
+            assert!(cuts
+                .clear_threshold
+                .is_some_and(|clear| clear <= cuts.detect_threshold));
+            let outcome = model.evaluate(TEXT, &[], &[]);
+            assert!(outcome.score.is_finite(), "{name}");
+            assert_eq!(outcome.category, module);
+            assert!(outcome.model.contains(name), "{name}: {}", outcome.model);
+        }
+    }
+
+    #[test]
+    fn a_builtin_model_answers_only_its_own_module_and_known_names() {
+        let wrong_module = L1TextModel::load(
+            SecurityCategory::Injection,
+            &L1ModelConfig::builtin("jailbreak"),
+        );
+        assert!(wrong_module.is_err_and(|error| error.contains("jailbreak module")));
+        let unknown = L1TextModel::load(
+            SecurityCategory::Injection,
+            &L1ModelConfig::builtin("injection"),
+        );
+        assert!(unknown.is_err_and(|error| error.contains("unknown built-in")));
+        // A built-in name and a bundle at once, or neither, is refused.
+        let both = L1ModelConfig {
+            builtin: Some("jailbreak".into()),
+            ..L1ModelConfig::new("m", "ab")
+        };
+        let neither = L1ModelConfig {
+            bundle_dir: None,
+            ..L1ModelConfig::new("m", "ab")
+        };
+        for config in [both, neither] {
+            assert!(L1TextModel::load(SecurityCategory::Jailbreak, &config).is_err());
+        }
     }
 
     #[test]
@@ -333,7 +475,12 @@ pub(crate) mod tests {
         let config: L1ModelConfig =
             serde_json::from_str(r#"{"bundle_dir":"m","manifest_sha256":"ab"}"#).unwrap();
         assert_eq!(config, L1ModelConfig::new("m", "ab"));
-        assert!(serde_json::from_str::<L1ModelConfig>(r#"{"bundle_dir":"m"}"#).is_err());
+        let builtin: L1ModelConfig = serde_json::from_str(r#"{"builtin":"jailbreak"}"#).unwrap();
+        assert_eq!(builtin, L1ModelConfig::builtin("jailbreak"));
+        assert_eq!(
+            serde_json::to_value(&builtin).unwrap(),
+            serde_json::json!({"builtin": "jailbreak", "clear_enabled": true})
+        );
         assert!(serde_json::from_str::<L1ModelConfig>(
             r#"{"bundle_dir":"m","manifest_sha256":"ab","clear":1}"#
         )

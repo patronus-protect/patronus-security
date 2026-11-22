@@ -67,8 +67,7 @@ fn assert_parity(name: &str, model: &CategoryModel, rows: &[Value]) {
             want.to_bits(),
             "{name} {id}: {score} != {want}"
         );
-        let top: Vec<(&str, f64)> =
-            top.iter().map(|f| (f.feature.as_str(), f.weight)).collect();
+        let top: Vec<(&str, f64)> = top.iter().map(|f| (f.feature.as_str(), f.weight)).collect();
         let want: Vec<(&str, f64)> = expected["top"]
             .as_array()
             .expect("top")

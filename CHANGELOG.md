@@ -11,6 +11,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **L1 model config (Rust):** `L1ModelConfig.bundle_dir` and `manifest_sha256` are now
+  `Option`s, next to the new `builtin`; `L1ModelConfig::new(dir, sha256)` still builds a pinned
+  release config, and `L1ModelConfig::builtin(name)` names a model shipped with Ark Core.
 - **Ark Core's keys are set only in the config (Rust):** `SecurityGateway::set_execution_gates`,
   `set_execution_backend`, `set_onnx_runtime_options` and `set_shell_command_policy_config` are
   gone; put the gates (`GatewayConfig::with_gates`), `execution_backend`, `onnx_runtime` and
@@ -296,6 +299,15 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- **Detection change (Ark Core, opt-in):** Ark Core ships an L1 text model for each of the eleven
+  attack classes (`instruction_injection`, `jailbreak`, `prompt_extraction`, `tool_poisoning`,
+  `agent_config_tampering`, `memory_poisoning`, `exfiltration`, `unsafe_action`,
+  `resource_exhaustion`, `harmful_content`, `toxic_language`) in the Rust crate and the Python
+  wheel. `cascade.modules.<category>.l1_model: {"builtin": "<class>"}` runs one on what the
+  module's rules leave open, without a download; full Ark takes the same config. Each model is a
+  compact fastText-type model (256 KiB in memory) calibrated at 0.1 % (detect) and 1 % (clear)
+  false positives on German and English benign text, chat included. Without a cascade, or without
+  `l1_model`, nothing changes.
 - **Detection change:** (`toxic_language`) the category now has its own L1 rules: an insult aimed
   at the addressed person ("you are a …", "du bist ein …"), derogatory or dehumanising statements
   about a protected group, threats of violence in the first person against a person or group, and

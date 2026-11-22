@@ -474,7 +474,7 @@ fn l1_model(name: &str, outcome: Option<StageOutcome>) -> L1TextModel {
         },
     )
     .unwrap();
-    std::fs::remove_dir_all(&config.bundle_dir).ok();
+    std::fs::remove_dir_all(config.bundle_dir.as_ref().unwrap()).ok();
     model
 }
 

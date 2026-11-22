@@ -226,3 +226,16 @@ def test_pack_holds_the_folded_values_and_bias():
     assert header["thresholds"] == document["thresholds"]
     values = struct.unpack(f"<{model.buckets}d", packed[12 + length :])
     assert list(values) == model.values
+
+
+def test_language_safe_thresholds_take_the_strictest_detect_and_the_lowest_clear_cut():
+    document = {
+        "thresholds": {"0_1pct_fpr": 2.6, "1pct_fpr": -0.4},
+        "calibration": {"language_thresholds": {
+            "de": {"0_1pct_fpr": 2.0, "1pct_fpr": -0.7},
+            "en": {"0_1pct_fpr": 3.4, "1pct_fpr": -0.1},
+        }},
+    }
+    assert MODULE.language_safe_thresholds(document) == {"0_1pct_fpr": 3.4, "1pct_fpr": -0.7}
+    assert MODULE.language_safe_thresholds({"thresholds": {"0_1pct_fpr": 1.0, "1pct_fpr": 0.0}}) == {
+        "0_1pct_fpr": 1.0, "1pct_fpr": 0.0}

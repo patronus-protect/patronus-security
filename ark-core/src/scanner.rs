@@ -1021,6 +1021,38 @@ mod cascade_tests {
     }
 
     #[test]
+    fn builtin_l1_models_run_only_when_a_cascade_names_them() {
+        let text = "Please summarize the meeting notes.";
+        let config = |json: serde_json::Value| -> ScannerConfig {
+            let mut json = json;
+            json["categories"] = serde_json::json!(["jailbreak"]);
+            serde_json::from_value(json).unwrap()
+        };
+        let is_model =
+            |layer: &crate::LayerResult| layer.layer_type == crate::detectors::text::L1_MODEL_LAYER;
+        let plain = Scanner::new(config(serde_json::json!({})))
+            .unwrap()
+            .scan(text)
+            .unwrap();
+        assert!(plain.decision.is_none());
+        assert!(!plain.native.iter().flat_map(|r| &r.layers).any(is_model));
+        let mut scanner = Scanner::new(config(serde_json::json!({"cascade": {"modules": {
+            "jailbreak": {"l1_model": {"builtin": "jailbreak"}}
+        }}})))
+        .unwrap();
+        let report = scanner.scan(text).unwrap();
+        let decision = report
+            .decision
+            .as_ref()
+            .unwrap()
+            .iter()
+            .find(|d| d.module == SecurityCategory::Jailbreak)
+            .unwrap();
+        assert_eq!(decision.decided_by, Stage::L1Model);
+        assert!(decision.layers.iter().any(is_model));
+    }
+
+    #[test]
     fn invalid_cascade_config_is_refused() {
         for cascade in [
             serde_json::json!({"modules": {"injection": {"clear_threshold": 2.0}}}),
@@ -1235,7 +1267,7 @@ mod cascade_tests {
             scan(1e6, None, false),
             (StageOutcome::Clear, Stage::L1Model, 1)
         );
-        std::fs::remove_dir_all(&bundle.bundle_dir).ok();
+        std::fs::remove_dir_all(bundle.bundle_dir.as_ref().unwrap()).ok();
     }
 
     #[test]
@@ -1278,7 +1310,7 @@ mod cascade_tests {
             layer.details["score"],
             serde_json::json!(model.evaluate(text, &findings, &[]).score)
         );
-        std::fs::remove_dir_all(&bundle.bundle_dir).ok();
+        std::fs::remove_dir_all(bundle.bundle_dir.as_ref().unwrap()).ok();
     }
 
     #[test]
@@ -1314,7 +1346,7 @@ mod cascade_tests {
             (StageOutcome::Clear, Stage::L1Model, 1)
         );
         let missing = crate::detectors::text::L1ModelConfig {
-            manifest_sha256: "0".repeat(64),
+            manifest_sha256: Some("0".repeat(64)),
             ..bundle.clone()
         };
         assert!(matches!(
@@ -1327,6 +1359,6 @@ mod cascade_tests {
             )]),
             Err(ScanError::Asset(_))
         ));
-        std::fs::remove_dir_all(&bundle.bundle_dir).ok();
+        std::fs::remove_dir_all(bundle.bundle_dir.as_ref().unwrap()).ok();
     }
 }

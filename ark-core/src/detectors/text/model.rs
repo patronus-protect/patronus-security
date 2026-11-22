@@ -41,6 +41,11 @@ impl CategoryModel {
         }
     }
 
+    /// Parse a packed fastText-type model (the built-in model form).
+    pub fn from_packed(bytes: &[u8]) -> Result<Self, String> {
+        FastTextModel::from_packed(bytes, TEXT_MODEL).map(Self::FastText)
+    }
+
     /// Model name recorded in `model.json`.
     pub fn name(&self) -> &str {
         match self {

@@ -169,8 +169,9 @@ producers are switched off with the existing `models` gate (for example
     "modules": {
       "injection": {
         "clear_threshold": 0.05,
-        "l1_model": {"bundle_dir": "/srv/models/injection-l1", "manifest_sha256": "…"}
+        "l1_model": {"builtin": "instruction_injection"}
       },
+      "jailbreak": {"l1_model": {"bundle_dir": "/srv/models/jailbreak-l1", "manifest_sha256": "…"}},
       "exfiltration": {"detect_threshold": 0.3, "clear_threshold": 0.02}
     }
   }
@@ -184,6 +185,7 @@ producers are switched off with the existing `models` gate (for example
 | `conditional` | [Conditional gates](../reference/configuration.md#conditional-gates) for L2 and L3, over the L1 results of every scanned module. Only `result` conditions: Core scans carry no request metadata, so `metadata` conditions are refused. | none |
 | `cascade.modules.<category>.detect_threshold` | The heuristic's detect cut on its rule scorer's probability (`0.0`–`1.0`): for `injection` (and the classes its rules feed) the injection scorer's candidate score; for the threat classes the document scorer's own probability (recomputed from `details.matched_rules`), not the points score; for PII and DLP the result's confidence. A score at or above it is detected when the category's mode (`<category>_mode`) admits it. A threat points rule accepted on its own, with evidence left after the mode floor, is detected regardless. | the scorer's calibrated point |
 | `cascade.modules.<category>.clear_threshold` | The heuristic's clear cut on the same score; an undetected score below it is clear. Not above `detect_threshold`. | off |
+| `cascade.modules.<category>.l1_model.builtin` | A model shipped with Ark Core, by name; nothing is downloaded. One per module: `instruction_injection` (module `injection`), `jailbreak`, `prompt_extraction`, `tool_poisoning`, `agent_config_tampering`, `memory_poisoning`, `exfiltration`, `unsafe_action`, `resource_exhaustion`, `harmful_content`, `toxic_language` (module of the same name). Each is a compact fastText-type text model (256 KiB) with cuts at 0.1 % (detect) and 1 % (clear) false positives on German and English benign text. Set either `builtin` or `bundle_dir`. | no model |
 | `cascade.modules.<category>.l1_model.bundle_dir` | The L1 model release directory (`manifest.json`, `config.json`, the model file), loaded once when the scanner is created. | no model |
 | `cascade.modules.<category>.l1_model.manifest_sha256` | sha256 of the release's `manifest.json`; required with `bundle_dir`. | — |
 | `cascade.modules.<category>.l1_model.detect_threshold` | The model's detect cut on its score; a score above it is detected. | the model's 0.1 % false-positive cut |
