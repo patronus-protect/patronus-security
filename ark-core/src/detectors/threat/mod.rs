@@ -3561,6 +3561,30 @@ mod tests {
     }
 
     #[test]
+    fn toxic_lexicon_rules_drop_a_negating_subject_in_the_clause() {
+        // "Nobody thinks you are an idiot" denies the insult; a negating
+        // subject without a verb of saying or believing does not.
+        for text in [
+            "Nobody here thinks you are an idiot, the question was fair.",
+            "No one in this team believes you are a moron.",
+            "Niemand denkt, du bist ein Trottel.",
+            "Keiner hier sagt, ihr seid Idioten.",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
+        }
+        for text in [
+            "Nobody likes you, you are an idiot.",
+            "Niemand mag dich. Du bist ein Trottel.",
+        ] {
+            assert_eq!(
+                toxic_rules(text),
+                ["ark.threat.tx_insult_addressee"],
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
     fn toxic_threats_and_harassment_bind_the_verb_to_its_target() {
         for (text, rule) in [
             ("I will kill you.", "ark.threat.tx_threat"),
