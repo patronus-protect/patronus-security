@@ -653,6 +653,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `--baseline-rows` also trains a baseline on some of the `--rows` files and sets its cuts on the
   same held-out texts, so two training setups are compared on one pool.
   **Detection change:** none; no text model is enabled yet.
+- An optional text model for the `prompt_extraction` category: the compact fastText-type model, which
+  stays within about 4 ms per 100 KiB, while the TF-IDF variants are slower or larger. It finds
+  far more requests for a guarded password or secret than the rules and open heuristic baselines,
+  but it still reacts to the topic and flags defensive system prompts, security documentation and
+  password help, and it finds no German requests yet. It runs only when a cascade configures it for
+  the category. New test cases cover requests for a guarded password or secret word in German and
+  English next to their harmless look-alikes.
+  **Detection change:** none; no text model is enabled and the rules are unchanged.
 - `scripts/l1_threat/ablation.py calibrate` accepts `--rows` more than once, so a text model can
   train on several sources at once: every file is split by the same hash of the row id, one half
   trains and the other half sets the cuts. A jailbreak model trained this way on two sources and

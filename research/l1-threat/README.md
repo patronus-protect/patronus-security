@@ -325,6 +325,13 @@ ganz (TPR 0–0,8 %). Die Kalibrierung ersetzt nicht die Wahl je Klasse (JB02, P
 kalibriert ihren Gewinner mit `calibrate` auf ihrem Split. Die Auswahlregel der Ablation rechnet weiter mit 1 ms
 je 100 KiB zusätzlich; mit der Owner-Freigabe von ~4 ms wäre `FT` dort wählbar — das ändert der Owner.
 
+**Stand PX02.** Prompt-Extraction-Scorer gewählt (`scoreboard/prompt-extraction-scorer.md`): `FT` im S11-Setup,
+TPR@0,1 % auf den Kalibrierzeilen 99,4 (beste Heuristik auf Dev 3,6, ATR), `gandalf` 62,1 bei gematchter 0,1-%-FPR
+(ATR 22,8), p95 ~4,05 ms je 100 KiB; `B4` (99,8, ~15 ms) und `B1` (99,7, 7 MB) liegen über dem Budget. Nicht
+verdrahtet (nur über `cascade.modules.prompt_extraction.l1_model`); die PX01-Regeln bleiben die präzise Schicht.
+Offen: Dev-Positive sind zu 99,6 % Mosscap, das Modell lernt das Thema — auf den Goldens 18/30 englische Hard
+Negatives (Abwehr-Prompts, Doku, Testcode, Passworthilfe) am Detect-Schnitt, 0 deutsche Positive.
+
 **Stand JB02.** Jailbreak-Scorer gewählt (`scoreboard/jailbreak-scorer.md`): `ablation.py calibrate` nimmt
 `--rows` mehrfach, jede Datei teilt sich über denselben Hash in Trainings- und Kalibrierhälfte (seit S11 je Template, s. u.). Mit
 `--rows train_dev --rows generated` trainiert der fastText-Kandidat neben WildJailbreak (einzige native
