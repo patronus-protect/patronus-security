@@ -372,7 +372,7 @@ impl ThreatPipeline {
                         continue;
                     }
                     if category == SecurityCategory::ToxicLanguage
-                        && !toxic_holds(&compiled.rule.id, &captures)
+                        && !toxic_holds(&compiled.rule.id, window, &captures)
                     {
                         continue;
                     }
@@ -1005,12 +1005,19 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
 
 /// The hashed lexicon check of a toxic language match: its `lex` words hold
 /// an insult (or, per rule, a dehumanising metaphor, or a violence verb
-/// bound to a target) that no negation before it cancels. Phrase rules have no `lex`.
-fn toxic_holds(rule_id: &str, captures: &regex::Captures<'_>) -> bool {
+/// bound to a target) that no negation before it cancels, and its sentence
+/// does not deny it before the match ("Nobody thinks you are an idiot").
+/// Phrase rules have no `lex`.
+fn toxic_holds(rule_id: &str, window: &str, captures: &regex::Captures<'_>) -> bool {
     use toxic_lexicon::Family;
     let Some(lex) = captures.name("lex").map(|m| m.as_str()) else {
         return true;
     };
+    let m = captures.get(0).unwrap();
+    let from = sentence(window, m.start(), m.end()).as_ptr() as usize - window.as_ptr() as usize;
+    if toxic_lexicon::denied_by_subject(&window[from..m.start()]) {
+        return false;
+    }
     match rule_id {
         "ark.threat.tx_dehumanisation" => toxic_lexicon::contains(lex, Family::Dehumanise),
         "ark.threat.tx_threat" => toxic_lexicon::threatens_target(lex),

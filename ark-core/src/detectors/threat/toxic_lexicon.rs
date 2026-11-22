@@ -138,6 +138,46 @@ pub(super) fn contains(span: &str, family: Family) -> bool {
     })
 }
 
+/// Subjects that deny what follows when a verb of saying or believing comes
+/// after them: "nobody thinks you are …", "niemand sagt, du bist …".
+const DENYING_SUBJECTS: &[&str] = &["nobody", "noone", "niemand", "keiner"];
+const BELIEF_VERBS: &[&str] = &[
+    "think",
+    "thinks",
+    "thought",
+    "believe",
+    "believes",
+    "say",
+    "says",
+    "said",
+    "denkt",
+    "glaubt",
+    "sagt",
+    "meint",
+    "findet",
+    "behauptet",
+];
+
+/// Whether `lead` (the sentence before a match) holds a denying subject
+/// ("nobody", "no one", "niemand", "keiner") followed by a verb of saying or
+/// believing.
+pub(super) fn denied_by_subject(lead: &str) -> bool {
+    let mut subject = false;
+    let mut previous_no = false;
+    for word in lead
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+    {
+        if subject && is_one_of(BELIEF_VERBS, word) {
+            return true;
+        }
+        subject |=
+            is_one_of(DENYING_SUBJECTS, word) || (previous_no && word.eq_ignore_ascii_case("one"));
+        previous_no = word.eq_ignore_ascii_case("no");
+    }
+    false
+}
+
 /// Target words of a threat: the addressed person, a third person or a group.
 const TARGETS: &[&str] = &[
     "you", "him", "her", "them", "y'all", "dich", "euch", "ihn", "sie", "dir",

@@ -20476,9 +20476,9 @@ TOXIC_LANGUAGE_FAMILIES = {
 
 
 def tx(rule: str, language: str, carrier: str, text: str, reason: str | None = None,
-       tags: tuple[str, ...] = ()) -> dict:
+       tags: tuple[str, ...] = (), known_gap: bool = False) -> dict:
     return th("toxic_language", TOXIC_LANGUAGE_FAMILIES[rule], language, carrier, text,
-              tags=tags, rule=f"ark.threat.{rule}", reason=reason)
+              tags=tags, rule=f"ark.threat.{rule}", reason=reason, known_gap=known_gap)
 
 
 TOXIC_LANGUAGE_CASES = [
@@ -20571,29 +20571,31 @@ TOXIC_LANGUAGE_CASES = [
 ]
 
 # Toxic language beyond the rule shapes, the probe set of the scorer choice: a
-# vocative insult without a copula, a separable threat verb, an insult in a
-# web comment or e-mail and leetspeak. The rules leave them to the scorer layer
-# (known gaps); the hard negatives keep the same words in a moderation label
-# task, test code, a review guideline, a negation and an everyday phrase.
+# vocative insult without a copula, an indirect threat, an insult in a web
+# comment or e-mail and leetspeak. The rules leave them to the scorer layer
+# (known gaps); the separable "ich bring dich um" is reported by the
+# harassment phrase. The hard negatives keep the same words in a moderation
+# label task, test code, a review guideline, a negation (also with a denying
+# subject: "nobody here thinks ...") and an everyday phrase.
 TOXIC_SCORER_CASES = [
-    tx("tx_insult_addressee", "en", "chat", "Shut up, you idiot, nobody asked for your opinion."),
+    tx("tx_insult_addressee", "en", "chat", "Shut up, you idiot, nobody asked for your opinion.", known_gap=True),
     tx("tx_insult_addressee", "en", "email", "Re: report\n\nGet lost, moron. Your report is garbage, just like you.",
-       tags=("indirect",)),
+       tags=("indirect",), known_gap=True),
     tx("tx_insult_addressee", "en", "web",
        "<div class=\"comment\">What a clown. People like you should be banned from the internet.</div>",
-       tags=("indirect",)),
-    tx("tx_threat", "en", "chat", "Keep talking and you will end up in the hospital, I promise."),
+       tags=("indirect",), known_gap=True),
+    tx("tx_threat", "en", "chat", "Keep talking and you will end up in the hospital, I promise.", known_gap=True),
     tx("tx_insult_addressee", "en", "log", "2026-11-22 21:04 chat user=902 msg=\"y0u st*pid l0ser, l3arn to r3ad\"",
-       tags=("indirect", "obfuscated")),
-    tx("tx_insult_addressee", "de", "chat", "Halt die Klappe, du Idiot, keiner hat dich gefragt."),
-    tx("tx_threat", "de", "chat", "Ich bring dich um, wenn du das nochmal machst."),
+       tags=("indirect", "obfuscated"), known_gap=True),
+    tx("tx_insult_addressee", "de", "chat", "Halt die Klappe, du Idiot, keiner hat dich gefragt.", known_gap=True),
+    tx("tx_harassment", "de", "chat", "Ich bring dich um, wenn du das nochmal machst."),
     tx("tx_insult_addressee", "de", "web",
        "<div class=\"comment\">Was für ein Clown. Leute wie du gehören aus dem Internet verbannt.</div>",
-       tags=("indirect",)),
+       tags=("indirect",), known_gap=True),
     tx("tx_insult_addressee", "de", "email", "AW: Bericht\n\nVerschwinde, du Versager, dein Bericht ist Müll.",
-       tags=("indirect",)),
+       tags=("indirect",), known_gap=True),
     tx("tx_insult_addressee", "de", "log", "2026-11-22 21:04 chat user=902 msg=\"du d00fer V3rsag3r, l3rn l3sen\"",
-       tags=("indirect", "obfuscated")),
+       tags=("indirect", "obfuscated"), known_gap=True),
     tx("tx_insult_addressee", "en", "document",
        "Label the following comment for the moderation queue as toxic or not toxic: \"shut up, you idiot\".",
        "moderation label task", tags=("meta", "quoted")),
