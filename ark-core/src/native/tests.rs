@@ -134,6 +134,7 @@ fn action_detectors_live_in_their_attack_classes() {
         ["native:threat_l1", "native:injection_rule_catalog"]
     );
     assert_eq!(ids(SecurityCategory::HarmfulContent), ["native:threat_l1"]);
+    assert_eq!(ids(SecurityCategory::ToxicLanguage), ["native:threat_l1"]);
     assert_eq!(
         ids(SecurityCategory::Jailbreak),
         [

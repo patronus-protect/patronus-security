@@ -20,6 +20,7 @@ use super::{
 use crate::{EvaluationResult, EvidenceSpan, SecurityCategory};
 
 pub(crate) mod scorer;
+mod toxic_lexicon;
 
 const RULES: &str = include_str!("rules.json");
 const MAX_FINDINGS: usize = 256;
@@ -367,6 +368,11 @@ impl ThreatPipeline {
                     }
                     if compiled.rule.id.starts_with("ark.threat.ex_")
                         && !exfiltration_holds(&compiled.rule.id, window, &captures)
+                    {
+                        continue;
+                    }
+                    if category == SecurityCategory::ToxicLanguage
+                        && !toxic_holds(&compiled.rule.id, &captures)
                     {
                         continue;
                     }
@@ -811,10 +817,18 @@ fn clause_context(
             && hit.lexicon == "negation_scope"
             && end <= hit.range.start
     };
+    // A toxic language match reads its own negation from its lexicon words
+    // ("you are not an idiot") or right before it; another negation in the
+    // clause ("you idiot, nobody wants you", "dich vermisst keiner") is part
+    // of the abuse.
+    let toxic_negation = |hit: &super::context_lexica::Hit| {
+        category == SecurityCategory::ToxicLanguage && hit.lexicon == "negation_scope"
+    };
     let counts = |hit: &super::context_lexica::Hit| {
         hit.kind == Kind::Counter
             && (category == SecurityCategory::ResourceExhaustion
                 || !hit.lexicon.starts_with("exhaust."))
+            && (category == SecurityCategory::ToxicLanguage || !hit.lexicon.starts_with("toxic."))
             && !own
                 .iter()
                 .any(|own| own.start <= hit.range.start && hit.range.end <= own.end)
@@ -824,6 +838,7 @@ fn clause_context(
             && !secrecy_tail(hit)
             && !restriction_tail(hit)
             && !stored_tail(hit)
+            && !toxic_negation(hit)
     };
     let lead_in_counters = scan.before(text, span).is_some_and(|before| {
         let sibling_item = matches!(
@@ -976,6 +991,23 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
         }
         id if id.starts_with("ark.threat.ac_") => !removed_diff_line(text, start),
         _ => true,
+    }
+}
+
+/// The hashed lexicon check of a toxic language match: its `lex` words hold
+/// an insult (or, per rule, a dehumanising metaphor, or a violence verb with
+/// a target) that no negation before it cancels. Phrase rules have no `lex`.
+fn toxic_holds(rule_id: &str, captures: &regex::Captures<'_>) -> bool {
+    use toxic_lexicon::Family;
+    let Some(lex) = captures.name("lex").map(|m| m.as_str()) else {
+        return true;
+    };
+    match rule_id {
+        "ark.threat.tx_dehumanisation" => toxic_lexicon::contains(lex, Family::Dehumanise),
+        "ark.threat.tx_threat" => {
+            toxic_lexicon::names_target(lex) && toxic_lexicon::contains(lex, Family::ViolenceVerb)
+        }
+        _ => toxic_lexicon::contains(lex, Family::Insult),
     }
 }
 

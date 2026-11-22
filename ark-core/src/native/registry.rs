@@ -350,7 +350,9 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
             add_threat_rules(&mut specs, category);
             add_injection_rules(&mut specs, category);
         }
-        SecurityCategory::HarmfulContent | SecurityCategory::ResourceExhaustion => {
+        SecurityCategory::HarmfulContent
+        | SecurityCategory::ResourceExhaustion
+        | SecurityCategory::ToxicLanguage => {
             add_threat_rules(&mut specs, category);
         }
         _ => {}

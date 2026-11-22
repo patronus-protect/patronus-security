@@ -1,0 +1,42 @@
+# Sources of the hashed toxic_language lexicon (ark-core/src/detectors/threat/toxic_lexicon.json).
+# Built by scripts/l1_threat/toxic_lexicon.py; `build` refuses a term whose source is missing here,
+# has `use: false` or a licence outside ALLOWED_LICENCES. No plaintext term list is committed.
+sources:
+- id: ark_hand_seed
+  kind: hand
+  licence: MIT
+  url: research/l1-threat/categories/toxic_language.md
+  revision: "2026-11-22"
+  note: >-
+    Seed written by hand (TX01): common DE/EN insults, dehumanising animal/vermin/disease metaphors
+    and violence verbs in their inflected forms; no slurs. Kept outside the repository by the runner.
+- id: ldnoobw
+  kind: word_list
+  licence: CC-BY-4.0
+  url: https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words
+  revision: unpinned
+  use: false
+  note: Permissive word list (en, de files); to be pinned to a commit and reviewed per family before use.
+- id: germeval2018_train
+  kind: dataset_contrast
+  licence: CC-BY-4.0
+  url: https://github.com/uds-lsv/GermEval-2018-Data
+  revision: unpinned
+  use: false
+  note: >-
+    Train split would feed `lexicons.py mine`; off because the same repository holds the test split of
+    the holdout, so only the owner may fetch it (README "Herkunft").
+- id: gahd
+  kind: dataset_contrast
+  licence: CC-BY-4.0
+  url: https://github.com/jagol/gahd
+  revision: unpinned
+  use: false
+  note: Licence allows it, but GAHD is a holdout source of toxic_language; never read for the lexicon.
+- id: hatecheck
+  kind: dataset_contrast
+  licence: CC-BY-4.0
+  url: https://github.com/paul-rottger/hatecheck-data
+  revision: unpinned
+  use: false
+  note: Licence allows it, but HateCheck DE/EN is a holdout source of toxic_language; never read for the lexicon.

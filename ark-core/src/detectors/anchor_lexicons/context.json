@@ -1364,5 +1364,113 @@
     "sources": [
       "research/l1-threat/categories/resource_exhaustion.md"
     ]
+  },
+  {
+    "id": "toxic.counter_speech",
+    "kind": "counter",
+    "description": "Gegenrede: eine abwertende Aussage wird zurückgewiesen oder als falsch, rassistisch, Hassrede benannt",
+    "en": [
+      "the claim that",
+      "is false",
+      "is wrong",
+      "is racist",
+      "are racist",
+      "it is wrong to",
+      "fact check*",
+      "fact-check*",
+      "myth",
+      "debunk*",
+      "hate speech"
+    ],
+    "de": [
+      "die behauptung",
+      "ist falsch",
+      "ist rassistisch",
+      "sind rassistisch",
+      "es ist falsch",
+      "faktencheck*",
+      "mythos",
+      "widerleg*",
+      "hassrede"
+    ],
+    "shared": [],
+    "cased": [],
+    "origin": {
+      "the claim that": "hand",
+      "is false": "hand",
+      "is wrong": "hand",
+      "is racist": "hand",
+      "are racist": "hand",
+      "it is wrong to": "hand",
+      "fact check*": "hand",
+      "fact-check*": "hand",
+      "myth": "hand",
+      "debunk*": "hand",
+      "hate speech": "hand",
+      "die behauptung": "hand",
+      "ist falsch": "hand",
+      "ist rassistisch": "hand",
+      "sind rassistisch": "hand",
+      "es ist falsch": "hand",
+      "faktencheck*": "hand",
+      "mythos": "hand",
+      "widerleg*": "hand",
+      "hassrede": "hand"
+    },
+    "sources": [
+      "research/l1-threat/categories/toxic_language.md"
+    ]
+  },
+  {
+    "id": "toxic.moderation",
+    "kind": "counter",
+    "description": "Moderation: Richtlinie, gemeldeter oder gelöschter Beitrag, Sicherheitsleitfaden",
+    "en": [
+      "moderation",
+      "moderator*",
+      "guideline*",
+      "safety guide*",
+      "reported",
+      "removed",
+      "suspended",
+      "report them",
+      "community rules"
+    ],
+    "de": [
+      "moderation*",
+      "richtlinie*",
+      "leitfaden*",
+      "gemeldet",
+      "gelöscht",
+      "geloescht",
+      "gesperrt",
+      "melde sie",
+      "nutzungsregeln"
+    ],
+    "shared": [],
+    "cased": [],
+    "origin": {
+      "moderation": "hand",
+      "moderator*": "hand",
+      "guideline*": "hand",
+      "safety guide*": "hand",
+      "reported": "hand",
+      "removed": "hand",
+      "suspended": "hand",
+      "report them": "hand",
+      "community rules": "hand",
+      "moderation*": "hand",
+      "richtlinie*": "hand",
+      "leitfaden*": "hand",
+      "gemeldet": "hand",
+      "gelöscht": "hand",
+      "geloescht": "hand",
+      "gesperrt": "hand",
+      "melde sie": "hand",
+      "nutzungsregeln": "hand"
+    },
+    "sources": [
+      "research/l1-threat/categories/toxic_language.md"
+    ]
   }
 ]
