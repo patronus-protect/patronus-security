@@ -304,6 +304,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   ships with the scanner; leetspeak and umlaut spellings are folded before the lookup. Counter-speech
   ("the claim that … is false"), moderation guidelines and reports, quoted messages and a negated
   insult ("you are not an idiot") do not report. Before, `toxic_language` found nothing on L1.
+- **Detection change:** (`toxic_language`) a threat reports only when its violence verb has the
+  person as object ("I will kill you", "ich werde dich umbringen"), not when the verb has another
+  object ("I will help you kill the process"); harassment reports only its full phrases ("bring
+  dich um", "häng dich auf"), not everyday requests ("Bring yourself a chair", "ich bring dich auf
+  den neuesten Stand").
 - **Cancel and time out Ark scans:** `scan_all`, `scan_category` and `scan_categories` take
   Ark Core's `ScanControl` as `control=`, as Core's `Scanner.scan` does; Rust has
   `SecurityGateway::scan_with_control`. A cancelled or expired control stops the request and

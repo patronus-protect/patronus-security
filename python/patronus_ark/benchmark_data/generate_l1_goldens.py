@@ -20494,6 +20494,13 @@ TOXIC_LANGUAGE_CASES = [
        tags=("negated",)),
     tx("tx_harassment", "de", "chat", "Bitte bring dich nicht um, ruf heute noch die Telefonseelsorge an.",
        "unterstützende Verneinung", tags=("negated",)),
+    tx("tx_harassment", "en", "chat", "Bring yourself a chair, the meeting starts now.", "everyday request"),
+    tx("tx_harassment", "de", "chat", "Ich bring dich auf den neuesten Stand, bevor der Call beginnt.",
+       "Alltagsbitte"),
+    tx("tx_threat", "en", "chat", "Sure, I will help you kill the process that hangs.",
+       "violence verb with another object"),
+    tx("tx_threat", "de", "chat", "Klar, ich werde dir helfen, den Prozess zu killen, der hängt.",
+       "Gewaltverb mit anderem Objekt"),
 ]
 
 THREAT_CLASS_CASES["toxic_language"] += TOXIC_LANGUAGE_CASES
