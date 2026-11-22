@@ -334,6 +334,11 @@ and `DEV/translated`; the four version-7 sets came out byte-identical).
   request-shaped Nemotron rows. Built locally from the pinned file with the registry recipe (registry generation 22;
   the owner's prepare run freezes it into `DEV/train_dev`). toxic_language EN now has 803 scored positives from two
   sources.
+- **Still short: toxic_language DE** (55 translated Nemotron rows, one source). The runner does not close it by
+  translating DynaHate: that would mean hand-writing some 150 German hate texts with slurs and calls to violence, and
+  the owner decision of 2026-11-22 prefers a native German source. The native candidate is the registered GermEval
+  2018 training split (CC-BY-4.0, about 1,700 offensive tweets); its recipe belongs in the owner's holdout overlay
+  because the same repository holds the holdout test split.
 
 The three sets were summarised with `gold.py summary` on a freeze of these sets alone and merged into
 `gold-dev.json`; the per-class counts, the per-source dev targets and the chat pool come from the whole dev pool
