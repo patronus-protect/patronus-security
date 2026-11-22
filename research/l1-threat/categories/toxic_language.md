@@ -112,7 +112,7 @@ Familien-Gewichte. Zeichen-N-Gramm-LR (`B1`, `B4`) und `FT` liegen auf der Kalib
 66 % TPR@0,1 %, lernen aber nur den Anfrage-Rahmen der einzigen Quelle (`nemotron_safety_v3`: „schreib eine
 Beleidigung über …“): auf nativem toxischem Text (`civil_comments`, `textdetox_de`) 0–1,4 % am Dev-Schnitt (die
 Regeln 0,6 % bei 0 FP), auf den Goldens 1 von 32 Positiven. Die Erwartung „Zeichen-N-Gramm-LR zahlt sich aus“
-gilt erst mit nativen Trainingspositiven (Owner-Abruf GermEval 2018 Train und DynaHate nach `DEV/train_dev`).
+gilt erst mit nativen Trainingspositiven (Owner: `DEV` auf Generation 23 neu einfrieren — DynaHate, XSafety-DE — plus GermEval 2018 Train).
 Regel-Ergänzung: ein verneinendes Subjekt mit Verb des Sagens/Glaubens vor dem Treffer im selben Satz
 („Nobody here thinks you are an idiot“, „Niemand denkt, du bist ein Trottel“) hebt den Lexikon-Treffer auf;
 Dev unverändert (0 Benign-Treffer, Report 13/2 216). Zahlen: [`scoreboard/toxic-language-scorer.md`](../scoreboard/toxic-language-scorer.md).

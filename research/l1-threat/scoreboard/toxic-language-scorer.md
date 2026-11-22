@@ -45,12 +45,14 @@ of the three is wired; `cascade.modules.toxic_language.l1_model` could load an F
 `ark-core/src/detectors/text/l1_model.rs`), but there is no candidate worth configuring.
 
 **Open:**
-- **Train data.** A model needs native toxic text as positives (DE and EN), not toxicity requests. Licensed
-  candidates named in `categories/toxic_language.md` §12: GermEval 2018 train split (CC-BY-4.0, recipe via the
-  holdout setup because the same repo holds the test split) and the Dynamically Generated Hate Speech Dataset
-  (CC-BY-4.0, EN). Owner command needed: fetch and freeze the GermEval 2018 train split and the DynaHate
-  originals into `DEV/train_dev` (`prepare_corpora.py` with the recipes in `datasets.yaml`), then rerun the
-  command above. Until then a decision for a model cannot be made on dev.
+- **Train data.** A model needs native toxic text as positives (DE and EN), not toxicity requests. The frozen
+  `DEV` is generation 20; `datasets.yaml` (generation 23) already adds two scored `toxic_language` sources to
+  `train_dev`: the Dynamically Generated Hate Speech Dataset (CC-BY-4.0, EN originals, dehumanisation and
+  threats) and the German XSafety insult prompts (Apache-2.0, translated). GermEval 2018 train (CC-BY-4.0, native
+  DE) is still `pending` (its recipe comes from the holdout setup, `--overlay`). Owner command needed: re-freeze
+  `DEV` at generation 23 (`python3 scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out HOLDOUT`,
+  with the GermEval 2018 train recipe from the holdout overlay), then rerun the calibration command above for
+  FT, B4 and B1. Until then no model can be chosen on dev.
 - **Rules.** 9 of 32 golden positives are rule gaps: vocative insults without a copula ("Shut up, you idiot",
   "Halt die Klappe, du Idiot"), insults without an addressee phrase in web comments and e-mails, leetspeak
   beyond the normalisation ("y0u st*pid l0ser"), indirect threats ("you will end up in the hospital"). The

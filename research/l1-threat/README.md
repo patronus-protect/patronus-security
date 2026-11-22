@@ -417,8 +417,8 @@ Lead-in mehr (Dev 77 → 83 von 83, 0 Benign-Treffer). Zahlen und Latenz in
 `B1`/`B4` (Zeichen-N-Gramm-LR) erreichen in der Verteilung 80–82 % TPR@0,1 %, `FT` 66 %, aber alle Dev-Positiven
 stammen aus einer Quelle von Anfragen nach toxischem Inhalt; auf nativem toxischem Text der Report-Sets finden
 die Modelle 0–1,4 % (Regeln 0,6 % bei 0 FP), auf den Goldens 1 von 32. Neue Regel-Prüfung: verneinendes Subjekt
-mit Verb des Glaubens/Sagens vor einer Beleidigung. Offen: native Trainingspositive (Owner-Abruf GermEval 2018
-Train, DynaHate). Zahlen in [`scoreboard/toxic-language-scorer.md`](scoreboard/toxic-language-scorer.md).
+mit Verb des Glaubens/Sagens vor einer Beleidigung. Offen: native Trainingspositive (Owner: `DEV` auf
+Generation 23 neu einfrieren, plus GermEval 2018 Train). Zahlen in [`scoreboard/toxic-language-scorer.md`](scoreboard/toxic-language-scorer.md).
 
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
