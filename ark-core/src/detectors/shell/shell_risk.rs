@@ -123,6 +123,10 @@ pub struct ShellConfig {
     /// Directories of user `.cedar` policies, read in file-name order.
     #[serde(default)]
     pub policy_dirs: Vec<PathBuf>,
+    /// Inline user policies: Cedar sources, applied after the `policy_dirs`
+    /// files; one source may hold several policies.
+    #[serde(default)]
+    pub policies: Vec<String>,
     /// Bundle-default policy id -> `"ask"`: lowers that policy from block.
     #[serde(default)]
     pub allowlist: BTreeMap<String, String>,
@@ -151,6 +155,36 @@ impl ShellConfig {
         )
         .map_err(|error| error.to_string())
     }
+
+    /// The runtime replacement of this config by `next`: `next`'s user
+    /// policies and allowlist ([`ShellPolicyConfig::load`]) applied to
+    /// `pipeline`, this config's bundle loaded from (`None`: not loaded yet,
+    /// the bundle load applies them). The bundle is not reloaded, so a `next`
+    /// naming another bundle (`bundle_dir`, both resolved below the model cache
+    /// root `root`, or `manifest_sha256`) is refused. A refused `next` leaves
+    /// the pipeline unchanged. Returns the config now in effect.
+    pub fn reload(
+        &self,
+        next: ShellConfig,
+        root: Option<&Path>,
+        pipeline: Option<&ShellRiskPipeline>,
+    ) -> Result<ShellConfig, String> {
+        if next.manifest_sha256 != self.manifest_sha256 || next.dir(root)? != self.dir(root)? {
+            return Err(
+                "shell: a reload replaces policies and allowlist only; another bundle \
+                 needs a new scanner"
+                    .into(),
+            );
+        }
+        let policies = ShellPolicyConfig::load(&next)?;
+        if let Some(pipeline) = pipeline {
+            pipeline.configure(&policies)?;
+        }
+        Ok(ShellConfig {
+            bundle_dir: self.bundle_dir.clone(),
+            ..next
+        })
+    }
 }
 
 impl Default for ShellConfig {
@@ -160,6 +194,7 @@ impl Default for ShellConfig {
             bundle_dir: None,
             manifest_sha256: pinned_manifest(),
             policy_dirs: Vec::new(),
+            policies: Vec::new(),
             allowlist: BTreeMap::new(),
         }
     }
@@ -211,10 +246,7 @@ impl ShellRiskPipeline {
     /// Load the bundle of `config` and apply its user policies and allowlist.
     pub fn from_config(config: &ShellConfig) -> Result<Self, String> {
         let pipeline = Self::from_pinned_bundle_dir(&config.dir(None)?, &config.manifest_sha256)?;
-        pipeline.configure(&ShellPolicyConfig::load(
-            &config.policy_dirs,
-            &config.allowlist,
-        )?)?;
+        pipeline.configure(&ShellPolicyConfig::load(config)?)?;
         Ok(pipeline)
     }
 

@@ -402,11 +402,21 @@ pub fn set_dynamic_pii_config(&self, config: DynamicPiiConfig) -> Result<(), Str
 Replace the pipeline-specific `dynamic-pii` configuration.
 
 ```rust
-pub fn shell_command_policy_config(&self) -> &ShellPolicyConfig;
+pub fn shell_config(&self) -> ShellConfig;
 ```
 
-Return the `shell_command` user policies and allowlist that `warmup`
-applies, loaded from Core's `shell` key.
+Return Core's `shell` config in effect: the bundle `warmup` loads and
+the user policies and allowlist of the `shell_command` verdict.
+
+```rust
+pub fn reload_shell(&self, shell: ShellConfig) -> Result<(), String>;
+```
+
+Replace the `shell_command` user policies and allowlist at runtime
+with those of `shell`, through Core's [`ShellConfig::reload`] (the path
+of Core's `Scanner::reload_shell`): applied to the loaded bundle, or by
+`warmup` when it is not loaded yet. A refused `shell` (another bundle,
+unreadable or invalid policies) leaves the gateway unchanged.
 
 ```rust
 pub fn dynamic_pii_config(&self) -> DynamicPiiConfig;
@@ -2153,6 +2163,15 @@ executed. `context` is the harness context (cwd, home, repo root);
 `prior_facts` are the `verdict.facts` of earlier commands of the same
 session, kept by the caller. A Cat policy is the rule
 `cat.<policy id>`: the `rules` gates of the config turn it off. Text scans do not run Cat.
+
+```rust
+pub fn reload_shell(&mut self, shell: ShellConfig) -> Result<(), ScanError>;
+```
+
+Replace Cat's user policies and allowlist at runtime with those of
+`shell` ([`ShellConfig::reload`]), without reloading the bundle. A
+refused `shell` (another bundle, unreadable or invalid policies) leaves
+the scanner unchanged.
 
 ## Shared Native Engine
 

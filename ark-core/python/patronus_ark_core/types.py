@@ -163,6 +163,8 @@ class ShellConfig(TypedDict, total=False):
     bundle_dir: str
     manifest_sha256: NotRequired[str]
     policy_dirs: NotRequired[list[str]]
+    policies: NotRequired[list[str]]
+    """Inline Cedar user policies, applied after the `policy_dirs` files."""
     allowlist: NotRequired[dict[str, Literal["ask"]]]
 
 

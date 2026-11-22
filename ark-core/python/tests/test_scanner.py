@@ -6,6 +6,13 @@ import pytest
 from patronus_ark_core import CancelledError, ScanControl, Scanner, pii_rule_ids, seed_word_list
 
 
+NO_KUBECTL_DELETE = (
+    '@id("user.no_kubectl_delete")\n@decision("block")\n'
+    'forbid (principal, action == Action::"segment", resource)\n'
+    'when { context.program == "kubectl" && context.verb == "DELETE" };\n'
+)
+
+
 def test_original_unicode_spans_and_selective_checks():
     text = "😀 Kontakt: " + "alice" + "@example.org"
     scanner = Scanner({"categories": ["pii", "dlp"]})
@@ -94,19 +101,21 @@ def test_shell_needs_a_configured_verified_bundle(tmp_path):
     (tmp_path / "manifest.json").write_text('{"files": {}}')
     with pytest.raises(RuntimeError, match="is not the pinned release manifest"):
         Scanner({"shell": {"bundle_dir": str(tmp_path)}})
+    # Inline policies are a config key: the bundle check, not the parser, refuses.
+    with pytest.raises(RuntimeError, match="is not the pinned release manifest"):
+        Scanner({"shell": {"bundle_dir": str(tmp_path), "policies": [NO_KUBECTL_DELETE]}})
 
 
 @pytest.mark.skipif(not os.environ.get("PATRONUS_SHELL_RISK_BUNDLE"), reason="requires the K26 bundle")
-def test_shell_verdict_with_user_policies(tmp_path):
-    (tmp_path / "kubectl.cedar").write_text(
-        '@id("user.no_kubectl_delete")\n@decision("block")\n'
-        'forbid (principal, action == Action::"segment", resource)\n'
-        'when { context.program == "kubectl" && context.verb == "DELETE" };\n'
-    )
-    scanner = Scanner({"shell": {
-        "bundle_dir": os.environ["PATRONUS_SHELL_RISK_BUNDLE"],
-        "policy_dirs": [str(tmp_path)],
-    }})
+@pytest.mark.parametrize("inline", [False, True])
+def test_shell_verdict_with_user_policies(tmp_path, inline):
+    shell = {"bundle_dir": os.environ["PATRONUS_SHELL_RISK_BUNDLE"]}
+    if inline:
+        shell["policies"] = [NO_KUBECTL_DELETE]
+    else:
+        (tmp_path / "kubectl.cedar").write_text(NO_KUBECTL_DELETE)
+        shell["policy_dirs"] = [str(tmp_path)]
+    scanner = Scanner({"shell": shell})
     verdict = scanner.shell_verdict("kubectl delete pod web-1", cwd="/repo", with_facts=True)
     assert verdict["v"] == "patronus.verdict/1"
     assert verdict["decision"] == "block"

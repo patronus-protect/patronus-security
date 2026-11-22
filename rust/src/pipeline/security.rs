@@ -636,12 +636,10 @@ pub struct SecurityGatewayCore {
     external_l1: Mutex<HashMap<SecurityCategory, Vec<Arc<dyn ExternalL1Detector>>>>,
     /// Request-independent configuration for the L3-only dynamic entity pipeline.
     dynamic_pii_config: Mutex<DynamicPiiConfig>,
-    /// User policies and allowlist of the `shell_command` verdict, loaded
-    /// from Core's `shell.policy_dirs` and `shell.allowlist`.
-    shell_command_policy_config: ShellPolicyConfig,
-    /// Cat's bundle (`shell`): its directory (unset: below the cache root)
-    /// and the release manifest warmup accepts.
-    shell: ShellConfig,
+    /// Core's `shell`: Cat's bundle (its directory, unset: below the cache
+    /// root, and the release manifest warmup accepts), user policies and
+    /// allowlist; [`SecurityGateway::reload_shell`] replaces the policies.
+    shell: Mutex<ShellConfig>,
     queue_worker_count: AtomicUsize,
 
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
@@ -848,8 +846,7 @@ impl SecurityGateway {
         } = config;
         let warmup = core.warmup_options();
         let shell = core.shell.clone().unwrap_or_default();
-        let shell_policies = ShellPolicyConfig::load(&shell.policy_dirs, &shell.allowlist)
-            .map_err(|error| format!("shell: {error}"))?;
+        ShellPolicyConfig::load(&shell).map_err(|error| format!("shell: {error}"))?;
         let core = Arc::new(core);
         let mut execution = ScanExecution::from_core(Arc::clone(&core));
         execution.set_wolf(core.wolf.clone().unwrap_or_default())?;
@@ -876,8 +873,7 @@ impl SecurityGateway {
             execution: Mutex::new(execution),
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(dynamic_pii.validated()?),
-            shell_command_policy_config: shell_policies,
-            shell,
+            shell: Mutex::new(shell),
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
             distributed_fingerprints: OnceLock::new(),
@@ -1395,10 +1391,25 @@ impl SecurityGateway {
         Ok(())
     }
 
-    /// Return the `shell_command` user policies and allowlist that `warmup`
-    /// applies, loaded from Core's `shell` key.
-    pub fn shell_command_policy_config(&self) -> &ShellPolicyConfig {
-        &self.shell_command_policy_config
+    /// Return Core's `shell` config in effect: the bundle `warmup` loads and
+    /// the user policies and allowlist of the `shell_command` verdict.
+    pub fn shell_config(&self) -> ShellConfig {
+        self.shell
+            .lock()
+            .expect("shell config mutex poisoned")
+            .clone()
+    }
+
+    /// Replace the `shell_command` user policies and allowlist at runtime
+    /// with those of `shell`, through Core's [`ShellConfig::reload`] (the path
+    /// of Core's `Scanner::reload_shell`): applied to the loaded bundle, or by
+    /// `warmup` when it is not loaded yet. A refused `shell` (another bundle,
+    /// unreadable or invalid policies) leaves the gateway unchanged.
+    pub fn reload_shell(&self, shell: ShellConfig) -> Result<(), String> {
+        let root = self.model_base_dir().map_err(|error| error.to_string())?;
+        let mut current = self.shell.lock().expect("shell config mutex poisoned");
+        *current = current.reload(shell, Some(&root), self.shell_command_pipeline.as_ref())?;
+        Ok(())
     }
 
     /// Return the currently configured `dynamic-pii` settings.
@@ -1421,9 +1432,10 @@ impl SecurityGateway {
     /// Whether the shell command model is configured and allowed by the gates.
     /// Cat's bundle in Core's layout below `base_dir`, pinned to this gateway's manifest.
     fn shell_command_config(&self, base_dir: &std::path::Path) -> Result<ShellConfig, String> {
+        let shell = self.shell_config();
         Ok(ShellConfig {
-            bundle_dir: Some(self.shell.dir(Some(base_dir))?),
-            ..self.shell.clone()
+            bundle_dir: Some(shell.dir(Some(base_dir))?),
+            ..shell
         })
     }
 

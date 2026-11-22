@@ -19,7 +19,7 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | gate keys | see [below](#execution-gates) | `rules`, `models`, `*_mode`, `explain`, `l1`/`l2`/`l3`, `conditional`, `l3_policy`, `cascade`. | yes | yes |
 | `cache_root` | path | Model cache root (default: platform cache dir plus `patronus_ark`). | yes | yes |
 | `wolf` | dict | The dedicated injection L3: `model`, `precision`, `execution` (window, overlap, batch), optional `bundle_dir` and `threshold` (unset: the serving default). Wolf runs on `execution_backend` and `onnx_runtime`. | yes | yes |
-| `shell` | dict | Cat, the `shell_command` verdict: `policy_dirs`, `allowlist`, optional `bundle_dir`. | yes | yes |
+| `shell` | dict | Cat, the `shell_command` verdict: `policy_dirs`, inline Cedar `policies`, `allowlist`, optional `bundle_dir`. | yes | yes |
 | `max_input_bytes`, `max_findings` | integer | Optional input size and evidence-span limits; unset (the default) means no limit, a set value must be positive. When exceeded, Core returns an error and Ark ends the request with a `limit_exceeded` failure. | yes | yes |
 | `download` | `"never"` \| `"missing"` | Whether `warmup()` may download missing assets. Default `"never"`. | yes | yes |
 | `download_categories` | list | Restrict automatic downloads to these categories (Wolf's is `injection`, Cat's `shell_command`); unset: every category. | yes | yes |

@@ -123,20 +123,17 @@ pub struct ShellPolicyConfig {
 }
 
 impl ShellPolicyConfig {
-    /// The user policies of the `*.cedar` files in `policy_dirs` and the
-    /// allowlist: the `policy_dirs` / `allowlist` keys of every host's
-    /// configuration ([`ShellConfig`](super::ShellConfig), the gateway).
-    pub fn load(
-        policy_dirs: &[impl AsRef<Path>],
-        allowlist: &BTreeMap<String, String>,
-    ) -> Result<Self, String> {
+    /// The user policies and allowlist of `shell`: the `*.cedar` files of its
+    /// `policy_dirs`, then its inline `policies`, and its `allowlist`.
+    pub fn load(shell: &super::ShellConfig) -> Result<Self, String> {
         let mut config = Self {
-            allowlist: allowlist.clone(),
+            allowlist: shell.allowlist.clone(),
             ..Self::default()
         };
-        for dir in policy_dirs {
-            config.add_cedar_dir(dir.as_ref())?;
+        for dir in &shell.policy_dirs {
+            config.add_cedar_dir(dir)?;
         }
+        config.user_policies.extend(shell.policies.iter().cloned());
         Ok(config)
     }
 
@@ -454,12 +451,24 @@ mod tests {
         std::fs::write(dir.join("kubectl.cedar"), NO_KUBECTL_DELETE).unwrap();
         std::fs::write(dir.join("notes.txt"), "not a policy").unwrap();
         let allowlist = BTreeMap::from([("C2-WEBHOOK-SITE".to_string(), "ask".to_string())]);
-        let config = ShellPolicyConfig::load(&[&dir], &allowlist).unwrap();
+        let mut shell = super::super::ShellConfig {
+            policy_dirs: vec![dir.clone()],
+            allowlist: allowlist.clone(),
+            ..super::super::ShellConfig::default()
+        };
+        let config = ShellPolicyConfig::load(&shell).unwrap();
         assert_eq!(
             (config.user_policies.len(), &config.allowlist),
             (1, &allowlist)
         );
-        assert!(ShellPolicyConfig::load(&[dir.join("missing")], &allowlist).is_err());
+        // Inline policies follow the directory files.
+        shell.policies = vec!["// inline".to_string()];
+        assert_eq!(
+            ShellPolicyConfig::load(&shell).unwrap().user_policies,
+            [NO_KUBECTL_DELETE, "// inline"]
+        );
+        shell.policy_dirs = vec![dir.join("missing")];
+        assert!(ShellPolicyConfig::load(&shell).is_err());
         let config = ShellPolicyConfig {
             allowlist: BTreeMap::new(),
             ..config
