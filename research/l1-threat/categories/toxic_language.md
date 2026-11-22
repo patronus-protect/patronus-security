@@ -99,6 +99,12 @@ Verneinung zählt nur vor dem Lexikonwort oder direkt vor dem Treffer. `requires
 `profanity` (brauchen eine geerntete, lizenzgeprüfte Quelle), Vokativ („du Idiot“), trennbare Verben
 („ich bring dich um“). Lexikon derzeit nur Hand-Seed; GAHD und HateCheck sind Holdout-Quellen und dürfen
 nicht geerntet werden, GermEval 2018 Train nur nach Abruf durch den Owner.
+Messung 2026-11-22 (Hand-Seed, L1 allein, nur `toxic_language`): 0 Flags auf 63.573 Benign-Zeilen von
+`DEV` (einschließlich Hard-Benigns); Positive: nemotron_safety_v3 0/51 (EN) und 0/55 (DE), report-only
+civil_comments 4/144, textdetox_de 9/2072 — der Recall kommt erst mit dem geernteten Lexikon (Owner-Abruf
+einer erlaubten Train-Quelle, dann `lexicons.py mine` → Durchsicht → `toxic_lexicon.py build`). Latenz:
+`toxic_language` allein ≈ 4 ms je 100-KiB-Fenster deutschen Texts (Release, germanquad), alle elf Klassen
+zusammen ≈ 130 ms ± 5 % mit und ohne die Klasse (im Rauschen).
 Davor: keine L1-Regeln. L2/L3-Label `toxic_or_harmful` mappt primär hierher (X03).
 
 ## 10. Übernommene OSS-Regeln
