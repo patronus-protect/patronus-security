@@ -107,7 +107,7 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | | Quelle |
 |---|---|
 | Patterns/Anker | kein Bestand; gehashtes Lexikon `mined` auf Train (Häufigkeit/Kontrast) plus permissiv lizenzierte Wortlisten (Lizenz je Quelle in TX01); Gruppenbezeichnungen `hand` |
-| Train/Dev | bewertet: Nemotron Safety Guard v3 (Test- und Validierungs-Split, nur menschlich gelabelte kurze Prompts, die den toxischen Akt selbst benennen; DE maschinell übersetzt, als `translated` markiert; Gold siehe `scoreboard/gold-notes.md`); GermEval 2018 Train-Split (CC-BY-4.0, Rezept über das Holdout-Setup, weil dasselbe Repo den Test-Split hält) |
+| Train/Dev | bewertet: Nemotron Safety Guard v3 (Test- und Validierungs-Split, nur menschlich gelabelte kurze Prompts, die den toxischen Akt selbst benennen; DE maschinell übersetzt, als `translated` markiert; Gold siehe `scoreboard/gold-notes.md`); Dynamically Generated Hate Speech Dataset (CC-BY-4.0, von geschulten Annotatoren geschriebener englischer Fließtext, nur Originaleinträge der Typen Entmenschlichung und Drohung); GermEval 2018 Train-Split (CC-BY-4.0, Rezept über das Holdout-Setup, weil dasselbe Repo den Test-Split hält) |
 | Holdout `neutral` | DE: GermEval 2018 (Test-Split), GAHD, HateCheck-DE, chatmod-bench; EN: HateCheck-EN, Measuring Hate Speech, RTP-LX en |
 | Holdout `ark_blind` | nicht nötig (genug `neutral`) |
 | Hard Negatives | HateCheck-Gegenrede und -Zitate, GAHD-Kontrastpaare, Moderationsfälle |

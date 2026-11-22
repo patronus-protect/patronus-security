@@ -1051,6 +1051,24 @@ datasets:
       The five harm areas lie inside the harmful_content subclasses (self_harm, violent_crime, cbrne and
       nonviolent_crime for regulated items, nonviolent_crime for scams, child_safety). Licence CC-BY-2.0 on the
       dataset card at the pinned revision
+  - id: dynahate
+    name: Dynamically Generated Hate Speech Dataset
+    source: github:bvidgen/Dynamically-Generated-Hate-Speech-Dataset
+    licence: CC-BY-4.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "type = dehumanization (original entry)", classes: [toxic_language]}
+      - {label: "type = threatening (original entry)", classes: [toxic_language]}
+      - {label: perturbation, out_of_scope: "minimal edit of an original entry, often flipping its label; kept out so one entry is not counted twice"}
+      - {label: "type = derogation, animosity, support, notgiven or none", out_of_scope: "derogation (10 % doubtful in the dev review sample), implicit or untyped hate and the nothate rows"}
+    note: >-
+      Synthetic English hate speech written by trained annotators against a model in the loop (Vidgen et al., ACL 2021),
+      labelled hate or nothate with a hate type and target group. Only original entries of the two explicit types
+      (dehumanisation and threats against a group) count; derogation, animosity, support for hateful entities, untyped
+      round-1 rows, perturbations and nothate rows are left out. Running text rather than requests to a model, so it
+      complements the request-shaped Nemotron rows. Licence CC-BY-4.0 in the README at the pinned commit
   - id: generators_dev_seed
     name: Generators, dev seed
     source: E02 generators with the dev seed

@@ -85,6 +85,7 @@
     "toxic_language": {
       "report/civil_comments": 144,
       "report/textdetox_de": 2072,
+      "train_dev/dynahate": 752,
       "train_dev/nemotron_safety_v3": 106
     },
     "unsafe_action": {
@@ -140,7 +141,7 @@
     },
     "toxic_language": {
       "de": 55,
-      "en": 51
+      "en": 803
     },
     "unsafe_action": {
       "de": 164,
@@ -353,9 +354,10 @@
       },
       "en": {
         "provenance": {
-          "native": 51
+          "native": 803
         },
         "sources": {
+          "dynahate": 752,
           "nemotron_safety_v3": 51
         }
       }
@@ -742,6 +744,13 @@
       "note": "fake admin role asks the model to reveal personal information it holds; probes protected data rather than the hidden password or instructions",
       "set": "translated/runner_translations_de",
       "verdict": "unclear"
+    },
+    {
+      "id": "dynahate:0032382",
+      "label": "toxic_language",
+      "note": "questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat",
+      "set": "train_dev/dynahate",
+      "verdict": "unclear"
     }
   ],
   "provenance": {
@@ -787,7 +796,7 @@
       "synthetic": 243
     },
     "toxic_language": {
-      "native": 51,
+      "native": 803,
       "translated": 55
     },
     "unsafe_action": {
@@ -983,6 +992,17 @@
       "role": "dev",
       "rows": 14635,
       "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/dynahate": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "dynahate",
+      "error_rate": 0.02,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 752,
+      "unclear": 1,
       "wrong": 0
     },
     "train_dev/germanquad": {

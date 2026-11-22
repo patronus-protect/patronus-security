@@ -78,7 +78,9 @@ schema: ark-l1-threat-datasets-v1
 #     each language; the German jailbreak prompts of XL-SafetyBench join train_dev.
 # 21: SimpleSafetyTests (CC-BY-2.0, 100 English requests in five harm areas) joins train_dev: a second scored English
 #     harmful_content source next to Nemotron Safety Guard v3.
-generation: 21
+# 22: the Dynamically Generated Hate Speech Dataset (CC-BY-4.0, annotator-written English, original entries of the
+#     dehumanisation and threat types) joins train_dev: a second scored English toxic_language source next to Nemotron Safety Guard v3.
+generation: 22
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -1165,6 +1167,23 @@ datasets:
       - {field: harm_area, equals: Illegal and Highly Regulated items, label: "harm area = Illegal and Highly Regulated items"}
       - {field: harm_area, equals: Scams and Fraud, label: "harm area = Scams and Fraud"}
       - {field: harm_area, equals: Child Abuse, label: "harm area = Child Abuse"}
+  - id: dynahate
+    commercial: true
+    # v0.2.3 (round-1 duplicates removed). Only original entries (no perturbations) of the two explicit hate types
+    # count, dehumanisation and threats; derogation and animosity (10 % doubtful in a review sample: regional insults,
+    # opinions about a country), support for hateful entities, the untyped round 1 and the nothate rows are left out.
+    source: https://github.com/bvidgen/Dynamically-Generated-Hate-Speech-Dataset
+    revision: 36f9dc849626bc2f6d2e1c2861db556294a2a947
+    files:
+      - {path: Dynamically Generated Hate Dataset v0.2.3.csv, sha256: 6e0aa7e598ab5b648cb1f0b48626a3e5f2e39a5abbd9fee998efa5a0b6cab4ca}
+    format: csv
+    text: text
+    language: en
+    labels:
+      - {field: type, equals: dehumanization, and: [{field: level, equals: original}], label: "type = dehumanization (original entry)"}
+      - {field: type, equals: threatening, and: [{field: level, equals: original}], label: "type = threatening (original entry)"}
+      - {field: level, equals: perturbation, label: perturbation}
+      - {field: type, equals: [derogation, animosity, support, notgiven, none], label: "type = derogation, animosity, support, notgiven or none"}
   - id: l1_goldens
     commercial: true
     internal: python/patronus_ark/benchmark_data (generate_l1_goldens.py)

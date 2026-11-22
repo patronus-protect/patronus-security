@@ -324,6 +324,16 @@ and `DEV/translated`; the four version-7 sets came out byte-identical).
   translation correct; one Mosscap row is unclear (a fake administrator asks for personal information, not the hidden
   password). The four version-7 generated sets come out byte-identical from the larger translation input.
   harmful_content DE now has two sources (Nemotron Safety Guard v3 316, runner translations 100).
+- **Dynamically Generated Hate Speech Dataset (`toxic_language`, EN): 1 of 50 unclear (2 %).** Vidgen et al. (ACL 2021),
+  CC-BY-4.0, v0.2.3 at a pinned commit: English hate speech written by trained annotators against a model in the
+  loop, with hate type and target group. A first recipe with the derogation type as well failed the bar (5 of 50
+  doubtful: an organisation to be banned, regional insults about the North of England, an opinion that Japan is
+  xenophobic, a sexual joke without a target); the registry keeps only original entries (no perturbations) of the
+  dehumanisation and threat types, 752 rows (454 and 298). The re-review found one unclear row (scare quotes around
+  refugees, no dehumanising term or threat). Running text rather than requests to a model, so it complements the
+  request-shaped Nemotron rows. Built locally from the pinned file with the registry recipe (registry generation 22;
+  the owner's prepare run freezes it into `DEV/train_dev`). toxic_language EN now has 803 scored positives from two
+  sources.
 
 The three sets were summarised with `gold.py summary` on a freeze of these sets alone and merged into
 `gold-dev.json`; the per-class counts, the per-source dev targets and the chat pool come from the whole dev pool

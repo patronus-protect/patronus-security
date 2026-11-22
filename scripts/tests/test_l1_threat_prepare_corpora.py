@@ -981,6 +981,22 @@ def test_fetch_downloads_pinned_url(world, tmp_path):
     assert (tmp_path / "cache" / "train_set" / "data.jsonl").read_bytes() == TRAIN
 
 
+
+def test_fetch_quotes_spaces_in_pinned_paths(world, tmp_path):
+    # Upstream file names with spaces (a GitHub release CSV) need a quoted URL; the cache keeps the plain name.
+    registry, _, _ = world
+    entry = {**registry["datasets"][0], "source": "https://github.com/example/repo",
+             "files": [{**registry["datasets"][0]["files"][0], "path": "Some Data v1.csv"}]}
+    seen = []
+
+    def download(url):
+        seen.append(url)
+        return TRAIN
+
+    MODULE.fetch(entry, tmp_path / "cache", offline=False, download=download)
+    assert seen == [f"https://raw.githubusercontent.com/example/repo/{REVISION}/Some%20Data%20v1.csv"]
+    assert (tmp_path / "cache" / "train_set" / "Some Data v1.csv").read_bytes() == TRAIN
+
 def test_prepare_train_dev(world, tmp_path):
     registry, emap, sources = world
     (sources / "holdout_set" / "data.jsonl").unlink()  # never read for another split
