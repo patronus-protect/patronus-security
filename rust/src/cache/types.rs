@@ -40,18 +40,6 @@ impl CacheKey {
         }
     }
 
-    pub(crate) fn namespace(&self) -> CacheNamespace {
-        self.namespace
-    }
-
-    pub(crate) fn chunk_hash(&self) -> &[u8; 32] {
-        &self.chunk_hash
-    }
-
-    pub(crate) fn chunk_len(&self) -> u64 {
-        self.chunk_len
-    }
-
     pub(crate) fn to_bytes(self) -> [u8; 72] {
         let mut bytes = [0u8; 72];
         bytes[..32].copy_from_slice(self.namespace.as_bytes());
@@ -133,7 +121,7 @@ mod tests {
         let bytes = key.to_bytes();
 
         assert_eq!(&bytes[..32], namespace.as_bytes());
-        assert_eq!(&bytes[32..64], key.chunk_hash());
+        assert_eq!(&bytes[32..64], blake3::hash(b"chunk").as_bytes());
         assert_eq!(u64::from_le_bytes(bytes[64..].try_into().unwrap()), 5);
     }
 }

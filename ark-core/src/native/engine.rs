@@ -75,6 +75,14 @@ impl NativeEngine {
         index(category).map_or(&[], |i| &self.groups[i])
     }
 
+    /// Whether `gates` enable one of the producers of `category`: its L1
+    /// pass runs ([`Self::scan_module`]).
+    pub fn runs(&self, category: SecurityCategory, gates: &ScanGateMatrix) -> bool {
+        self.producers(category)
+            .iter()
+            .any(|producer| producer.enabled(gates))
+    }
+
     /// Execute an active producer. Call `producer.enabled(gates)` before this method.
     /// Cancellation is checked before and after detection; panics become detector errors.
     pub fn run_producer(

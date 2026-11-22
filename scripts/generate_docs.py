@@ -175,7 +175,7 @@ def parse_ntdb_packages() -> list[NtdbPackage]:
     source = (ROOT / "rust/src/assets/specs.rs").read_text()
     blocks = dict(
         re.findall(
-            r"pub const (\w+): NtdbL2PackageAssetSpec = NtdbL2PackageAssetSpec \{(.*?)\n\};",
+            r"pub const (\w+): PipelineModelAssetSpec = PipelineModelAssetSpec \{(.*?)\n\};",
             source,
             flags=re.S,
         )

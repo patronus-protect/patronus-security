@@ -1184,6 +1184,62 @@ mod l3_worker_streaming {
     }
 
     #[test]
+    fn scan_control_stops_a_waiting_scan_and_drops_its_request() {
+        use patronus_ark_core::{ScanControl, ScanError};
+        let scanner = SecurityGateway::new(patronus_ark::GatewayConfig::new(
+            vec![SecurityCategory::Dlp],
+            SecurityLevel::L2,
+        ))
+        .unwrap();
+        scanner.set_queue_worker_count(1);
+        let categories = [SecurityCategory::Dlp];
+        let expired = ScanControl::with_timeout(Duration::ZERO).unwrap();
+        assert!(matches!(
+            scanner.scan_with_control("text", &categories, &expired),
+            Err(ScanError::DeadlineExceeded)
+        ));
+
+        // The one worker is busy, so each controlled scan waits in the queue.
+        let busy = scanner.enqueue_test_work_delay_request(400);
+        let started = Instant::now();
+        let deadline = ScanControl::with_timeout(Duration::from_millis(50)).unwrap();
+        assert!(matches!(
+            scanner.scan_with_control("text", &categories, &deadline),
+            Err(ScanError::DeadlineExceeded)
+        ));
+        let cancelled = ScanControl::default();
+        let canceller = cancelled.clone();
+        let cancel = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(30));
+            canceller.cancel();
+        });
+        assert!(matches!(
+            scanner.scan_with_control("text", &categories, &cancelled),
+            Err(ScanError::Cancelled)
+        ));
+        cancel.join().unwrap();
+        assert!(started.elapsed() < Duration::from_millis(350));
+
+        // Only the busy request publishes; the stopped ones leave nothing.
+        loop {
+            let event = scanner
+                .consume_next_event(Some(Duration::from_secs(5)))
+                .expect("the busy request finishes");
+            assert_eq!(event.request_id(), busy);
+            if matches!(event, QueuedSecurityEvent::Finished { .. }) {
+                break;
+            }
+        }
+        assert!(scanner
+            .consume_next_event(Some(Duration::from_millis(300)))
+            .is_none());
+        let report = scanner
+            .scan_with_control("text", &categories, &ScanControl::default())
+            .unwrap();
+        assert_eq!(report.input_bytes, 4);
+    }
+
+    #[test]
     fn enqueue_only_submits_work_to_the_gateway_worker() {
         let scanner = SecurityGateway::new(patronus_ark::GatewayConfig::new(
             vec![SecurityCategory::Dlp],

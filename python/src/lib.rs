@@ -3,14 +3,15 @@
 use patronus_ark::{
     DynamicPiiConfig, GatewayConfig, QueuedSecurityEvent, SecurityFailure,
     SecurityGateway as RustSecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
+    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult, CONTROL_POLL,
 };
 use patronus_ark_core::{
     cascade::ScanGateMatrix, cascade::SecurityLevel,
     normalization::normalize_text as rust_normalize_text, normalization::TextNormalizationConfig,
-    NtdbOperatingPoint, ScanReport, SecurityCategory,
+    NtdbOperatingPoint, ScanControl, ScanError, ScanReport, SecurityCategory,
 };
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyTimeoutError, prelude::*};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -81,9 +82,14 @@ impl SecurityGateway {
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
-    fn scan_all(&self, py: Python<'_>, text: &str) -> PyResult<PyObject> {
-        let report = py.allow_threads(|| self.inner.scan_all(text));
-        report_to_py(py, report)
+    #[pyo3(signature = (text, control=None))]
+    fn scan_all(
+        &self,
+        py: Python<'_>,
+        text: &str,
+        control: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<PyObject> {
+        self.scan(py, self.inner.categories(), text, control)
     }
 
     #[pyo3(signature = (execution_gates_json=None))]
@@ -101,35 +107,27 @@ impl SecurityGateway {
             .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
-    fn scan_category(&self, py: Python<'_>, category: &str, text: &str) -> PyResult<PyObject> {
-        let cat = match category.parse::<SecurityCategory>() {
-            Ok(c) => c,
-            Err(e) => return Err(pyo3::exceptions::PyValueError::new_err(e)),
-        };
-        let report = py.allow_threads(|| self.inner.scan_category(cat, text));
-        report_to_py(py, report)
+    #[pyo3(signature = (category, text, control=None))]
+    fn scan_category(
+        &self,
+        py: Python<'_>,
+        category: &str,
+        text: &str,
+        control: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<PyObject> {
+        let category = parse_categories(vec![category.to_string()])?;
+        self.scan(py, &category, text, control)
     }
 
+    #[pyo3(signature = (categories, text, control=None))]
     fn scan_categories(
         &self,
         py: Python<'_>,
         categories: Vec<String>,
         text: &str,
+        control: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyObject> {
-        let rust_categories = parse_categories(categories)?;
-        let profile = std::env::var_os("PATRONUS_PHASE_METRICS").is_some_and(|v| v == "1");
-        let started = std::time::Instant::now();
-        let report = py.allow_threads(|| self.inner.scan_categories(&rust_categories, text));
-        let scanned = std::time::Instant::now();
-        let report = report_to_py(py, report)?;
-        if profile {
-            eprintln!(
-                "L1_BINDING_PROFILE scan_ms={} result_conversion_ms={}",
-                scanned.duration_since(started).as_secs_f64() * 1000.0,
-                scanned.elapsed().as_secs_f64() * 1000.0
-            );
-        }
-        Ok(report)
+        self.scan(py, &parse_categories(categories)?, text, control)
     }
 
     #[pyo3(signature = (text, categories=None, execution_gates_json=None, metadata_json=None, ntdb_operating_point=None, chunk_overlap_tokens=0))]
@@ -228,6 +226,94 @@ impl SecurityGateway {
     fn max_level(&self) -> &'static str {
         self.inner.max_level().as_str()
     }
+}
+
+impl SecurityGateway {
+    /// One synchronous scan of `categories`; under `control`, Ark Core's
+    /// `ScanControl`, as Core's `Scanner.scan(..., control=...)`.
+    fn scan(
+        &self,
+        py: Python<'_>,
+        categories: &[SecurityCategory],
+        text: &str,
+        control: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<PyObject> {
+        let profile = std::env::var_os("PATRONUS_PHASE_METRICS").is_some_and(|v| v == "1");
+        let started = std::time::Instant::now();
+        let report = match control {
+            None => py.allow_threads(|| self.inner.scan_categories(categories, text)),
+            Some(control) => with_core_control(py, control, |control| {
+                self.inner.scan_with_control(text, categories, control)
+            })?,
+        };
+        let scanned = std::time::Instant::now();
+        let report = report_to_py(py, report)?;
+        if profile {
+            eprintln!(
+                "L1_BINDING_PROFILE scan_ms={} result_conversion_ms={}",
+                scanned.duration_since(started).as_secs_f64() * 1000.0,
+                scanned.elapsed().as_secs_f64() * 1000.0
+            );
+        }
+        Ok(report)
+    }
+}
+
+/// Run `scan` without the GIL under `control`, a `patronus_ark_core.ScanControl`
+/// of Ark Core's extension: a Core control of this extension follows it,
+/// checked every [`CONTROL_POLL`] on a watcher thread. Core's errors are
+/// raised as Core raises them: `TimeoutError` past the deadline,
+/// `patronus_ark_core.CancelledError` once cancelled.
+fn with_core_control<T: Send>(
+    py: Python<'_>,
+    control: &Bound<'_, PyAny>,
+    scan: impl FnOnce(&ScanControl) -> Result<T, ScanError> + Send,
+) -> PyResult<T> {
+    let core = py.import_bound("patronus_ark_core")?;
+    if !control.is_instance(&core.getattr("ScanControl")?)? {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "control must be a patronus_ark_core.ScanControl",
+        ));
+    }
+    control.call_method0("check")?;
+    let caller = control.clone().unbind();
+    let local = ScanControl::default();
+    let done = AtomicBool::new(false);
+    let result = py.allow_threads(|| {
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                while !done.load(Ordering::Acquire) {
+                    std::thread::sleep(CONTROL_POLL);
+                    let expired = Python::with_gil(|py| {
+                        caller
+                            .call_method0(py, "check")
+                            .err()
+                            .map(|error| error.is_instance_of::<PyTimeoutError>(py))
+                    });
+                    match expired {
+                        Some(true) => local.cancel_deadline(),
+                        Some(false) => local.cancel(),
+                        None => continue,
+                    }
+                    break;
+                }
+            });
+            let result = scan(&local);
+            done.store(true, Ordering::Release);
+            result
+        })
+    });
+    result.map_err(|error| match error {
+        ScanError::DeadlineExceeded => PyTimeoutError::new_err(error.to_string()),
+        ScanError::Cancelled => match core.getattr("CancelledError") {
+            Ok(cancelled) => match cancelled.downcast_into() {
+                Ok(cancelled) => PyErr::from_type_bound(cancelled, error.to_string()),
+                Err(downcast) => downcast.into(),
+            },
+            Err(error) => error,
+        },
+        error => pyo3::exceptions::PyRuntimeError::new_err(error.to_string()),
+    })
 }
 
 fn parse_categories(categories: Vec<String>) -> PyResult<Vec<SecurityCategory>> {

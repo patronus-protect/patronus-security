@@ -50,7 +50,8 @@ pipeline:
   #     overlap_tokens: 0
   #     batch_size: 1
 
-  # Optional ONNX Runtime CPU tuning. Defaults are 1/1/false, which avoid
+  # Optional ONNX Runtime CPU tuning of every ONNX model, Wolf included
+  # (Ark Core's `onnx_runtime`). Defaults are 1/1/false, which avoid
   # oversubscription when several API containers share one VPS.
   onnx_runtime:
     intra_threads: 1

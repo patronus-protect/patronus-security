@@ -330,21 +330,10 @@ fn one_core_config_gives_identical_l1_results_in_core_and_ark() {
                 .collect::<Vec<_>>(),
             "text={text}"
         );
-        // Ark decides at L1 only the modules with an L1 result; Core also
-        // answers `clear` for a module without one.
-        let with_results = direct
-            .decision
-            .unwrap()
-            .into_iter()
-            .filter(|decision| {
-                ark.native
-                    .iter()
-                    .any(|result| result.category == decision.module.as_str())
-            })
-            .collect::<Vec<_>>();
+        // Every module gets Core's decision, also one without an L1 result.
         assert_eq!(
             untimed_decisions(ark.decision.as_deref()),
-            untimed_decisions(Some(&with_results)),
+            untimed_decisions(direct.decision.as_deref()),
             "text={text}"
         );
     }

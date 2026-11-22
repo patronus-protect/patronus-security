@@ -89,8 +89,8 @@ fn run_strategy(strategy: L3Strategy) -> Result<Value, String> {
     ];
     let mut scanner = SecurityGateway::new({
         let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
-        config.download = DownloadPolicy::Missing;
-        config.download_categories = Some(categories);
+        config.core.download = DownloadPolicy::Missing;
+        config.core.download_categories = Some(categories);
         config
     })
     .unwrap();

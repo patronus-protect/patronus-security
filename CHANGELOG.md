@@ -11,6 +11,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **One place for download and ONNX settings:** Ark Core's config now holds `download`,
+  `download_categories`, `download_timeout_ms`, `execution_backend` and `onnx_runtime`, and Ark
+  reads the same keys. Core's `Scanner(config, warmup={...})` argument is gone: put `download` and
+  `download_timeout_ms` in the config (`Scanner::warmup(config)` and
+  `warmup::prepare_assets(&config)` in Rust). `wolf.backend` and `wolf.runtime_options` are
+  gone: Wolf and Ark's own models both run on `execution_backend` and `onnx_runtime`. In Rust,
+  `WolfRunner::new` takes the backend and runtime options next to the Wolf config, and Ark's
+  `GatewayConfig` no longer has its own download and ONNX fields (they are under `core`).
+- **NTDB packages are prepared by Ark Core:** Ark's NTDB L2 packages use Core's new
+  `ModelSpec::prepare_package` (manifest first, shared files kept once and linked). In Ark's Rust
+  API the NTDB packages are `PipelineModelAssetSpec`s; `NtdbL2PackageAssetSpec`,
+  `ntdb_l2_package_asset(s)`, `ntdb_l2_package_assets_present` and `download_ntdb_l2_package`
+  are replaced by `ntdb_l2_package_current` and `prepare_ntdb_l2_package`.
+
 - **Blocking scans return a report:** `scan_all`, `scan_categories` and `scan_category` (and
   Rust's `scan_input`) now return one report per input in the same shape as Ark Core's
   `Scanner.scan`: `input_bytes`, the results in `native`, `wolf` (the Wolf result when the
@@ -262,6 +276,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   request still sets it apart.
 
 ### Added
+
+- **Cancel and time out Ark scans:** `scan_all`, `scan_category` and `scan_categories` take
+  Ark Core's `ScanControl` as `control=`, as Core's `Scanner.scan` does; Rust has
+  `SecurityGateway::scan_with_control`. A cancelled or expired control stops the request and
+  raises `CancelledError` or `TimeoutError` (Rust: `ScanError::Cancelled` or
+  `DeadlineExceeded`).
 
 - **Bring your own ONNX Runtime:** the prebuilt ONNX Runtime download is now the default
   feature `ort-download` of `patronus-ark` and `patronus-ark-core`. Turn it off with
@@ -915,6 +935,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`patronus_ark_core::detectors::threat::ThreatPipeline`), next to the injection detector.
   Rules, scores and evidence are unchanged, and `patronus_ark::detectors::threat` still resolves
   to the same detector.
+### Fixed
+
+- **Same module decisions as Ark Core:** with `cascade`, a category whose rules ran without a
+  result (for example an attack class with no candidate) now gets Ark Core's clear decision in
+  Ark too, instead of none.
+
 ## [0.1.17] - 2026-11-16
 
 This release changes only the prompt-injection model (Wolf Defender) on top of 0.1.16.

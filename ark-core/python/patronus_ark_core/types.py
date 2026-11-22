@@ -154,8 +154,6 @@ class WolfConfig(TypedDict, total=False):
     precision: NotRequired[
         Literal["auto", "fp32", "fp16", "mixed", "mixed_x86", "int8_int4", "int8_int4_x86"]
     ]
-    backend: NotRequired[Literal["auto", "cpu", "gpu", "coreml", "core_ml", "cuda", "direct_ml", "tensorrt", "tensor_rt"]]
-    runtime_options: NotRequired[OnnxRuntimeOptions]
     execution: NotRequired[WolfExecutionOptions]
 
 
@@ -319,12 +317,15 @@ class ScannerConfig(ScanGates, total=False):
     max_input_bytes: int | None
     max_findings: int | None
     cache_root: str
+    download: Literal["never", "missing"]
+    download_categories: list[str] | None
+    download_timeout_ms: int
+    execution_backend: Literal[
+        "auto", "cpu", "gpu", "coreml", "core_ml", "cuda", "directml", "direct_ml", "tensorrt",
+        "tensor_rt",
+    ]
+    onnx_runtime: OnnxRuntimeOptions
     wolf: WolfConfig | None
     shell: ShellConfig | None
-
-
-class WarmupOptions(TypedDict, total=False):
-    download: Literal["never", "missing"]
-    download_timeout_ms: int
 
 

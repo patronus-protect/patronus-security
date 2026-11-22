@@ -156,9 +156,96 @@ impl ModelSpec {
 
     #[cfg(not(feature = "download"))]
     fn fetch(&self, _: &Path, _: &[&str], _: Option<&Progress<'_>>) -> Result<(), ScanError> {
-        Err(ScanError::Config(
-            "asset download requires the Core download feature".into(),
-        ))
+        Err(no_download())
+    }
+
+    /// Prepare a package-style model, whose own `manifest` file lists its
+    /// files, in the cache directory below `root`: fetch the manifest when the
+    /// directory does not hold the pin (or lacks it), then `list` the package
+    /// from the directory and whether it already held the pin. Fetch the
+    /// listed files that are missing (all of them for another pin) and the
+    /// shared files whose copy is not current, link every shared copy into
+    /// the directory, mark it current, or fail under
+    /// [`DownloadPolicy::Never`] when anything is to fetch. With `generate`,
+    /// then write the generated files of the listed files.
+    pub fn prepare_package(
+        &self,
+        root: &Path,
+        manifest: &str,
+        list: impl FnOnce(&Path, bool) -> Result<PackageFiles, ScanError>,
+        options: &PrepareOptions<'_>,
+    ) -> Result<PathBuf, ScanError> {
+        let dir = self.cache_dir(root);
+        let current = self.is_current(&dir);
+        let refuse = |options: &PrepareOptions<'_>| -> Result<(), ScanError> {
+            if options.download == DownloadPolicy::Never {
+                return Err(ScanError::Asset(format!(
+                    "missing {} assets at {}; downloads disabled",
+                    self.id,
+                    dir.display()
+                )));
+            }
+            Ok(())
+        };
+        let manifest_path = dir.join(manifest);
+        let fetch_manifest = !current || !manifest_path.is_file();
+        if fetch_manifest {
+            refuse(options)?;
+            self.fetch_package(&[self.file(manifest, manifest_path)], 1, options.progress)?;
+        }
+        let package = list(&dir, current)?;
+        let fetches = package
+            .shared
+            .iter()
+            .filter(|file| !file.current)
+            .map(|file| self.file(&file.relative, file.path.clone()))
+            .chain(
+                package
+                    .files
+                    .iter()
+                    .filter(|file| !current || !dir.join(file).is_file())
+                    .map(|file| self.file(file, dir.join(file))),
+            )
+            .collect::<Vec<_>>();
+        if !fetches.is_empty() {
+            refuse(options)?;
+            let total = package.files.len() + package.shared.len() + 1;
+            self.fetch_package(&fetches, total, options.progress)?;
+        }
+        for file in &package.shared {
+            link_shared_file(&file.path, &dir.join(&file.relative)).map_err(|error| {
+                ScanError::Asset(format!("link {}: {error}", file.path.display()))
+            })?;
+        }
+        #[cfg(feature = "download")]
+        if fetch_manifest || !fetches.is_empty() {
+            self.mark_current(&dir)?;
+        }
+        if options.generate {
+            let files = package.files.iter().map(String::as_str).collect::<Vec<_>>();
+            prepare_generated_files(self.id, &dir, &files);
+        }
+        Ok(dir)
+    }
+
+    #[cfg(feature = "download")]
+    fn fetch_package(
+        &self,
+        files: &[ModelFile],
+        total: usize,
+        progress: Option<&Progress<'_>>,
+    ) -> Result<(), ScanError> {
+        fetch_files(files, total, progress)
+    }
+
+    #[cfg(not(feature = "download"))]
+    fn fetch_package(
+        &self,
+        _: &[ModelFile],
+        _: usize,
+        _: Option<&Progress<'_>>,
+    ) -> Result<(), ScanError> {
+        Err(no_download())
     }
 
     /// Write `dir`'s revision marker; call it once every file of the pin is in place.
@@ -167,6 +254,52 @@ impl ModelSpec {
         fs::create_dir_all(dir).map_err(asset)?;
         atomic_marker(dir, REVISION_MARKER, self.revision)
     }
+}
+
+/// The files of a package-style model, as its manifest lists them
+/// ([`ModelSpec::prepare_package`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PackageFiles {
+    /// Files inside the model directory, below the source prefix; neither
+    /// the manifest nor a shared file.
+    pub files: Vec<String>,
+    /// Files the model shares with other models.
+    pub shared: Vec<SharedFile>,
+}
+
+/// A file several models share: one copy at `path`, linked into each model
+/// directory at `relative`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedFile {
+    /// Path inside the model directory and below the source prefix.
+    pub relative: String,
+    /// The shared copy.
+    pub path: PathBuf,
+    /// Whether the shared copy is current; one that is not is fetched again.
+    pub current: bool,
+}
+
+/// Link `dest` to the shared copy `shared`, replacing what `dest` held: a
+/// symbolic link, or on Windows a hard link where it can.
+pub fn link_shared_file(shared: &Path, dest: &Path) -> io::Result<()> {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    if fs::symlink_metadata(dest).is_ok() {
+        fs::remove_file(dest)?;
+    }
+    #[cfg(unix)]
+    return std::os::unix::fs::symlink(shared, dest);
+    #[cfg(windows)]
+    return fs::hard_link(shared, dest)
+        .or_else(|_| std::os::windows::fs::symlink_file(shared, dest));
+    #[cfg(not(any(unix, windows)))]
+    return fs::hard_link(shared, dest);
+}
+
+#[cfg(not(feature = "download"))]
+fn no_download() -> ScanError {
+    ScanError::Config("asset download requires the Core download feature".into())
 }
 
 /// How [`ModelSpec::prepare`] treats a missing model and its generated files.
@@ -431,6 +564,56 @@ mod tests {
         assert!(!SPEC.files_present(&dir.0, &["model.onnx", "config.json"]));
         fs::write(dir.0.join(REVISION_MARKER), "rev-b").unwrap();
         assert!(!SPEC.files_present(&dir.0, &["model.onnx"]));
+    }
+
+    #[test]
+    fn a_present_package_links_its_shared_files_and_a_stale_one_needs_permission() {
+        let root = Directory::new("prepare-package");
+        let dir = SPEC.cache_dir(&root.0);
+        let offline = PrepareOptions::default();
+        let error = SPEC
+            .prepare_package(&root.0, "manifest.json", |_, _| unreachable!(), &offline)
+            .unwrap_err();
+        assert!(error.to_string().contains("downloads disabled"), "{error}");
+
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("manifest.json"), b"{}").unwrap();
+        fs::write(dir.join("head.bin"), b"head").unwrap();
+        fs::write(dir.join(REVISION_MARKER), "rev-a").unwrap();
+        let shared = root.0.join("shared/tokenizer.json");
+        fs::create_dir_all(shared.parent().unwrap()).unwrap();
+        fs::write(&shared, b"tokens").unwrap();
+        let package = |current| PackageFiles {
+            files: vec!["head.bin".into()],
+            shared: vec![SharedFile {
+                relative: "tok/tokenizer.json".into(),
+                path: shared.clone(),
+                current,
+            }],
+        };
+        let prepared = SPEC
+            .prepare_package(
+                &root.0,
+                "manifest.json",
+                |listed, pinned| {
+                    assert_eq!((listed, pinned), (dir.as_path(), true));
+                    Ok(package(true))
+                },
+                &offline,
+            )
+            .unwrap();
+        assert_eq!(prepared, dir);
+        assert_eq!(fs::read(dir.join("tok/tokenizer.json")).unwrap(), b"tokens");
+
+        let error = SPEC
+            .prepare_package(
+                &root.0,
+                "manifest.json",
+                |_, _| Ok(package(false)),
+                &offline,
+            )
+            .unwrap_err();
+        assert!(error.to_string().contains("downloads disabled"), "{error}");
     }
 
     #[test]

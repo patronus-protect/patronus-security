@@ -193,7 +193,7 @@ pub fn prepare_wolf_cache(
             }
             return Ok(());
         }
-        if options.download == DownloadPolicy::Never {
+        if options.download_for(SecurityCategory::Injection) == DownloadPolicy::Never {
             return Err(asset(
                 "Wolf assets missing or preparation incomplete; prepare them or enable download=missing",
             ));

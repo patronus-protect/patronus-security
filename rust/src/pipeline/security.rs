@@ -27,7 +27,7 @@ use crate::{
 use patronus_ark_core::{
     native::NativeEngine,
     post_prediction::{filter_evidence, resolve_dlp_pii_overlaps},
-    warmup::DownloadPolicy,
+    warmup::{DownloadPolicy, WarmupOptions},
     ScanControl,
 };
 
@@ -624,10 +624,9 @@ pub struct SecurityGatewayCore {
     max_input_bytes: Option<usize>,
     /// Core's `max_findings`, when set: more L1 evidence spans fail the request.
     max_findings: Option<usize>,
-    /// Whether `warmup` may download missing model assets.
-    download: DownloadPolicy,
-    /// Optional allowlist of categories that may download missing assets.
-    download_categories: Option<Vec<SecurityCategory>>,
+    /// Core's download keys: whether and for which categories `warmup` may
+    /// download missing model assets, and its time budget.
+    warmup: WarmupOptions,
     /// Execution gates consumed by scan methods.
     execution: Mutex<ScanExecution>,
     /// Application-provided L1 heuristics, grouped in registration order by category.
@@ -844,27 +843,24 @@ impl SecurityGateway {
         config.validate()?;
         let GatewayConfig {
             core,
-            download,
-            download_categories,
             l3_strategy,
             ntdb_operating_point,
             ntdb_decision_threshold_point,
-            execution_backend,
             onnx_batch_mode,
-            onnx_runtime,
             dynamic_pii,
             cache,
         } = config;
+        let warmup = core.warmup_options();
         let shell = core.shell.unwrap_or_default();
         let shell_policies = ShellPolicyConfig::load(&shell.policy_dirs, &shell.allowlist)
             .map_err(|error| format!("shell: {error}"))?;
         let mut execution = ScanExecution::with_gates(core.max_level, core.gates);
         execution.set_wolf(core.wolf.unwrap_or_default())?;
-        execution.set_backend(execution_backend);
+        execution.set_backend(core.execution_backend);
         if let Some(mode) = onnx_batch_mode {
             execution.set_onnx_batch_mode(mode);
         }
-        execution.set_onnx_runtime_options(onnx_runtime);
+        execution.set_onnx_runtime_options(core.onnx_runtime);
         execution.set_ntdb_operating_point(ntdb_operating_point);
         execution.set_ntdb_decision_threshold_point(ntdb_decision_threshold_point);
         execution.set_l3_strategy(l3_strategy);
@@ -881,8 +877,7 @@ impl SecurityGateway {
             cache_root: core.cache_root,
             max_input_bytes: core.max_input_bytes,
             max_findings: core.max_findings,
-            download,
-            download_categories,
+            warmup,
             execution: Mutex::new(execution),
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(dynamic_pii.validated()?),
@@ -1065,14 +1060,7 @@ impl SecurityGateway {
 
     #[doc(hidden)]
     pub fn should_download_assets_for(&self, category: SecurityCategory) -> bool {
-        if self.download == DownloadPolicy::Never {
-            return false;
-        }
-
-        match &self.download_categories {
-            Some(categories) => categories.contains(&category),
-            None => true,
-        }
+        self.warmup.download_for(category) == DownloadPolicy::Missing
     }
 
     /// Replace the execution gate matrix used by subsequent scans. The
@@ -1304,7 +1292,7 @@ impl SecurityGateway {
         inputs: &[ExternalL1Input],
         execution: &ScanExecution,
     ) -> Vec<SecurityScanResult> {
-        self.scan_l1_inputs(inputs, execution)
+        self.scan_l1_inputs(inputs, execution, &ScanControl::default())
     }
 
     /// Resolve canonical distributed pipeline bindings without executing scanners.
@@ -1333,10 +1321,14 @@ impl SecurityGateway {
         metadata: &serde_json::Value,
         execution: &ScanExecution,
     ) -> DistributedL2Plan {
-        let (mut l1_results, l1_failures) =
-            request_queue::split_results(self.scan_l1_inputs(inputs, execution));
+        let (mut l1_results, l1_failures) = request_queue::split_results(self.scan_l1_inputs(
+            inputs,
+            execution,
+            &ScanControl::default(),
+        ));
         let gate_results = patronus_ark_core::cascade::l1_gate_results(&l1_results);
         let undecided = request_queue::l1_undecided_inputs(
+            &self.native_engine,
             inputs,
             &mut l1_results,
             !l1_failures.is_empty(),
@@ -1500,6 +1492,7 @@ impl SecurityGateway {
             input,
             execution,
             &crate::threat::NativeText::new(input.text.as_ref()),
+            &ScanControl::default(),
         )
     }
 
@@ -1508,18 +1501,17 @@ impl SecurityGateway {
         input: &ExternalL1Input,
         execution: &ScanExecution,
         prepared: &crate::threat::NativeText<'_>,
+        control: &ScanControl,
     ) -> Vec<SecurityScanResult> {
         let category = input.category;
         let text = input.text.as_ref();
         let mut results = Vec::new();
         if self.level_enabled(execution, SecurityLevel::L1) {
-            // Core's L1 pass; the gateway's scans are never cancelled.
-            match self.native_engine.scan_module(
-                category,
-                prepared,
-                execution.gates(),
-                &ScanControl::default(),
-            ) {
+            // Core's L1 pass, under the scan's control.
+            match self
+                .native_engine
+                .scan_module(category, prepared, execution.gates(), control)
+            {
                 Ok(native) => results.extend(native.into_iter().map(SecurityScanResult::from)),
                 Err(error) => results.push(scanner_error_scan_result(
                     category,
@@ -1805,6 +1797,7 @@ impl SecurityGateway {
         &self,
         inputs: &[ExternalL1Input],
         execution: &ScanExecution,
+        control: &ScanControl,
     ) -> Vec<SecurityScanResult> {
         use rayon::prelude::*;
 
@@ -1825,7 +1818,12 @@ impl SecurityGateway {
         let mut results = inputs
             .par_iter()
             .map(|input| {
-                self.scan_category_prepared(input, &execution, &prepared[input.text.as_ref()])
+                self.scan_category_prepared(
+                    input,
+                    &execution,
+                    &prepared[input.text.as_ref()],
+                    control,
+                )
             })
             .collect::<Vec<_>>();
         resolve_dlp_pii_overlaps(

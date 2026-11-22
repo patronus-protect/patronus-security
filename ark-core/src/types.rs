@@ -405,6 +405,14 @@ impl OnnxRuntimeOptions {
         }
     }
 
+    /// Refuse a zero thread count; unset counts follow ONNX Runtime.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.intra_threads == Some(0) || self.inter_threads == Some(0) {
+            return Err("onnx_runtime thread counts must be positive".into());
+        }
+        Ok(())
+    }
+
     pub fn normalized(self) -> Self {
         Self {
             intra_threads: self.intra_threads.filter(|value| *value > 0),

@@ -17,8 +17,8 @@ from patronus_ark_core import Scanner, ScanControl, ScannerBusyError, CancelledE
 scanner = Scanner({
     "categories": ["injection"],
     "models": {"native:injection_l1": False},
-    "wolf": {"bundle_dir": sys.argv[1], "threshold": 0.8,
-             "precision": "fp16", "backend": "cpu"},
+    "execution_backend": "cpu",
+    "wolf": {"bundle_dir": sys.argv[1], "threshold": 0.8, "precision": "fp16"},
 })
 mode = sys.argv[2]
 control = ScanControl(timeout_ms=5000 if mode == "cancel" else 1000)

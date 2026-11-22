@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             SecurityLevel::L3,
         );
         config.core.cache_root = Some(asset_dir.clone());
-        config.download = if allow_downloads() {
+        config.core.download = if allow_downloads() {
             DownloadPolicy::Missing
         } else {
             DownloadPolicy::Never

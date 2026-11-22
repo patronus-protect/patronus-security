@@ -151,10 +151,9 @@ def test_independent_scanners_can_run_in_threads():
 
 @pytest.mark.skipif(not os.environ.get("PATRONUS_CORE_WOLF_BUNDLE"), reason="requires local Wolf assets")
 def test_real_wolf_is_reused_and_obeys_per_call_selection():
-    scanner = Scanner({"wolf": {
+    scanner = Scanner({"execution_backend": "cpu", "wolf": {
         "bundle_dir": os.environ["PATRONUS_CORE_WOLF_BUNDLE"],
         "threshold": 0.8, "precision": os.environ.get("PATRONUS_CORE_WOLF_PRECISION", "fp16"),
-        "backend": "cpu",
     }})
     first = scanner.scan("Please summarize this document", categories=["injection"])
     second = scanner.scan("Please summarize this document", categories=["injection"])

@@ -153,20 +153,6 @@ impl ExactCacheStore for MemoryCacheStore {
         Ok(())
     }
 
-    fn remove_expired(&self, now_unix_ms: u64) -> Result<usize, CacheError> {
-        let mut state = self.state.lock().expect("cache mutex poisoned");
-        let expired = state
-            .entries
-            .iter()
-            .filter_map(|(key, entry)| entry.output.is_expired(now_unix_ms).then_some(*key))
-            .collect::<Vec<_>>();
-        let removed = expired.len();
-        for key in expired {
-            state.remove(&key);
-        }
-        Ok(removed)
-    }
-
     fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
         let mut state = self.state.lock().expect("cache mutex poisoned");
         let stale = state
@@ -229,17 +215,6 @@ mod tests {
     }
 
     #[test]
-    fn cleanup_removes_only_expired_entries() {
-        let store = MemoryCacheStore::new(MemoryCacheConfig::default());
-        store.put(key("expired"), output(20)).unwrap();
-        store.put(key("current"), output(30)).unwrap();
-
-        assert_eq!(store.remove_expired(20).unwrap(), 1);
-        assert!(store.get(&key("expired"), 20).unwrap().is_none());
-        assert!(store.get(&key("current"), 20).unwrap().is_some());
-    }
-
-    #[test]
     fn cleanup_removes_entries_created_before_cutoff() {
         let store = MemoryCacheStore::new(MemoryCacheConfig::default());
         store.put(key("old"), output_created(10, 100)).unwrap();
@@ -285,11 +260,11 @@ mod tests {
             max_entries: 10,
             max_bytes: bytes * 3,
         });
-        store.put(key("first"), output(20)).unwrap();
+        store.put(key("first"), output_created(5, 20)).unwrap();
         store.put(key("second"), output(100)).unwrap();
         store.put(key("third"), output(100)).unwrap();
         store.put(key("second"), output(100)).unwrap();
-        assert_eq!(store.remove_expired(20).unwrap(), 1);
+        assert_eq!(store.remove_created_before(10).unwrap(), 1);
         store.put(key("fourth"), output(100)).unwrap();
         store.put(key("fifth"), output(100)).unwrap();
         assert!(store.get(&key("third"), 20).unwrap().is_none());
@@ -316,7 +291,7 @@ mod tests {
         store.put(key("second"), small.clone()).unwrap();
         store.put(key("large"), large).unwrap();
         assert_eq!(store.len(), 1);
-        assert_eq!(store.remove_expired(100).unwrap(), 1);
+        assert_eq!(store.remove_created_before(u64::MAX).unwrap(), 1);
         store.put(key("fresh"), small).unwrap();
         assert!(store.get(&key("fresh"), 20).unwrap().is_some());
         let state = store.state.lock().unwrap();

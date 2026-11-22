@@ -29,6 +29,7 @@ pub(crate) struct WriteBehindStats {
     write_errors: AtomicU64,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct WriteBehindStatsSnapshot {
     pub(crate) queued: u64,
@@ -37,6 +38,7 @@ pub(crate) struct WriteBehindStatsSnapshot {
     pub(crate) write_errors: u64,
 }
 
+#[cfg(test)]
 impl WriteBehindStats {
     pub(crate) fn snapshot(&self) -> WriteBehindStatsSnapshot {
         WriteBehindStatsSnapshot {
@@ -83,6 +85,7 @@ impl WriteBehindStore {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn stats(&self) -> Arc<WriteBehindStats> {
         Arc::clone(&self.stats)
     }
@@ -118,11 +121,6 @@ impl ExactCacheStore for WriteBehindStore {
             self.put(key, value)?;
         }
         Ok(())
-    }
-
-    fn remove_expired(&self, now_unix_ms: u64) -> Result<usize, CacheError> {
-        self.flush()?;
-        self.inner.remove_expired(now_unix_ms)
     }
 
     fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
@@ -346,13 +344,13 @@ mod tests {
             .as_nanos();
         let path = std::env::temp_dir().join(format!("patronus-write-behind-{unique}.redb"));
         {
-            let redb = Arc::new(RedbCacheStore::open(&path).unwrap());
+            let redb = Arc::new(RedbCacheStore::open_with_encryption(&path, None).unwrap());
             let store = WriteBehindStore::new(redb, WriteBehindConfig::default());
             store.put(key("chunk"), output()).unwrap();
             store.flush().unwrap();
             assert_eq!(store.stats().snapshot().written, 1);
         }
-        let reopened = RedbCacheStore::open(&path).unwrap();
+        let reopened = RedbCacheStore::open_with_encryption(&path, None).unwrap();
         assert!(reopened.get(&key("chunk"), 10).unwrap().is_some());
         drop(reopened);
         std::fs::remove_file(path).unwrap();
@@ -396,10 +394,6 @@ mod tests {
                 self.largest_batch
                     .fetch_max(entries.len(), Ordering::Relaxed);
                 self.memory.put_batch(entries)
-            }
-
-            fn remove_expired(&self, now_unix_ms: u64) -> Result<usize, CacheError> {
-                self.memory.remove_expired(now_unix_ms)
             }
 
             fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
@@ -472,10 +466,6 @@ mod tests {
                 Ok(())
             }
 
-            fn remove_expired(&self, _now_unix_ms: u64) -> Result<usize, CacheError> {
-                Ok(0)
-            }
-
             fn remove_created_before(&self, _until_unix_ms: u64) -> Result<usize, CacheError> {
                 Ok(0)
             }
@@ -525,10 +515,6 @@ mod tests {
 
             fn put(&self, _key: CacheKey, _value: CachedModelOutput) -> Result<(), CacheError> {
                 Err(CacheError::Storage("write failed".to_string()))
-            }
-
-            fn remove_expired(&self, _now_unix_ms: u64) -> Result<usize, CacheError> {
-                Ok(0)
             }
 
             fn remove_created_before(&self, _until_unix_ms: u64) -> Result<usize, CacheError> {

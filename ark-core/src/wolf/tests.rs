@@ -15,7 +15,7 @@ mod published_model_tests {
         let bundle = std::env::var_os("ARK_WOLF_BUNDLE").expect("set ARK_WOLF_BUNDLE");
         let mut config = WolfConfig::new(PathBuf::from(bundle), 0.8);
         config.precision = WolfPrecision::Fp16;
-        let mut runner = WolfRunner::new(&config).unwrap();
+        let mut runner = WolfRunner::new(&config, Default::default(), Default::default()).unwrap();
         let mut reference: WolfManifest = serde_json::from_str(include_str!(
             "../../tests/fixtures/wolf_published_reference.json"
         ))
@@ -153,9 +153,9 @@ mod published_model_tests {
         };
         let mut config = WolfConfig::new(&bundle, 0.8);
         config.precision = WolfPrecision::Fp16;
-        config.backend = crate::ExecutionBackend::Cpu;
         // The bundle's published profile is the default.
-        let mut runner = WolfRunner::new(&config).unwrap();
+        let mut runner =
+            WolfRunner::new(&config, crate::ExecutionBackend::Cpu, Default::default()).unwrap();
         assert_eq!(
             (runner.windows.window_tokens, runner.windows.overlap_tokens),
             (2048, 64)
@@ -208,7 +208,12 @@ mod published_model_tests {
         .unwrap();
         let revision = WolfModel::Small.spec().revision;
         fs::write(dir.join(".patronus-revision"), revision).unwrap();
-        let mut runner = WolfRunner::new(&WolfConfig::new(&dir, 0.8)).unwrap();
+        let mut runner = WolfRunner::new(
+            &WolfConfig::new(&dir, 0.8),
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
         let result = runner
             .scan("Hello, please summarize the meeting agenda.")
             .unwrap();
@@ -258,7 +263,12 @@ mod progress_tests {
         )
         .unwrap();
         fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
-        let mut runner = WolfRunner::new(&WolfConfig::new(&dir, 0.8)).unwrap();
+        let mut runner = WolfRunner::new(
+            &WolfConfig::new(&dir, 0.8),
+            Default::default(),
+            Default::default(),
+        )
+        .unwrap();
         // The model's published windows: 2046 content tokens, 64 overlap.
         for (tokens, windows) in [(0, 1), (2046, 1), (2047, 2), (4029, 3)] {
             let text = " a".repeat(tokens);

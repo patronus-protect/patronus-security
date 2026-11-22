@@ -21,8 +21,8 @@ fn main() {
             vec![SecurityCategory::Injection, SecurityCategory::DynamicPii],
             SecurityLevel::L3,
         );
-        config.download = DownloadPolicy::Missing;
-        config.download_categories = Some(vec![
+        config.core.download = DownloadPolicy::Missing;
+        config.core.download_categories = Some(vec![
             SecurityCategory::Injection,
             SecurityCategory::DynamicPii,
         ]);

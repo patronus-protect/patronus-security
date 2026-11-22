@@ -112,10 +112,11 @@ fn batches_overlap_padding_and_progress_match_independent_window_oracle() {
                 overlap_tokens: Some(2),
                 batch_size,
             };
-            let mut runner = WolfRunner::new(&with_execution(
-                bundle.config(0.5).wolf.as_ref().unwrap(),
-                options,
-            ))
+            let mut runner = WolfRunner::new(
+                &with_execution(bundle.config(0.5).wolf.as_ref().unwrap(), options),
+                Default::default(),
+                Default::default(),
+            )
             .unwrap();
             for tokens in [0, 1, 6, 7, 10, ids.len()] {
                 let prefix = if tokens == 0 {
@@ -182,10 +183,11 @@ fn execution_options_validate_export_dimensions_and_keep_default_api() {
         },
     ] {
         assert!(matches!(
-            WolfRunner::new(&with_execution(
-                fixed.config(0.5).wolf.as_ref().unwrap(),
-                options
-            )),
+            WolfRunner::new(
+                &with_execution(fixed.config(0.5).wolf.as_ref().unwrap(), options),
+                Default::default(),
+                Default::default()
+            ),
             Err(ScanError::Config(_))
         ));
     }
@@ -206,13 +208,17 @@ fn execution_options_validate_export_dimensions_and_keep_default_api() {
     assert_eq!(a.document_logit, b.document_logit);
     assert_eq!(a.windows, b.windows);
     assert!(matches!(
-        WolfRunner::new(&with_execution(
-            dynamic.config(0.5).wolf.as_ref().unwrap(),
-            WolfExecutionOptions {
-                window_tokens: Some(8193),
-                ..Default::default()
-            }
-        )),
+        WolfRunner::new(
+            &with_execution(
+                dynamic.config(0.5).wolf.as_ref().unwrap(),
+                WolfExecutionOptions {
+                    window_tokens: Some(8193),
+                    ..Default::default()
+                }
+            ),
+            Default::default(),
+            Default::default()
+        ),
         Err(ScanError::Config(_))
     ));
 }
@@ -221,7 +227,12 @@ fn execution_options_validate_export_dimensions_and_keep_default_api() {
 fn threshold_changes_reuse_the_model_and_invalid_values_preserve_the_previous_threshold() {
     use patronus_ark_core::wolf::WolfRunner;
     let bundle = Bundle::batched(false);
-    let mut runner = WolfRunner::new(bundle.config(0.5).wolf.as_ref().unwrap()).unwrap();
+    let mut runner = WolfRunner::new(
+        bundle.config(0.5).wolf.as_ref().unwrap(),
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap();
     fs::remove_file(bundle.0.join("model_fp16.onnx")).unwrap();
     runner.set_threshold(0.0).unwrap();
     assert!(runner.scan(" a").unwrap().matched);
@@ -240,14 +251,18 @@ fn threshold_changes_reuse_the_model_and_invalid_values_preserve_the_previous_th
 fn cancellation_between_batched_rows_never_returns_partial_success() {
     use patronus_ark_core::{wolf::WolfRunner, ScanControl, WolfExecutionOptions};
     let bundle = Bundle::batched(true);
-    let mut runner = WolfRunner::new(&with_execution(
-        bundle.config(0.5).wolf.as_ref().unwrap(),
-        WolfExecutionOptions {
-            window_tokens: Some(8),
-            overlap_tokens: Some(2),
-            batch_size: 4,
-        },
-    ))
+    let mut runner = WolfRunner::new(
+        &with_execution(
+            bundle.config(0.5).wolf.as_ref().unwrap(),
+            WolfExecutionOptions {
+                window_tokens: Some(8),
+                overlap_tokens: Some(2),
+                batch_size: 4,
+            },
+        ),
+        Default::default(),
+        Default::default(),
+    )
     .unwrap();
     let control = ScanControl::default();
     let mut completed = 0;
@@ -422,14 +437,22 @@ fn legacy_manifest_keeps_integrity_without_overriding_254_content_profile() {
     manifest["content_tokens"] = serde_json::json!(256);
     manifest["sequence_tokens"] = serde_json::json!(258);
     fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-    let mut runner =
-        patronus_ark_core::wolf::WolfRunner::new(&WolfConfig::new(&bundle.0, 0.8)).unwrap();
+    let mut runner = patronus_ark_core::wolf::WolfRunner::new(
+        &WolfConfig::new(&bundle.0, 0.8),
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap();
     assert_eq!(runner.scan(&" a".repeat(254)).unwrap().windows, 1);
     assert_eq!(runner.scan(&" a".repeat(255)).unwrap().windows, 2);
     // Compatibility must not erase the manifest's file integrity check.
     fs::write(bundle.0.join("model_fp16.onnx"), b"corrupt").unwrap();
     assert!(matches!(
-        patronus_ark_core::wolf::WolfRunner::new(&WolfConfig::new(&bundle.0, 0.8)),
+        patronus_ark_core::wolf::WolfRunner::new(
+            &WolfConfig::new(&bundle.0, 0.8),
+            Default::default(),
+            Default::default()
+        ),
         Err(ScanError::Asset(_))
     ));
 }
@@ -438,7 +461,12 @@ fn legacy_manifest_keeps_integrity_without_overriding_254_content_profile() {
 fn cancelled_or_expired_wolf_work_stops_with_typed_error_and_runner_is_reusable() {
     use patronus_ark_core::{wolf::WolfRunner, ScanControl};
     let bundle = Bundle::new();
-    let mut runner = WolfRunner::new(&WolfConfig::new(&bundle.0, 0.8)).unwrap();
+    let mut runner = WolfRunner::new(
+        &WolfConfig::new(&bundle.0, 0.8),
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap();
     let cancelled = ScanControl::default();
     cancelled.cancel();
     assert!(matches!(
@@ -475,7 +503,12 @@ fn deadline_terminates_active_onnx_loop_and_same_runner_remains_usable() {
     )
     .unwrap();
     fs::write(bundle.0.join("config.json"), r#"{"num_labels":1}"#).unwrap();
-    let mut runner = WolfRunner::new(&WolfConfig::new(&bundle.0, 0.8)).unwrap();
+    let mut runner = WolfRunner::new(
+        &WolfConfig::new(&bundle.0, 0.8),
+        Default::default(),
+        Default::default(),
+    )
+    .unwrap();
     let control = ScanControl::with_timeout(std::time::Duration::from_millis(30)).unwrap();
     assert!(matches!(
         runner.scan_with_control(" a", &control),
@@ -672,14 +705,18 @@ fn unset_settings_follow_the_bundles_published_pooling_json() {
     use patronus_ark_core::{wolf::WolfRunner, WolfExecutionOptions};
     let bundle = Bundle::batched(false);
     let text = " a".repeat(20);
-    let explicit = WolfRunner::new(&with_execution(
-        bundle.config(0.5).wolf.as_ref().unwrap(),
-        WolfExecutionOptions {
-            window_tokens: Some(8),
-            overlap_tokens: Some(2),
-            batch_size: 1,
-        },
-    ))
+    let explicit = WolfRunner::new(
+        &with_execution(
+            bundle.config(0.5).wolf.as_ref().unwrap(),
+            WolfExecutionOptions {
+                window_tokens: Some(8),
+                overlap_tokens: Some(2),
+                batch_size: 1,
+            },
+        ),
+        Default::default(),
+        Default::default(),
+    )
     .unwrap()
     .scan(&text)
     .unwrap();
@@ -691,7 +728,7 @@ fn unset_settings_follow_the_bundles_published_pooling_json() {
     .unwrap();
     let mut config = bundle.config(0.5).wolf.unwrap();
     config.threshold = None;
-    let mut published = WolfRunner::new(&config).unwrap();
+    let mut published = WolfRunner::new(&config, Default::default(), Default::default()).unwrap();
     let report = published.scan(&text).unwrap();
     assert_eq!(report.threshold, 0.25);
     assert_eq!(report.windows, explicit.windows);
@@ -704,13 +741,13 @@ fn unset_settings_follow_the_bundles_published_pooling_json() {
     assert!(!published.scan(&text).unwrap().matched);
     // A bundle publishing `>=` also detects at the threshold.
     fs::write(bundle.0.join("POOLING.json"), r#"{"threshold": ">=0.25"}"#).unwrap();
-    let mut inclusive = WolfRunner::new(&config).unwrap();
+    let mut inclusive = WolfRunner::new(&config, Default::default(), Default::default()).unwrap();
     let probability = inclusive.scan(&text).unwrap().attack_probability;
     inclusive.set_threshold(probability).unwrap();
     assert!(inclusive.scan(&text).unwrap().matched);
     // Without POOLING.json Core uses the model's documented 2048/64 windows.
     fs::remove_file(bundle.0.join("POOLING.json")).unwrap();
-    let mut documented = WolfRunner::new(&config).unwrap();
+    let mut documented = WolfRunner::new(&config, Default::default(), Default::default()).unwrap();
     let report = documented.scan(&" a".repeat(2047)).unwrap();
     assert_eq!((report.threshold, report.windows), (0.5, 2));
 }

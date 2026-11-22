@@ -6,8 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{
     CacheError, CacheKey, CacheWriteMode, CachedModelOutput, ExactCacheConfig, ExactCacheStore,
-    MemoryCacheConfig, MemoryCacheStore, RedbCacheStore, SimilarityStoreRecord, WriteBehindStats,
-    WriteBehindStatsSnapshot, WriteBehindStore,
+    MemoryCacheConfig, MemoryCacheStore, RedbCacheStore, SimilarityStoreRecord, WriteBehindStore,
 };
 
 pub(crate) trait Clock: Send + Sync {
@@ -43,7 +42,6 @@ pub(crate) struct CacheCoordinator {
     persistent: Mutex<Option<Arc<dyn ExactCacheStore>>>,
     persistent_config: Option<super::PersistentCacheConfig>,
     storage_location: Option<PathBuf>,
-    write_stats: Mutex<Option<Arc<WriteBehindStats>>>,
     clock: Arc<dyn Clock>,
     entry_ttl_ms: u64,
     memory_config: MemoryCacheConfig,
@@ -62,7 +60,6 @@ impl CacheCoordinator {
             persistent: Mutex::new(persistent),
             persistent_config: None,
             storage_location: None,
-            write_stats: Mutex::new(None),
             clock,
             entry_ttl_ms: ExactCacheConfig::default().entry_ttl.as_millis() as u64,
             memory_config: MemoryCacheConfig::default(),
@@ -90,14 +87,13 @@ impl CacheCoordinator {
         };
 
         let storage_location = persistent_config.storage_location.clone();
-        let (persistent, write_stats) = open_persistent_store(&persistent_config)?;
+        let persistent = open_persistent_store(&persistent_config)?;
 
         Ok(Self {
             memory,
             persistent: Mutex::new(Some(persistent)),
             persistent_config: Some(persistent_config),
             storage_location: Some(storage_location),
-            write_stats: Mutex::new(write_stats),
             clock,
             entry_ttl_ms,
             memory_config,
@@ -108,14 +104,6 @@ impl CacheCoordinator {
 
     pub(crate) fn storage_location(&self) -> Option<&Path> {
         self.storage_location.as_deref()
-    }
-
-    pub(crate) fn write_stats(&self) -> Option<WriteBehindStatsSnapshot> {
-        self.write_stats
-            .lock()
-            .expect("cache write stats mutex poisoned")
-            .as_ref()
-            .map(|stats| stats.snapshot())
     }
 
     pub(crate) fn flush(&self) -> Result<(), CacheError> {
@@ -130,10 +118,6 @@ impl CacheCoordinator {
             .persistent
             .lock()
             .map_err(|_| CacheError::Storage("cache connection mutex poisoned".to_string()))?
-            .take();
-        self.write_stats
-            .lock()
-            .map_err(|_| CacheError::Storage("cache write stats mutex poisoned".to_string()))?
             .take();
         if let Some(persistent) = persistent {
             persistent.flush()?;
@@ -290,31 +274,21 @@ impl CacheCoordinator {
             .map_err(|_| CacheError::Storage("cache connection mutex poisoned".to_string()))?;
         if persistent.is_none() {
             if let Some(config) = &self.persistent_config {
-                let (store, stats) = open_persistent_store(config)?;
-                *persistent = Some(store);
-                *self.write_stats.lock().map_err(|_| {
-                    CacheError::Storage("cache write stats mutex poisoned".to_string())
-                })? = stats;
+                *persistent = Some(open_persistent_store(config)?);
             }
         }
         Ok(persistent.clone())
     }
 }
 
-type PersistentStoreHandle = (Arc<dyn ExactCacheStore>, Option<Arc<WriteBehindStats>>);
-
 fn open_persistent_store(
     config: &super::PersistentCacheConfig,
-) -> Result<PersistentStoreHandle, CacheError> {
+) -> Result<Arc<dyn ExactCacheStore>, CacheError> {
     let redb: Arc<dyn ExactCacheStore> =
         RedbCacheStore::open_shared(&config.storage_location, config.encryption.clone())?;
     Ok(match config.write_mode {
-        CacheWriteMode::WriteThrough => (redb, None),
-        CacheWriteMode::Async => {
-            let store = Arc::new(WriteBehindStore::new(redb, config.write_behind));
-            let stats = Some(store.stats());
-            (store, stats)
-        }
+        CacheWriteMode::WriteThrough => redb,
+        CacheWriteMode::Async => Arc::new(WriteBehindStore::new(redb, config.write_behind)),
     })
 }
 
@@ -413,7 +387,6 @@ mod tests {
         .unwrap();
 
         assert!(cache.storage_location().is_none());
-        assert!(cache.write_stats().is_none());
     }
 
     #[test]
@@ -432,7 +405,6 @@ mod tests {
             assert_eq!(lookup.source, CacheSource::Computed);
             assert_eq!(cache.storage_location(), Some(path.as_path()));
             cache.flush().unwrap();
-            assert_eq!(cache.write_stats().unwrap().written, 1);
         }
         let reopened = CacheCoordinator::from_config_with_clock(
             config,
@@ -574,10 +546,6 @@ mod tests {
 
             fn put(&self, _key: CacheKey, _value: CachedModelOutput) -> Result<(), CacheError> {
                 Err(CacheError::Storage("write failed".to_string()))
-            }
-
-            fn remove_expired(&self, _now_unix_ms: u64) -> Result<usize, CacheError> {
-                Err(CacheError::Storage("cleanup failed".to_string()))
             }
 
             fn remove_created_before(&self, _until_unix_ms: u64) -> Result<usize, CacheError> {

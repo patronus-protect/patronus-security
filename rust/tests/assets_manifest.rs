@@ -1,13 +1,21 @@
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use patronus_ark::{
-    assets::dedicated_l3_asset, assets::ntdb_l2_package_assets,
-    assets::ntdb_l2_package_assets_present, assets::DEDICATED_L3_ASSETS, assets::DYNAMIC_PII_ASSET,
-    assets::NTDB_L2_PACKAGE_MANIFEST, assets::UNIFIED_L3_ASSET,
+use patronus_ark::assets::{
+    dedicated_l3_asset, ntdb_l2_package_current, PipelineModelAssetSpec, DEDICATED_L3_ASSETS,
+    DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
 };
 
-use patronus_ark_core::{cascade::SecurityLevel, warmup::DownloadPolicy, SecurityCategory};
+use patronus_ark_core::{warmup::DownloadPolicy, SecurityCategory};
+
+/// The NTDB L2 packages of `category`.
+fn ntdb_packages(category: SecurityCategory) -> Vec<PipelineModelAssetSpec> {
+    NTDB_L2_PACKAGE_MANIFEST
+        .iter()
+        .copied()
+        .filter(|asset| asset.category == category)
+        .collect()
+}
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
     let suffix = SystemTime::now()
@@ -168,7 +176,7 @@ fn classifier_assets_use_the_public_hub_repositories() {
         assert_eq!(l3.spec.repository, l3_repo);
         assert_eq!(l3.spec.revision, revision);
 
-        let l2 = ntdb_l2_package_assets(category, SecurityLevel::L2);
+        let l2 = ntdb_packages(category);
         assert_eq!(
             l2.len(),
             if category == SecurityCategory::ToolTags {
@@ -227,21 +235,21 @@ fn sensitive_document_l3_bundle_lands_where_its_l3_model_loads() {
 #[test]
 fn ntdb_l2_package_manifest_has_available_model_specs() {
     assert_eq!(
-        ntdb_l2_package_assets(SecurityCategory::Injection, SecurityLevel::L2)
+        ntdb_packages(SecurityCategory::Injection)
             .iter()
             .map(|asset| asset.spec.cache_subdir)
             .collect::<Vec<_>>(),
         vec!["injection/l2_ntdb/injection_current"]
     );
     assert_eq!(
-        ntdb_l2_package_assets(SecurityCategory::SensitiveDocument, SecurityLevel::L2)
+        ntdb_packages(SecurityCategory::SensitiveDocument)
             .iter()
             .map(|asset| asset.spec.cache_subdir)
             .collect::<Vec<_>>(),
         vec!["sensitive_document/l2_ntdb/sensitive_document_current"]
     );
     assert_eq!(
-        ntdb_l2_package_assets(SecurityCategory::ToolClass, SecurityLevel::L2)
+        ntdb_packages(SecurityCategory::ToolClass)
             .iter()
             .map(|asset| asset.spec.cache_subdir)
             .collect::<Vec<_>>(),
@@ -264,7 +272,7 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
             "threat/l2_ntdb/threat_current",
         ),
     ] {
-        let assets = ntdb_l2_package_assets(category, SecurityLevel::L2);
+        let assets = ntdb_packages(category);
         assert_eq!(assets.len(), 1);
         assert_eq!(assets[0].spec.id, model);
         assert_eq!(assets[0].spec.cache_subdir, destination);
@@ -275,7 +283,7 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
             );
         }
     }
-    let tool_tags = ntdb_l2_package_assets(SecurityCategory::ToolTags, SecurityLevel::L2);
+    let tool_tags = ntdb_packages(SecurityCategory::ToolTags);
     assert_eq!(tool_tags.len(), 3);
     assert_eq!(
         tool_tags
@@ -292,14 +300,14 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
         asset.spec.repository == "patronus-studio/husky-nose-tool-security-properties-classifier"
             && asset.spec.revision == "f5736c09bcb6f75f1af3604706a1ee5c7e39d745"
     }));
-    assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
-    assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
+    assert!(ntdb_packages(SecurityCategory::Dlp).is_empty());
+    assert!(ntdb_packages(SecurityCategory::Pii).is_empty());
 }
 
 #[test]
 fn ntdb_l2_package_cache_requires_the_pinned_revision() {
     let dir = temp_dir("ntdb_revision");
-    let asset = ntdb_l2_package_assets(SecurityCategory::Injection, SecurityLevel::L2)[0];
+    let asset = ntdb_packages(SecurityCategory::Injection)[0];
     let package_dir = dir.join(asset.spec.cache_subdir);
     std::fs::create_dir_all(&package_dir).unwrap();
     std::fs::create_dir_all(package_dir.join("minilm")).unwrap();
@@ -310,19 +318,9 @@ fn ntdb_l2_package_cache_requires_the_pinned_revision() {
     std::fs::write(package_dir.join("manifest.json"), manifest.to_string()).unwrap();
     std::fs::write(package_dir.join("minilm/embedding_matrix.f16"), [0_u8; 2]).unwrap();
 
-    assert!(!ntdb_l2_package_assets_present(
-        SecurityCategory::Injection,
-        SecurityLevel::L2,
-        asset.spec.id,
-        &dir,
-    ));
+    assert!(!ntdb_l2_package_current(&asset.spec, &dir));
     std::fs::write(package_dir.join(".patronus-revision"), asset.spec.revision).unwrap();
-    assert!(ntdb_l2_package_assets_present(
-        SecurityCategory::Injection,
-        SecurityLevel::L2,
-        asset.spec.id,
-        &dir,
-    ));
+    assert!(ntdb_l2_package_current(&asset.spec, &dir));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -339,7 +337,7 @@ fn ntdb_l2_package_manifest_has_unique_destination_paths_per_category() {
         SecurityCategory::Pii,
     ] {
         let mut seen = HashSet::new();
-        for asset in ntdb_l2_package_assets(category, SecurityLevel::L3) {
+        for asset in ntdb_packages(category) {
             assert!(
                 seen.insert(asset.spec.cache_subdir),
                 "duplicate NTDB package destination for {category:?}: {}",
@@ -348,7 +346,6 @@ fn ntdb_l2_package_manifest_has_unique_destination_paths_per_category() {
             assert!(
                 asset.spec.source_prefix == "l2" || asset.spec.source_prefix.starts_with("l2/")
             );
-            assert!(asset.required);
         }
     }
 }
@@ -357,10 +354,9 @@ mod asset_downloads {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use patronus_ark::assets::{
-        dedicated_l3_asset, ntdb_l2_package_assets, ntdb_l2_package_manifest_files,
-    };
-    use patronus_ark_core::{cascade::SecurityLevel, warmup::DownloadPolicy, SecurityCategory};
+    use super::ntdb_packages;
+    use patronus_ark::assets::{dedicated_l3_asset, ntdb_l2_package_manifest_files};
+    use patronus_ark_core::{warmup::DownloadPolicy, SecurityCategory};
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let suffix = SystemTime::now()
@@ -379,7 +375,7 @@ mod asset_downloads {
 
     #[test]
     fn ntdb_l2_package_specs_cover_available_models() {
-        let injection = ntdb_l2_package_assets(SecurityCategory::Injection, SecurityLevel::L2);
+        let injection = ntdb_packages(SecurityCategory::Injection);
         assert_eq!(injection.len(), 1);
         assert_eq!(injection[0].spec.id, "wolf-defender-small");
         assert_eq!(injection[0].spec.source_prefix, "l2");
@@ -388,8 +384,7 @@ mod asset_downloads {
             "injection/l2_ntdb/injection_current"
         );
 
-        let sensitive =
-            ntdb_l2_package_assets(SecurityCategory::SensitiveDocument, SecurityLevel::L2);
+        let sensitive = ntdb_packages(SecurityCategory::SensitiveDocument);
         assert_eq!(sensitive.len(), 1);
         assert_eq!(sensitive[0].spec.id, "orca-sonar-document-classifier");
         assert_eq!(
@@ -403,17 +398,17 @@ mod asset_downloads {
             (SecurityCategory::Routing, "unified-v3-routing"),
             (SecurityCategory::UnsafeAction, "unified-v3-threat"),
         ] {
-            let assets = ntdb_l2_package_assets(category, SecurityLevel::L2);
+            let assets = ntdb_packages(category);
             assert_eq!(assets.len(), 1);
             assert_eq!(assets[0].spec.id, model);
         }
-        let tool_tags = ntdb_l2_package_assets(SecurityCategory::ToolTags, SecurityLevel::L2);
+        let tool_tags = ntdb_packages(SecurityCategory::ToolTags);
         assert_eq!(tool_tags.len(), 3);
         assert!(tool_tags
             .iter()
             .all(|asset| asset.spec.id.starts_with("tool_tags_")));
-        assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
-        assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
+        assert!(ntdb_packages(SecurityCategory::Dlp).is_empty());
+        assert!(ntdb_packages(SecurityCategory::Pii).is_empty());
     }
 
     #[test]

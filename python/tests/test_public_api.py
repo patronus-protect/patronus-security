@@ -185,6 +185,21 @@ class PublicApiTests(unittest.TestCase):
                 (["injection", "dynamic-pii"], "l3", "never"),
             )
 
+    def test_scans_take_cores_scan_control(self):
+        from patronus_ark_core import CancelledError, ScanControl
+
+        gateway = SecurityGateway({"categories": ["pii"], "max_level": "l1"})
+        with self.assertRaises(TimeoutError):
+            gateway.scan_all("hello", control=ScanControl(timeout_ms=0))
+        cancelled = ScanControl()
+        cancelled.cancel()
+        with self.assertRaises(CancelledError):
+            gateway.scan_categories(["pii"], "hello", control=cancelled)
+        with self.assertRaises(TypeError):
+            gateway.scan_category("pii", "hello", control=object())
+        report = gateway.scan_category("pii", "hello", control=ScanControl(timeout_ms=60_000))
+        self.assertEqual(report["input_bytes"], 5)
+
     def test_anchor_explain_is_explicit(self):
         scanner = SecurityGateway({"categories": ["dlp"], "max_level": "l1", "download": "never"})
         text = "token " * 64_000

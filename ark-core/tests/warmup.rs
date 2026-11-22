@@ -1,7 +1,7 @@
 #![cfg(feature = "wolf")]
 use patronus_ark_core::{
     wolf::{WolfConfig, WolfPrecision},
-    DownloadPolicy, ScanError, Scanner, ScannerConfig, WarmupOptions,
+    DownloadPolicy, ScanError, Scanner, ScannerConfig,
 };
 use std::{
     fs,
@@ -54,13 +54,10 @@ fn complete_local_assets_are_reused_without_network_or_migration() {
         .unwrap()
         .modified()
         .unwrap();
-    let mut scanner = Scanner::warmup(
-        bundle.config(),
-        WarmupOptions {
-            download: DownloadPolicy::Missing,
-            ..WarmupOptions::default()
-        },
-    )
+    let mut scanner = Scanner::warmup(ScannerConfig {
+        download: DownloadPolicy::Missing,
+        ..bundle.config()
+    })
     .unwrap();
     let first = scanner.scan("Meeting agenda.").unwrap().wolf.unwrap();
     let second = scanner.scan("Meeting agenda.").unwrap().wolf.unwrap();
@@ -81,13 +78,13 @@ fn complete_local_assets_are_reused_without_network_or_migration() {
 fn offline_missing_and_corrupt_assets_fail_instead_of_starting_clean() {
     let bundle = Bundle::new();
     assert!(matches!(
-        Scanner::warmup(bundle.config(), WarmupOptions::default()),
+        Scanner::warmup(bundle.config()),
         Err(ScanError::Asset(_))
     ));
     assert_eq!(fs::read_dir(&bundle.0).unwrap().count(), 0);
     bundle.local();
     fs::write(bundle.0.join("model_fp16.onnx"), b"broken model").unwrap();
-    assert!(Scanner::warmup(bundle.config(), WarmupOptions::default()).is_err());
+    assert!(Scanner::warmup(bundle.config()).is_err());
 }
 #[test]
 fn invalid_scan_policy_is_rejected_before_asset_preparation() {
@@ -95,26 +92,20 @@ fn invalid_scan_policy_is_rejected_before_asset_preparation() {
     let mut config = bundle.config();
     config.max_input_bytes = Some(0);
     assert!(matches!(
-        Scanner::warmup(
-            config,
-            WarmupOptions {
-                download: DownloadPolicy::Missing,
-                ..WarmupOptions::default()
-            }
-        ),
+        Scanner::warmup(ScannerConfig {
+            download: DownloadPolicy::Missing,
+            ..config
+        }),
         Err(ScanError::Config(_))
     ));
     assert_eq!(fs::read_dir(&bundle.0).unwrap().count(), 0);
     let mut config = bundle.config();
     config.wolf.as_mut().unwrap().threshold = Some(f64::NAN);
     assert!(matches!(
-        Scanner::warmup(
-            config,
-            WarmupOptions {
-                download: DownloadPolicy::Missing,
-                ..WarmupOptions::default()
-            }
-        ),
+        Scanner::warmup(ScannerConfig {
+            download: DownloadPolicy::Missing,
+            ..config
+        }),
         Err(ScanError::Config(_))
     ));
     assert_eq!(fs::read_dir(&bundle.0).unwrap().count(), 0);
@@ -134,13 +125,10 @@ fn official_download_warms_both_exports_then_reuses_them_offline() {
         let wolf = config.wolf.as_mut().unwrap();
         wolf.model = model;
         wolf.precision = precision;
-        let mut scanner = Scanner::warmup(
-            config.clone(),
-            WarmupOptions {
-                download: DownloadPolicy::Missing,
-                ..WarmupOptions::default()
-            },
-        )
+        let mut scanner = Scanner::warmup(ScannerConfig {
+            download: DownloadPolicy::Missing,
+            ..config.clone()
+        })
         .unwrap();
         let first = scanner
             .scan("Please summarize the meeting agenda.")
@@ -157,7 +145,7 @@ fn official_download_warms_both_exports_then_reuses_them_offline() {
         assert_eq!(first.model_id, model.spec().id);
         assert_eq!(first.precision, precision.as_str());
         drop(scanner);
-        let mut cached = Scanner::warmup(config, WarmupOptions::default()).unwrap();
+        let mut cached = Scanner::warmup(config).unwrap();
         let second = cached
             .scan("Please summarize the meeting agenda.")
             .unwrap()

@@ -1,4 +1,4 @@
-from .types import NativeCategory, ScanReport, ScannerConfig, ShellFacts, ShellVerdict, WarmupOptions
+from .types import NativeCategory, ScanReport, ScannerConfig, ShellFacts, ShellVerdict
 
 __version__: str
 
@@ -8,12 +8,12 @@ class ScannerBusyError(RuntimeError): ...
 class ScanControl:
     def __init__(self, timeout_ms: int | None = None) -> None: ...
     def cancel(self) -> None: ...
+    def check(self) -> None:
+        """Raise `TimeoutError` past the deadline, `CancelledError` once cancelled."""
+        ...
 
 class Scanner:
-    def __init__(
-        self, config: dict[str, object] | ScannerConfig | None = None, *,
-        warmup: dict[str, object] | WarmupOptions | None = None,
-    ) -> None: ...
+    def __init__(self, config: dict[str, object] | ScannerConfig | None = None) -> None: ...
     def scan(
         self, text: str, *, categories: list[NativeCategory] | None = None,
         control: ScanControl | None = None,

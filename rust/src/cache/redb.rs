@@ -62,10 +62,7 @@ impl RedbCacheStore {
         Ok(store)
     }
 
-    pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, CacheError> {
-        Self::open_with_encryption(path, None)
-    }
-
+    #[cfg(test)]
     pub(crate) fn open_with_encryption(
         path: impl AsRef<Path>,
         encryption: Option<CacheEncryptionConfig>,
@@ -236,51 +233,6 @@ impl ExactCacheStore for RedbCacheStore {
             }
         }
         write.commit().map_err(storage_error)
-    }
-
-    fn remove_expired(&self, now_unix_ms: u64) -> Result<usize, CacheError> {
-        let database = self.database()?;
-        let read = database.begin_read().map_err(storage_error)?;
-        let table = read.open_table(RECORDS).map_err(storage_error)?;
-        let mut expired = Vec::new();
-        for entry in table.iter().map_err(storage_error)? {
-            let (key, value) = entry.map_err(storage_error)?;
-            let (_, expires_at_unix_ms) = self.exact_times(value.value())?;
-            if expires_at_unix_ms <= now_unix_ms {
-                expired.push(key.value().to_vec());
-            }
-        }
-        drop(table);
-        drop(read);
-
-        let similarity_read = database.begin_read().map_err(storage_error)?;
-        let similarity_table = similarity_read
-            .open_table(SIMILARITY_RECORDS)
-            .map_err(storage_error)?;
-        let mut expired_similarity = Vec::new();
-        for entry in similarity_table.iter().map_err(storage_error)? {
-            let (id, value) = entry.map_err(storage_error)?;
-            let (_, expires_at_unix_ms) = self.similarity_times(value.value())?;
-            if expires_at_unix_ms <= now_unix_ms {
-                expired_similarity.push(id.value().to_vec());
-            }
-        }
-        drop(similarity_table);
-        drop(similarity_read);
-
-        if expired.is_empty() && expired_similarity.is_empty() {
-            return Ok(0);
-        }
-        let write = database.begin_write().map_err(storage_error)?;
-        {
-            let mut table = write.open_table(RECORDS).map_err(storage_error)?;
-            for key in &expired {
-                table.remove(key.as_slice()).map_err(storage_error)?;
-            }
-        }
-        remove_similarity_records(&write, &expired_similarity)?;
-        write.commit().map_err(storage_error)?;
-        Ok(expired.len() + expired_similarity.len())
     }
 
     fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
@@ -917,7 +869,7 @@ mod tests {
         let path = temp_path("missing-db");
         assert!(!path.exists());
 
-        let store = RedbCacheStore::open(&path).unwrap();
+        let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
 
         assert!(path.exists());
         drop(store);
@@ -933,7 +885,7 @@ mod tests {
         let parent = path.parent().unwrap().to_path_buf();
         assert!(!parent.exists());
 
-        let store = RedbCacheStore::open(&path).unwrap();
+        let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
 
         assert!(parent.exists());
         assert!(path.exists());
@@ -944,7 +896,7 @@ mod tests {
     #[test]
     fn deleted_database_file_is_recreated_with_live_handle() {
         let path = temp_path("deleted-live-handle");
-        let store = RedbCacheStore::open(&path).unwrap();
+        let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
         store.put(key("before-delete"), output(100)).unwrap();
         fs::remove_file(&path).unwrap();
         assert!(!path.exists());
@@ -961,12 +913,12 @@ mod tests {
     #[test]
     fn deleted_database_file_is_recreated_on_next_open() {
         let path = temp_path("deleted-next-open");
-        let store = RedbCacheStore::open(&path).unwrap();
+        let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
         store.put(key("before-delete"), output(100)).unwrap();
         fs::remove_file(&path).unwrap();
         assert!(!path.exists());
 
-        let reopened = RedbCacheStore::open(&path).unwrap();
+        let reopened = RedbCacheStore::open_with_encryption(&path, None).unwrap();
 
         assert!(path.exists());
         assert!(reopened.get(&key("before-delete"), 10).unwrap().is_none());
@@ -982,7 +934,7 @@ mod tests {
         let path = temp_path("corrupt");
         fs::write(&path, b"not a redb database").unwrap();
 
-        let error = match RedbCacheStore::open(&path) {
+        let error = match RedbCacheStore::open_with_encryption(&path, None) {
             Ok(_) => panic!("corrupt database must not be recreated silently"),
             Err(error) => error,
         };
@@ -994,9 +946,9 @@ mod tests {
     #[test]
     fn active_second_writer_remains_an_error() {
         let path = temp_path("active-writer");
-        let store = RedbCacheStore::open(&path).unwrap();
+        let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
 
-        let error = match RedbCacheStore::open(&path) {
+        let error = match RedbCacheStore::open_with_encryption(&path, None) {
             Ok(second) => {
                 drop(second);
                 drop(store);
@@ -1032,10 +984,10 @@ mod tests {
     fn persistent_hit_survives_reopen() {
         let path = temp_path("reopen");
         {
-            let store = RedbCacheStore::open(&path).unwrap();
+            let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
             store.put(key("chunk"), output(100)).unwrap();
         }
-        let reopened = RedbCacheStore::open(&path).unwrap();
+        let reopened = RedbCacheStore::open_with_encryption(&path, None).unwrap();
 
         let cached = reopened.get(&key("chunk"), 10).unwrap().unwrap();
         assert_eq!(cached.schema_version, 7);
@@ -1102,10 +1054,10 @@ mod tests {
         let path = temp_path("encrypted-cleanup");
         let store =
             RedbCacheStore::open_with_encryption(&path, Some(encryption_config(9))).unwrap();
-        store.put(key("old"), output(20)).unwrap();
-        store.put(key("new"), output(30)).unwrap();
+        store.put(key("old"), output_created(10, 100)).unwrap();
+        store.put(key("new"), output_created(30, 100)).unwrap();
 
-        let expired_similarity = SimilarityStoreRecord {
+        let stale_similarity = SimilarityStoreRecord {
             id: [1; 32],
             vector_space: "space".to_string(),
             producer_model_sha: "model".to_string(),
@@ -1114,24 +1066,24 @@ mod tests {
                 head: "decision\0injection\0attack".to_string(),
                 logits: vec![0.91],
             }],
-            bucket_keys: vec![b"expired-bucket".to_vec()],
+            bucket_keys: vec![b"stale-bucket".to_vec()],
             created_at_unix_ms: 10,
-            expires_at_unix_ms: 20,
+            expires_at_unix_ms: 100,
         };
         let current_similarity = SimilarityStoreRecord {
             id: [2; 32],
             bucket_keys: vec![b"current-bucket".to_vec()],
-            expires_at_unix_ms: 30,
-            ..expired_similarity.clone()
+            created_at_unix_ms: 30,
+            ..stale_similarity.clone()
         };
-        store.put_similarity(expired_similarity.clone()).unwrap();
+        store.put_similarity(stale_similarity.clone()).unwrap();
         store.put_similarity(current_similarity.clone()).unwrap();
 
-        assert_eq!(store.remove_expired(20).unwrap(), 2);
+        assert_eq!(store.remove_created_before(20).unwrap(), 2);
         assert!(store.get(&key("old"), 20).unwrap().is_none());
         assert!(store.get(&key("new"), 20).unwrap().is_some());
         assert!(store
-            .similarity_candidates(&expired_similarity.bucket_keys, 20, 10)
+            .similarity_candidates(&stale_similarity.bucket_keys, 20, 10)
             .unwrap()
             .is_empty());
         assert_eq!(
@@ -1252,16 +1204,13 @@ mod tests {
     }
 
     #[test]
-    fn expired_entries_are_removed_lazily_and_by_cleanup() {
+    fn expired_entries_are_removed_lazily() {
         let path = temp_path("expiry");
-        let store = RedbCacheStore::open(&path).unwrap();
+        let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
         store.put(key("lazy"), output(20)).unwrap();
-        store.put(key("sweep"), output(20)).unwrap();
         store.put(key("current"), output(30)).unwrap();
 
         assert!(store.get(&key("lazy"), 20).unwrap().is_none());
-        assert_eq!(store.remove_expired(20).unwrap(), 1);
-        assert!(store.get(&key("sweep"), 20).unwrap().is_none());
         assert!(store.get(&key("current"), 20).unwrap().is_some());
         drop(store);
         fs::remove_file(path).unwrap();
@@ -1270,7 +1219,7 @@ mod tests {
     #[test]
     fn entries_created_before_cutoff_are_removed_by_cleanup() {
         let path = temp_path("created-before");
-        let store = RedbCacheStore::open(&path).unwrap();
+        let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
         store.put(key("old"), output_created(10, 100)).unwrap();
         store.put(key("new"), output_created(20, 100)).unwrap();
 
@@ -1287,7 +1236,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let path = temp_path("permissions");
-        let store = RedbCacheStore::open(&path).unwrap();
+        let store = RedbCacheStore::open_with_encryption(&path, None).unwrap();
 
         assert_eq!(
             fs::metadata(&path).unwrap().permissions().mode() & 0o777,
