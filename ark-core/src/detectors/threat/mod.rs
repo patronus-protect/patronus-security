@@ -995,8 +995,8 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
 }
 
 /// The hashed lexicon check of a toxic language match: its `lex` words hold
-/// an insult (or, per rule, a dehumanising metaphor, or a violence verb with
-/// a target) that no negation before it cancels. Phrase rules have no `lex`.
+/// an insult (or, per rule, a dehumanising metaphor, or a violence verb
+/// bound to a target) that no negation before it cancels. Phrase rules have no `lex`.
 fn toxic_holds(rule_id: &str, captures: &regex::Captures<'_>) -> bool {
     use toxic_lexicon::Family;
     let Some(lex) = captures.name("lex").map(|m| m.as_str()) else {
@@ -1004,9 +1004,7 @@ fn toxic_holds(rule_id: &str, captures: &regex::Captures<'_>) -> bool {
     };
     match rule_id {
         "ark.threat.tx_dehumanisation" => toxic_lexicon::contains(lex, Family::Dehumanise),
-        "ark.threat.tx_threat" => {
-            toxic_lexicon::names_target(lex) && toxic_lexicon::contains(lex, Family::ViolenceVerb)
-        }
+        "ark.threat.tx_threat" => toxic_lexicon::threatens_target(lex),
         _ => toxic_lexicon::contains(lex, Family::Insult),
     }
 }
@@ -3503,6 +3501,34 @@ mod tests {
             "Fact check: the claim that immigrants are criminals is false.",
             "Moderation guideline: posts calling a group vermin are removed.",
             "Please don't kill yourself, call the helpline.",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn toxic_threats_and_harassment_bind_the_verb_to_its_target() {
+        for (text, rule) in [
+            ("I will kill you.", "ark.threat.tx_threat"),
+            (
+                "Ich werde dich nach der Arbeit verprügeln.",
+                "ark.threat.tx_threat",
+            ),
+            ("Häng dich doch einfach auf.", "ark.threat.tx_harassment"),
+            ("I know where you live.", "ark.threat.tx_harassment"),
+            ("Ich weiß, wo du wohnst.", "ark.threat.tx_harassment"),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
+        for text in [
+            // the violence verb has another object than the addressee
+            "I will help you kill the process.",
+            "I will show you how to kill a process.",
+            "Ich werde dir helfen, den Prozess zu killen.",
+            // a harassment verb with the complement of another phrase
+            "Bring yourself a chair.",
+            "Ich bring dich auf den neuesten Stand.",
+            "Häng dich um zehn an den Call.",
         ] {
             assert!(toxic_rules(text).is_empty(), "{text}");
         }

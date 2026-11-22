@@ -98,9 +98,10 @@ const NEGATIONS: &[&str] = &[
     "not", "no", "never", "nicht", "kein", "keine", "keiner", "nie", "niemals",
 ];
 
-/// Whether a word of `span` (a word or a word pair) is in `family`, without
-/// a negation before it.
-pub(super) fn contains(span: &str, family: Family) -> bool {
+/// Walks the words of `span` until `visit` decides. `visit` gets each raw
+/// word, whether it is a negation and the family bits of the word or of the
+/// pair it ends. An undecided walk returns `visit(None)`.
+fn walk(span: &str, mut visit: impl FnMut(Option<(&str, bool, u8)>) -> Option<bool>) -> bool {
     let table = table();
     let mut word = String::new();
     let mut previous = String::new();
@@ -110,29 +111,31 @@ pub(super) fn contains(span: &str, family: Family) -> bool {
         .filter(|w| !w.is_empty())
     {
         normalize(raw, &mut word);
-        if NEGATIONS.contains(&word.as_str()) {
-            return false;
-        }
-        let hit = |key: &str| {
-            table
-                .get(&hash(key))
-                .is_some_and(|bits| bits & family.bit() != 0)
-        };
+        let bits = |key: &str| table.get(&hash(key)).copied().unwrap_or(0);
+        let mut family = bits(&word);
         if !previous.is_empty() {
             pair.clear();
             pair.push_str(&previous);
             pair.push(' ');
             pair.push_str(&word);
-            if hit(&pair) {
-                return true;
-            }
+            family |= bits(&pair);
         }
-        if hit(&word) {
-            return true;
+        if let Some(decided) = visit(Some((raw, NEGATIONS.contains(&word.as_str()), family))) {
+            return decided;
         }
         std::mem::swap(&mut previous, &mut word);
     }
-    false
+    visit(None).unwrap_or(false)
+}
+
+/// Whether a word of `span` (a word or a word pair) is in `family`, without
+/// a negation before it.
+pub(super) fn contains(span: &str, family: Family) -> bool {
+    walk(span, |word| match word? {
+        (_, true, _) => Some(false),
+        (_, _, bits) if bits & family.bit() != 0 => Some(true),
+        _ => None,
+    })
 }
 
 /// Target words of a threat: the addressed person, a third person or a group.
@@ -140,10 +143,43 @@ const TARGETS: &[&str] = &[
     "you", "him", "her", "them", "y'all", "dich", "euch", "ihn", "sie", "dir",
 ];
 
-/// Whether the words of a threat name a target before or after its violence verb.
-pub(super) fn names_target(span: &str) -> bool {
-    span.split(|c: char| !(c.is_alphanumeric() || c == '\''))
-        .any(|w| TARGETS.iter().any(|t| t.eq_ignore_ascii_case(w)))
+/// Words that open another object after a verb: "help you kill the process".
+const DETERMINERS: &[&str] = &[
+    "the", "a", "an", "this", "that", "these", "those", "my", "your", "his", "its", "our", "their",
+    "some", "any", "every",
+];
+
+fn is_one_of(words: &[&str], word: &str) -> bool {
+    words.iter().any(|w| w.eq_ignore_ascii_case(word))
+}
+
+/// Whether `span` holds a violence verb, without a negation before it, whose
+/// object is a target: the target right after the verb ("kill you"), or
+/// before it when no determiner opens another object after the verb ("dich
+/// umbringen", but not "help you kill the process").
+pub(super) fn threatens_target(span: &str) -> bool {
+    let mut target_before = false;
+    // After a violence verb: whether a target came before it.
+    let mut after_verb: Option<bool> = None;
+    walk(span, |word| {
+        let Some((raw, negation, bits)) = word else {
+            return after_verb;
+        };
+        if let Some(bound) = after_verb.take() {
+            if is_one_of(TARGETS, raw) || (bound && !is_one_of(DETERMINERS, raw)) {
+                return Some(true);
+            }
+        }
+        if negation {
+            return Some(false);
+        }
+        if bits & Family::ViolenceVerb.bit() != 0 {
+            after_verb = Some(target_before);
+        } else {
+            target_before |= is_one_of(TARGETS, raw);
+        }
+        None
+    })
 }
 
 #[cfg(test)]
@@ -179,7 +215,16 @@ mod tests {
         assert!(contains(" nothing but vermin", Family::Dehumanise));
         assert!(!contains(" nothing but vermin", Family::Insult));
         assert!(contains(" dich umbringen", Family::ViolenceVerb));
-        assert!(names_target(" kill you"));
-        assert!(!names_target(" kill the process"));
+    }
+
+    #[test]
+    fn a_threat_binds_its_violence_verb_to_a_target() {
+        assert!(threatens_target(" kill you"));
+        assert!(threatens_target(" dich nach der Arbeit umbringen"));
+        assert!(threatens_target(" dich umbringen und abhauen"));
+        assert!(!threatens_target(" kill the process"));
+        assert!(!threatens_target(" help you kill the process"));
+        assert!(!threatens_target(" show you how to kill a process"));
+        assert!(!threatens_target(" never kill you"));
     }
 }

@@ -1019,7 +1019,7 @@
       "class_name": "toxic_language",
       "family": "harassment",
       "upstream_groups": [],
-      "pattern": "(?P<act>(?-u:\\b)(?:(?:go\\s{1,4}(?:and\\s{1,4})?)?kill|i\\s{1,4}know\\s{1,4}where|bring|h(?:ä|ae)ng|ich\\s{1,4}wei(?:ß|ss),?\\s{1,4}wo))\\s{1,4}(?P<target>yourself|you\\s{1,4}live|dich\\s{1,4}(?:(?:doch|einfach|endlich|bitte)\\s{1,4}){0,3}(?:um|auf)|du\\s{1,4}wohnst)(?-u:\\b)",
+      "pattern": "(?-u:\\b)(?:(?P<self_harm>(?:go\\s{1,4}(?:and\\s{1,4})?)?kill\\s{1,4}yourself|bring\\s{1,4}dich\\s{1,4}(?:(?:doch|einfach|endlich|bitte)\\s{1,4}){0,3}um|h(?:ä|ae)ng\\s{1,4}dich\\s{1,4}(?:(?:doch|einfach|endlich|bitte)\\s{1,4}){0,3}auf)|(?P<stalking>i\\s{1,4}know\\s{1,4}where\\s{1,4}you\\s{1,4}live|ich\\s{1,4}wei(?:ß|ss),?\\s{1,4}wo\\s{1,4}du\\s{1,4}wohnst))(?-u:\\b)",
       "points": {
         "base_score": 45,
         "validator": "format",
