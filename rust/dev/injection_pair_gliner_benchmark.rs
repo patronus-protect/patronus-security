@@ -91,11 +91,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut scanner = SecurityGateway::new({
         let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
         config.core.cache_root = Some(model_root);
+        config.core.execution_backend = ExecutionBackend::Cpu;
+        config.ntdb_operating_point = NtdbOperatingPoint::BestLatencyInF1;
         config
     })
     .unwrap();
-    scanner.set_execution_backend(ExecutionBackend::Cpu);
-    scanner.set_ntdb_operating_point(NtdbOperatingPoint::BestLatencyInF1);
     scanner.warmup()?;
     let scanner_warmup_ms = started.elapsed().as_secs_f64() * 1_000.0;
 

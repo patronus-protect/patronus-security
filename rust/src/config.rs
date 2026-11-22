@@ -9,8 +9,8 @@ use serde::{Deserialize, Deserializer};
 
 use crate::{
     CacheEncryptionConfig, CacheWriteMode, DynamicPiiConfig, ExactCacheConfig, L3Strategy,
-    MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode, PersistentCacheConfig, SecurityCategory,
-    SecurityLevel,
+    MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode, PersistentCacheConfig, ScanGateMatrix,
+    SecurityCategory, SecurityLevel,
 };
 
 /// The config of a [`crate::SecurityGateway`]: every key of Ark Core's
@@ -70,6 +70,12 @@ impl GatewayConfig {
             },
             ..Self::default()
         }
+    }
+
+    /// This config with Core's gate keys set to `gates`.
+    pub fn with_gates(mut self, gates: ScanGateMatrix) -> Self {
+        self.core.gates = gates;
+        self
     }
 
     /// Refuse what no gateway can run: no categories, a duplicate category,
@@ -199,6 +205,16 @@ mod tests {
 
     fn parse(json: serde_json::Value) -> Result<GatewayConfig, String> {
         serde_json::from_value(json).map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn with_gates_sets_cores_gate_keys_and_keeps_the_rest() {
+        let config = GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L2)
+            .with_gates(ScanGateMatrix::levels(true, false, false).with_rule("dlp_x", false));
+        assert!(!config.core.gates.allows_level(SecurityLevel::L2));
+        assert_eq!(config.core.gates.rules.get("dlp_x"), Some(&false));
+        assert_eq!(config.core.categories, vec![SecurityCategory::Dlp]);
+        assert_eq!(config.core.max_level, SecurityLevel::L2);
     }
 
     #[test]

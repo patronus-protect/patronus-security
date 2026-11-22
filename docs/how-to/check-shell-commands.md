@@ -282,17 +282,18 @@ bundle applies them at once (a refused configuration changes nothing), otherwise
 
     ```rust
     use patronus_ark::SecurityGateway;
-    use patronus_ark_core::{detectors::shell::ShellPolicyConfig, SecurityCategory, cascade::SecurityLevel};
+    use patronus_ark_core::{detectors::shell::ShellConfig, SecurityCategory, cascade::SecurityLevel};
 
     let mut gateway = SecurityGateway::new({
         let mut config = GatewayConfig::new(vec![SecurityCategory::Pii, SecurityCategory::Dlp, SecurityCategory::Injection, SecurityCategory::ShellCommand], SecurityLevel::L1);
-        config.download = DownloadPolicy::Missing;
-        config.download_categories = Some(vec![SecurityCategory::ShellCommand]);
+        config.core.download = DownloadPolicy::Missing;
+        config.core.download_categories = Some(vec![SecurityCategory::ShellCommand]);
+        config.core.shell = Some(ShellConfig {
+            policy_dirs: vec!["/etc/patronus/shell-policies".into()], // applied by warmup
+            ..ShellConfig::default()
+        });
         config
-
     }).unwrap();
-    let policies = ShellPolicyConfig::load(&["/etc/patronus/shell-policies"], &Default::default())?;
-    gateway.set_shell_command_policy_config(policies)?; // before or after warmup
     gateway.warmup()?;
 
     let result = &gateway.scan_categories(&[SecurityCategory::ShellCommand], "kubectl delete pod web-1").native[0];

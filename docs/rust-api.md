@@ -44,7 +44,7 @@ pub use cache::{
 };
 pub use config::GatewayConfig;
 pub use dynamic_pii::DynamicPiiConfig;
-pub use pipeline::SecurityGateway;
+pub use pipeline::{ScanRequest, ScanRequestOptions, SecurityGateway};
 pub use types::{
     L3Strategy, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityAssetProgress,
@@ -94,6 +94,12 @@ pub fn new(categories: Vec<SecurityCategory>, max_level: SecurityLevel) -> Self;
 ```
 
 The default config for `categories` up to `max_level`.
+
+```rust
+pub fn with_gates(mut self, gates: ScanGateMatrix) -> Self;
+```
+
+This config with Core's gate keys set to `gates`.
 
 ```rust
 pub fn validate(&self) -> Result<(), String>;
@@ -181,12 +187,6 @@ pub fn set_queue_worker_count(&self, worker_count: usize);
 Set the number of Ark queue workers spawned on first queued request.
 
 ```rust
-pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions);
-```
-
-Set ONNX Runtime session options for subsequent scans.
-
-```rust
 pub fn new(config: GatewayConfig) -> Result<Self, String>;
 ```
 
@@ -225,23 +225,10 @@ Register an external L1 heuristic for the category returned by the detector.
 Detectors run after the built-in L1 heuristics in registration order.
 
 ```rust
-pub fn set_execution_gates(&self, gates: ScanGateMatrix);
-```
-
-Replace the execution gate matrix used by subsequent scans. The
-native rules the new gates enable are built here, not on a scan.
-
-```rust
 pub fn set_onnx_batch_mode(&self, mode: OnnxBatchMode);
 ```
 
 Replace the ONNX batch mode used by subsequent batch scans.
-
-```rust
-pub fn set_execution_backend(&self, backend: ExecutionBackend);
-```
-
-Replace the execution backend and apply its default L3 mode.
 
 ```rust
 pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint);
@@ -415,18 +402,11 @@ pub fn set_dynamic_pii_config(&self, config: DynamicPiiConfig) -> Result<(), Str
 Replace the pipeline-specific `dynamic-pii` configuration.
 
 ```rust
-pub fn set_shell_command_policy_config(&self, config: ShellPolicyConfig) -> Result<(), String>;
+pub fn shell_command_policy_config(&self) -> &ShellPolicyConfig;
 ```
 
-Replace the user policies and allowlist of the `shell_command` verdict.
-A loaded pipeline applies them at once (a refused configuration changes
-nothing); otherwise `warmup` applies them.
-
-```rust
-pub fn shell_command_policy_config(&self) -> ShellPolicyConfig;
-```
-
-Return the configured `shell_command` user policies and allowlist.
+Return the `shell_command` user policies and allowlist that `warmup`
+applies, loaded from Core's `shell` key.
 
 ```rust
 pub fn dynamic_pii_config(&self) -> DynamicPiiConfig;
@@ -478,6 +458,47 @@ policy.
 ## Queued Request API
 
 ```rust
+pub struct ScanRequest {
+    pub text: String,
+    pub categories: Option<Vec<SecurityCategory>>,
+    pub control: ScanControl,
+    pub options: ScanRequestOptions,
+}
+```
+
+One queued scan for [`SecurityGateway::enqueue`]: the text, the
+categories to scan (unset: the gateway's), Ark Core's `control`
+(cancellation and deadline; default: none) and the request-local options.
+
+```rust
+pub fn new(text: impl Into<String>) -> Self;
+```
+
+A request for `text` with the gateway's categories and no options.
+
+```rust
+pub struct ScanRequestOptions {
+    /// Gates of this request only.
+    pub gates: Option<ScanGateMatrix>,
+    /// Request metadata that conditional gates read; default `{}`.
+    pub metadata: serde_json::Value,
+    /// Calibrated NTDB operating point (scoring).
+    pub ntdb_operating_point: Option<crate::NtdbOperatingPoint>,
+    /// Calibrated NTDB final-decision threshold set.
+    pub ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+    /// Overlap between adjacent classifier chunks; default none.
+    pub chunk_overlap_tokens: ChunkOverlapTokens,
+    /// `dynamic-pii` config of this request, replacing the gateway's; build
+    /// it with [`crate::DynamicPiiConfig::with_request`]. Validated again on
+    /// enqueue.
+    pub dynamic_pii: Option<DynamicPiiConfig>,
+}
+```
+
+Request-local options of a [`ScanRequest`]; each unset option keeps the
+gateway's config.
+
+```rust
 pub fn scan_category(
     &self,
     category: SecurityCategory,
@@ -503,130 +524,13 @@ deadline stops the request wherever it is (queued, L1, L2 or L3) and
 returns [`ScanError::Cancelled`] or [`ScanError::DeadlineExceeded`].
 
 ```rust
-pub fn enqueue(&self, text: impl Into<String>, gates: Option<ScanGateMatrix>) -> RequestId;
+pub fn enqueue(&self, request: ScanRequest) -> Result<RequestId, String>;
 ```
 
-Submit a scan to the background L1/L2 worker and return immediately
-with its request id. Results and completion are published through
-[`SecurityGateway::consume_next_event`].
-
-```rust
-pub fn enqueue_with_metadata(
-    &self,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-) -> RequestId;
-```
-
-Submit a scan with caller-provided request metadata used by conditional gates.
-
-```rust
-pub fn enqueue_with_options(
-    &self,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-) -> RequestId;
-```
-
-Submit a scan with request-local execution options.
-
-```rust
-pub fn enqueue_with_chunk_overlap_options(
-    &self,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-    chunk_overlap_tokens: ChunkOverlapTokens,
-) -> RequestId;
-```
-
-Submit a scan with caller-provided request-local execution and chunking options.
-
-```rust
-pub fn enqueue_categories(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-    gates: Option<ScanGateMatrix>,
-) -> RequestId;
-```
-
-Submit a scan with a caller-provided category subset to the background
-worker. This method returns a request id, not scan results.
-
-```rust
-pub fn enqueue_categories_with_metadata(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-) -> RequestId;
-```
-
-Submit selected categories with request-local metadata.
-
-```rust
-pub fn enqueue_categories_with_options(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-) -> RequestId;
-```
-
-Submit selected categories with request-local execution options.
-
-```rust
-pub fn enqueue_categories_with_chunk_overlap_options(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-    chunk_overlap_tokens: ChunkOverlapTokens,
-) -> RequestId;
-```
-
-Submit selected categories with request-local execution and chunking options.
-
-```rust
-pub fn enqueue_ark_api_categories_with_request_options(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-    chunk_overlap_tokens: ChunkOverlapTokens,
-    dynamic_pii: Option<DynamicPiiConfig>,
-) -> Result<RequestId, String>;
-```
-
-Submit an Ark API request: short-document Injection utility routing,
-request-local classifier chunk overlap and an optional request-local
-`dynamic-pii` configuration. Library callers use the other enqueue methods.
-
-`dynamic_pii` replaces the gateway's configuration for this request only;
-build it with [`crate::DynamicPiiConfig::with_request`]. It is validated
-again here and rejected before anything is queued.
-
-```rust
-pub fn enqueue_input(
-    &self,
-    input: ExternalL1Input,
-    gates: Option<ScanGateMatrix>,
-) -> RequestId;
-```
-
-Submit one category scan to the background worker.
+Submit `request` to the background L1/L2 worker and return
+immediately with its request id. Results and completion are published
+through [`SecurityGateway::consume_next_event`]. Refuses an invalid
+request-local `dynamic_pii` config before anything is queued.
 
 ```rust
 pub fn consume_next_event(&self, timeout: Option<Duration>) -> Option<QueuedSecurityEvent>;
@@ -1919,9 +1823,10 @@ No public documentation is available yet.
 ```rust
 pub struct ScanExecution {
     layers: LayerExecution,
-    backend: ExecutionBackend,
-    onnx_runtime_options: OnnxRuntimeOptions,
-    onnx_batch_mode: OnnxBatchMode,
+    /// The gateway's Core config; `backend` and `onnx_runtime_options` read it.
+    core: Arc<ScannerConfig>,
+    /// Ark's L3 batch mode; unset follows the backend.
+    onnx_batch_mode: Option<OnnxBatchMode>,
     ntdb_operating_point: NtdbOperatingPoint,
     ntdb_decision_threshold_point: NtdbOperatingPoint,
     l3_strategy: L3Strategy,
@@ -1934,8 +1839,9 @@ pub struct ScanExecution {
 ```
 
 Effective execution state consumed by scan methods and model pipelines:
-the Core [`LayerExecution`] (max level and gates, reached through `Deref`)
-plus Ark's runtime and NTDB settings.
+the Core [`LayerExecution`] (max level and gates, reached through `Deref`),
+the gateway's Core config (its ONNX backend and runtime options) and
+Ark's NTDB settings.
 
 ```rust
 pub fn new(max_level: SecurityLevel) -> Self;
@@ -1947,7 +1853,8 @@ Create an execution with shared rule defaults up to `max_level`.
 pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self;
 ```
 
-Create an execution with explicit gates up to `max_level`.
+Create an execution with explicit gates up to `max_level` and Core's
+default ONNX backend and runtime options.
 
 ```rust
 pub fn set_wolf(&mut self, wolf: WolfConfig) -> Result<(), String>;
@@ -1968,18 +1875,6 @@ pub fn set_onnx_batch_mode(&mut self, mode: OnnxBatchMode);
 ```
 
 Replace the ONNX batch execution mode.
-
-```rust
-pub fn set_backend(&mut self, backend: ExecutionBackend);
-```
-
-Replace the execution backend and apply its default L3 batch mode.
-
-```rust
-pub fn set_onnx_runtime_options(&mut self, options: OnnxRuntimeOptions);
-```
-
-Replace ONNX Runtime session options used by L3 ONNX classifiers.
 
 ```rust
 pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint);
@@ -2021,19 +1916,20 @@ Return a copy with a different max-level cap.
 pub fn onnx_batch_mode(&self) -> OnnxBatchMode;
 ```
 
-Return the ONNX batch mode backing this execution.
+Return the ONNX batch mode backing this execution: the set one, else
+lazy batches on the CPU and tensor batches on an accelerator.
 
 ```rust
 pub fn backend(&self) -> ExecutionBackend;
 ```
 
-Return the configured execution backend.
+Return Core's `execution_backend`.
 
 ```rust
 pub fn onnx_runtime_options(&self) -> OnnxRuntimeOptions;
 ```
 
-Return the ONNX Runtime session options backing this execution.
+Return Core's `onnx_runtime` session options.
 
 ```rust
 pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;

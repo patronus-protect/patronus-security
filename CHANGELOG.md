@@ -11,6 +11,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- **Ark Core's keys are set only in the config (Rust):** `SecurityGateway::set_execution_gates`,
+  `set_execution_backend`, `set_onnx_runtime_options` and `set_shell_command_policy_config` are
+  gone; put the gates (`GatewayConfig::with_gates`), `execution_backend`, `onnx_runtime` and
+  `shell.policy_dirs` / `shell.allowlist` in the gateway config. `ScanExecution::set_backend` and
+  `set_onnx_runtime_options` are gone too; a scan reads the backend and runtime options from the
+  gateway's config. `shell_command_policy_config()` returns a reference. Ark's own keys keep their
+  setters. Python: `SecurityGateway.rust_gateway.set_execution_gates` is gone.
+- **One `enqueue` (Rust):** `SecurityGateway::enqueue(ScanRequest)` replaces `enqueue(text,
+  gates)`, `enqueue_with_metadata`, `enqueue_with_options`, `enqueue_with_chunk_overlap_options`,
+  `enqueue_categories*`, `enqueue_ark_api_categories_with_request_options` and `enqueue_input`.
+  A `ScanRequest` holds the text, optional categories, Ark Core's `ScanControl` and
+  `ScanRequestOptions` (gates, metadata, NTDB points, chunk overlap, `dynamic_pii`); `enqueue`
+  returns `Result<RequestId, String>` and refuses an invalid request `dynamic_pii`. Python's
+  `enqueue(...)` keyword arguments are unchanged.
+- **NTDB and Dynamic PII pins live in Ark Core:** the NTDB package and GLiNER model specs are
+  Core's `model_assets::NTDB_*` and `model_assets::GLINER_SMALL`; Ark's asset specs use them, with
+  the same cache folders and pins, so nothing is downloaded again.
+
 - **One place for download and ONNX settings:** Ark Core's config now holds `download`,
   `download_categories`, `download_timeout_ms`, `execution_backend` and `onnx_runtime`, and Ark
   reads the same keys. Core's `Scanner(config, warmup={...})` argument is gone: put `download` and

@@ -4,7 +4,9 @@
 //! Core resolves the directory, checks that it holds the pinned revision,
 //! fetches the files the caller lists and prepares their generated files in one
 //! [`ModelSpec::prepare`], so a user such as Ark keeps only its model table and
-//! model-specific file lists.
+//! model-specific file lists. The pins of Ark's NTDB packages and of its GLiNER
+//! model are registered here ([`NTDB_INJECTION`], [`GLINER_SMALL`], ...), like
+//! Wolf's; Ark keeps their categories, file lists and executors.
 use crate::{warmup::DownloadPolicy, ScanError};
 use std::{
     fs, io,
@@ -502,10 +504,157 @@ pub(crate) fn atomic_marker(dir: &Path, name: &str, value: &str) -> Result<(), S
     result
 }
 
+/// Ark's Dynamic PII model: GLiNER small v2.5 (edge export).
+pub const GLINER_SMALL: ModelSpec = ModelSpec::new(
+    "gliner_small-v2.5-edge",
+    "patronus-studio/gliner_small-v2.5-edge",
+    "6cfcbd93d7fc6f5e1658f80afa38f73891b91693",
+    "dynamic_pii/gliner_small_v2_5",
+);
+
+const WOLF_SMALL: &crate::wolf::WolfModelSpec =
+    &crate::wolf::WOLF_MODELS[crate::wolf::WolfModel::Small as usize];
+
+/// Ark's NTDB L2 packages: each lives below `<category dir>/l2_ntdb` of the
+/// model cache, is read from the `l2` folder of its repository and lists its
+/// files in its own manifest ([`ModelSpec::prepare_package`]).
+const fn ntdb_package(
+    id: &'static str,
+    repository: &'static str,
+    revision: &'static str,
+    cache_subdir: &'static str,
+    source_prefix: &'static str,
+    env_override: &'static str,
+) -> ModelSpec {
+    ModelSpec::new(id, repository, revision, cache_subdir)
+        .with_source_prefix(source_prefix)
+        .with_env_override(env_override)
+}
+
+/// The injection NTDB package, in Wolf Small's repository and pin.
+pub const NTDB_INJECTION: ModelSpec = ntdb_package(
+    WOLF_SMALL.id,
+    WOLF_SMALL.repository,
+    WOLF_SMALL.revision,
+    "injection/l2_ntdb/injection_current",
+    "l2",
+    "PATRONUS_NTDB_INJECTION_DIR",
+);
+
+pub const NTDB_SENSITIVE_DOCUMENT: ModelSpec = ntdb_package(
+    "orca-sonar-document-classifier",
+    "patronus-studio/orca-sonar-document-classifier",
+    "efa2b1724946fb2de5a22ce58ef99d7b246c2798",
+    "sensitive_document/l2_ntdb/sensitive_document_current",
+    "l2",
+    "PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR",
+);
+
+pub const NTDB_TOOL_CLASS: ModelSpec = ntdb_package(
+    "unified-v3-tool-class",
+    "patronus-studio/husky-sight-tool-type-classifier",
+    "de43b66056fc6b41e5f5c170712770ae805a4850",
+    "tool_class/l2_ntdb/tool_class_current",
+    "l2",
+    "PATRONUS_NTDB_TOOL_CLASS_DIR",
+);
+
+pub const NTDB_TOOL_ACTION: ModelSpec = ntdb_package(
+    "unified-v3-tool-action",
+    "patronus-studio/husky-paw-tool-action-classifier",
+    "b2f4a556e7c9b02606589c5c587e096503f274c5",
+    "tool_action/l2_ntdb/tool_action_current",
+    "l2",
+    "PATRONUS_NTDB_TOOL_ACTION_DIR",
+);
+
+const TOOL_TAGS_REPOSITORY: &str = "patronus-studio/husky-nose-tool-security-properties-classifier";
+const TOOL_TAGS_REVISION: &str = "f5736c09bcb6f75f1af3604706a1ee5c7e39d745";
+
+pub const NTDB_TOOL_TAGS_SINK_EXTERNAL: ModelSpec = ntdb_package(
+    "tool_tags_sink_external",
+    TOOL_TAGS_REPOSITORY,
+    TOOL_TAGS_REVISION,
+    "tool_tags/l2_ntdb/tool_tags_sink_external_current",
+    "l2/sink_external",
+    "PATRONUS_NTDB_TOOL_TAGS_SINK_EXTERNAL_DIR",
+);
+
+pub const NTDB_TOOL_TAGS_SOURCE_SENSITIVE: ModelSpec = ntdb_package(
+    "tool_tags_source_sensitive",
+    TOOL_TAGS_REPOSITORY,
+    TOOL_TAGS_REVISION,
+    "tool_tags/l2_ntdb/tool_tags_source_sensitive_current",
+    "l2/source_sensitive",
+    "PATRONUS_NTDB_TOOL_TAGS_SOURCE_SENSITIVE_DIR",
+);
+
+pub const NTDB_TOOL_TAGS_SOURCE_UNTRUSTED: ModelSpec = ntdb_package(
+    "tool_tags_source_untrusted",
+    TOOL_TAGS_REPOSITORY,
+    TOOL_TAGS_REVISION,
+    "tool_tags/l2_ntdb/tool_tags_source_untrusted_current",
+    "l2/source_untrusted",
+    "PATRONUS_NTDB_TOOL_TAGS_SOURCE_UNTRUSTED_DIR",
+);
+
+pub const NTDB_ROUTING: ModelSpec = ntdb_package(
+    "unified-v3-routing",
+    "patronus-studio/panther-read-intent-classifier",
+    "74ec1d568bdddc34d408d4e96ce52b5dd7789cbe",
+    "routing/l2_ntdb/routing_current",
+    "l2",
+    "PATRONUS_NTDB_ROUTING_DIR",
+);
+
+pub const NTDB_THREAT: ModelSpec = ntdb_package(
+    "unified-v3-threat",
+    "patronus-studio/wolf-defender-threat-classifier",
+    "6520c1f43c716d1210321aecc7681446dd5ce317",
+    "threat/l2_ntdb/threat_current",
+    "l2",
+    "PATRONUS_NTDB_THREAT_DIR",
+);
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn registered_ntdb_packages_have_their_own_directories_and_overrides() {
+        let packages = [
+            NTDB_INJECTION,
+            NTDB_SENSITIVE_DOCUMENT,
+            NTDB_TOOL_CLASS,
+            NTDB_TOOL_ACTION,
+            NTDB_TOOL_TAGS_SINK_EXTERNAL,
+            NTDB_TOOL_TAGS_SOURCE_SENSITIVE,
+            NTDB_TOOL_TAGS_SOURCE_UNTRUSTED,
+            NTDB_ROUTING,
+            NTDB_THREAT,
+        ];
+        for (i, package) in packages.iter().enumerate() {
+            assert!(package.cache_subdir.contains("/l2_ntdb/"), "{}", package.id);
+            assert!(package.source_prefix.starts_with("l2"), "{}", package.id);
+            assert_eq!(package.revision.len(), 40, "{}", package.id);
+            assert!(packages[..i]
+                .iter()
+                .all(|other| other.cache_subdir != package.cache_subdir
+                    && other.env_override != package.env_override));
+        }
+        let wolf = crate::wolf::WolfModel::Small.spec();
+        assert_eq!(
+            (
+                NTDB_INJECTION.id,
+                NTDB_INJECTION.repository,
+                NTDB_INJECTION.revision
+            ),
+            (wolf.id, wolf.repository, wolf.revision)
+        );
+        assert_eq!(GLINER_SMALL.env_override, None);
+        assert_eq!(GLINER_SMALL.source_prefix, "");
+    }
 
     const SPEC: ModelSpec = ModelSpec::new("test-model", "org/repo", "rev-a", "models/test")
         .with_source_prefix("/l2/")

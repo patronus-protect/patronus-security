@@ -65,11 +65,6 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
         "every registered rule needs DE/EN fixtures"
     );
     assert_eq!(actual.len(), cases.len(), "duplicate fixtures");
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Pii, SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
     let generators = GeneratorSet::load(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../python/patronus_ark/dlp_synth/generators.json"),
@@ -77,10 +72,17 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
     .expect("generator spec must load");
     let mut missing = Vec::new();
     for case in cases {
-        gateway.set_execution_gates(ScanGateMatrix {
-            pii_mode: case.pii_mode,
-            ..ScanGateMatrix::all_enabled()
-        });
+        let gateway = SecurityGateway::new(
+            GatewayConfig::new(
+                vec![SecurityCategory::Pii, SecurityCategory::Dlp],
+                SecurityLevel::L1,
+            )
+            .with_gates(ScanGateMatrix {
+                pii_mode: case.pii_mode,
+                ..ScanGateMatrix::all_enabled()
+            }),
+        )
+        .unwrap();
         assert!(
             case.language_neutral || case.de != case.en,
             "translate {}",

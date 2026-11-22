@@ -16,15 +16,13 @@ fn scan(text: &str) -> SecurityScanResult {
 }
 
 fn scan_with_explain(text: &str, explain: bool) -> SecurityScanResult {
-    let mut scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
-    scanner.warmup().unwrap();
     let mut gates = patronus_ark_core::cascade::ScanGateMatrix::all_enabled();
     gates.explain = explain;
-    scanner.set_execution_gates(gates);
+    let mut scanner = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(gates),
+    )
+    .unwrap();
+    scanner.warmup().unwrap();
     scanner
         .scan_category(SecurityCategory::Dlp, text)
         .native
@@ -840,14 +838,12 @@ fn provider_prefix_does_not_suppress_a_real_password() {
         .evidence_spans
         .iter()
         .any(|span| span.label == "CREDENTIAL" && span.text == token));
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
     let mut gates = patronus_ark_core::cascade::ScanGateMatrix::default();
     gates.set_rule("dlp_github_token", false);
-    scanner.set_execution_gates(gates);
+    let scanner = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(gates),
+    )
+    .unwrap();
     let results = scanner
         .scan_category(SecurityCategory::Dlp, &format!("password = {token}"))
         .native;

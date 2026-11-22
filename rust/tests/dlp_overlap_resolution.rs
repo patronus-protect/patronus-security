@@ -635,18 +635,16 @@ fn a_standalone_wif_key_and_a_secret_next_to_it_both_stay() {
 
 #[test]
 fn content_classes_keep_their_spans_over_secrets() {
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
     let mut gates = ScanGateMatrix::default();
     for pattern in DLP_PATTERNS {
         if pattern.entity_group == "dlp.content.source_code" {
             gates.set_rule(pattern.name, true);
         }
     }
-    gateway.set_execution_gates(gates);
+    let gateway = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(gates),
+    )
+    .unwrap();
     let (text, value) = fill(
         "import os\n\nclient = Client(api_key=\"<<secret:0>>\")\n",
         "openai_project_api_key",
@@ -680,15 +678,15 @@ fn scored_modes_resolve_overlaps_like_strict() {
         15,
     );
     for mode in [ScoreMode::Balanced, ScoreMode::Recall] {
-        let gateway = SecurityGateway::new(GatewayConfig::new(
-            vec![SecurityCategory::Dlp],
-            SecurityLevel::L1,
-        ))
+        let gateway = SecurityGateway::new(
+            GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(
+                ScanGateMatrix {
+                    dlp_mode: mode,
+                    ..ScanGateMatrix::default()
+                },
+            ),
+        )
         .unwrap();
-        gateway.set_execution_gates(ScanGateMatrix {
-            dlp_mode: mode,
-            ..ScanGateMatrix::default()
-        });
         let result = gateway
             .scan_category(SecurityCategory::Dlp, &text)
             .native

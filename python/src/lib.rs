@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
-    DynamicPiiConfig, GatewayConfig, QueuedSecurityEvent, SecurityFailure,
-    SecurityGateway as RustSecurityGateway, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult, CONTROL_POLL,
+    DynamicPiiConfig, GatewayConfig, QueuedSecurityEvent, ScanRequest, ScanRequestOptions,
+    SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevelReadiness,
+    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
+    CONTROL_POLL,
 };
 use patronus_ark_core::{
     cascade::ScanGateMatrix, cascade::SecurityLevel,
@@ -92,13 +93,6 @@ impl SecurityGateway {
         self.scan(py, self.inner.categories(), text, control)
     }
 
-    #[pyo3(signature = (execution_gates_json=None))]
-    fn set_execution_gates(&mut self, execution_gates_json: Option<&str>) -> PyResult<()> {
-        let gates = parse_execution_gates_json(execution_gates_json)?.unwrap_or_default();
-        self.inner.set_execution_gates(gates);
-        Ok(())
-    }
-
     fn set_dynamic_pii_config(&self, config_json: &str) -> PyResult<()> {
         let config = parse_dynamic_pii_config_json(Some(config_json))?
             .expect("dynamic-pii config JSON was provided");
@@ -156,31 +150,20 @@ impl SecurityGateway {
             })
             .transpose()?
             .unwrap_or_else(|| serde_json::json!({}));
-        let request_id = match categories {
-            Some(categories) => {
-                let rust_categories = parse_categories(categories)?;
-                py.allow_threads(|| {
-                    self.inner.enqueue_categories_with_chunk_overlap_options(
-                        rust_categories,
-                        text,
-                        metadata,
-                        gates,
-                        ntdb_operating_point,
-                        chunk_overlap_tokens,
-                    )
-                })
-            }
-            None => py.allow_threads(|| {
-                self.inner.enqueue_with_chunk_overlap_options(
-                    text,
-                    metadata,
-                    gates,
-                    ntdb_operating_point,
-                    chunk_overlap_tokens,
-                )
-            }),
+        let request = ScanRequest {
+            text: text.to_string(),
+            categories: categories.map(parse_categories).transpose()?,
+            control: ScanControl::default(),
+            options: ScanRequestOptions {
+                gates,
+                metadata,
+                ntdb_decision_threshold_point: ntdb_operating_point,
+                chunk_overlap_tokens,
+                ..ScanRequestOptions::default()
+            },
         };
-        Ok(request_id)
+        py.allow_threads(|| self.inner.enqueue(request))
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     #[pyo3(signature = (timeout=None))]

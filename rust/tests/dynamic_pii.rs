@@ -1,4 +1,5 @@
 use patronus_ark::GatewayConfig;
+use patronus_ark::{ScanRequest, ScanRequestOptions};
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::fs::symlink;
@@ -152,7 +153,7 @@ fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
             ..DynamicPiiConfig::default()
         })
         .unwrap();
-    let skipped = gateway.enqueue("ordinary text", None);
+    let skipped = gateway.enqueue(ScanRequest::new("ordinary text")).unwrap();
     assert!(matches!(
         completion_for(&gateway, &skipped),
         SecurityRequestCompletion::Complete
@@ -168,7 +169,7 @@ fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
             ..DynamicPiiConfig::default()
         })
         .unwrap();
-    let enqueued = gateway.enqueue("ordinary text", None);
+    let enqueued = gateway.enqueue(ScanRequest::new("ordinary text")).unwrap();
     assert!(matches!(
         completion_for(&gateway, &enqueued),
         SecurityRequestCompletion::Degraded { .. }
@@ -183,7 +184,7 @@ fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
             ..DynamicPiiConfig::default()
         })
         .unwrap();
-    let source_delivered = gateway.enqueue("ordinary text", None);
+    let source_delivered = gateway.enqueue(ScanRequest::new("ordinary text")).unwrap();
     assert!(matches!(
         completion_for(&gateway, &source_delivered),
         SecurityRequestCompletion::Complete
@@ -198,7 +199,7 @@ fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
             ..DynamicPiiConfig::default()
         })
         .unwrap();
-    let source_absent = gateway.enqueue("ordinary text", None);
+    let source_absent = gateway.enqueue(ScanRequest::new("ordinary text")).unwrap();
     assert!(matches!(
         completion_for(&gateway, &source_absent),
         SecurityRequestCompletion::Degraded { .. }
@@ -686,15 +687,16 @@ fn request_config_applies_to_its_own_request_only() {
         .unwrap();
     let enqueue = |dynamic_pii: Option<DynamicPiiConfig>| {
         gateway
-            .enqueue_ark_api_categories_with_request_options(
-                vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
-                "ordinary text",
-                serde_json::json!({}),
-                None,
-                None,
-                Default::default(),
-                dynamic_pii,
-            )
+            .enqueue(ScanRequest {
+                categories: Some(vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii]),
+                options: ScanRequestOptions {
+                    metadata: serde_json::json!({}),
+                    chunk_overlap_tokens: Default::default(),
+                    dynamic_pii,
+                    ..Default::default()
+                },
+                ..ScanRequest::new("ordinary text")
+            })
             .unwrap()
     };
     let request = gateway
@@ -739,14 +741,15 @@ fn request_options_reject_an_invalid_dynamic_pii_config() {
     };
 
     assert!(gateway
-        .enqueue_ark_api_categories_with_request_options(
-            vec![SecurityCategory::DynamicPii],
-            "ordinary text",
-            serde_json::json!({}),
-            None,
-            None,
-            Default::default(),
-            Some(invalid),
-        )
+        .enqueue(ScanRequest {
+            categories: Some(vec![SecurityCategory::DynamicPii]),
+            options: ScanRequestOptions {
+                metadata: serde_json::json!({}),
+                chunk_overlap_tokens: Default::default(),
+                dynamic_pii: Some(invalid),
+                ..Default::default()
+            },
+            ..ScanRequest::new("ordinary text")
+        })
         .is_err());
 }

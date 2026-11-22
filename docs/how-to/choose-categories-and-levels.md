@@ -136,11 +136,18 @@ gateway:
 === "Rust"
 
     ```rust
+    use patronus_ark::{ScanRequest, ScanRequestOptions};
     use patronus_ark_core::cascade::ScanGateMatrix;
 
-    scanner.set_execution_gates(ScanGateMatrix::levels(true, true, false));
-    // ... later ...
-    scanner.set_execution_gates(ScanGateMatrix::all_enabled());   // reset
+    let scanner = SecurityGateway::new(config.with_gates(ScanGateMatrix::levels(true, true, false)))?;
+    // or for one request only:
+    scanner.enqueue(ScanRequest {
+        options: ScanRequestOptions {
+            gates: Some(ScanGateMatrix::levels(true, true, false)),
+            ..Default::default()
+        },
+        ..ScanRequest::new(text)
+    })?;
     ```
 
 ### Running classifiers with L3 only

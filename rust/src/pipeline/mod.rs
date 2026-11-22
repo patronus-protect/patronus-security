@@ -15,7 +15,10 @@ pub use l3_result::{
 };
 pub use l3_routing::{estimated_cost_ms, priority_index, ttl_ms};
 pub use l3_worker::DistributedL3ChunkInference;
-pub use security::{DistributedL2Pipeline, DistributedL2Plan, DistributedL3Plan, SecurityGateway};
+pub use security::{
+    DistributedL2Pipeline, DistributedL2Plan, DistributedL3Plan, ScanRequest, ScanRequestOptions,
+    SecurityGateway,
+};
 
 pub(crate) use l3_result::{is_benign_class, mark_decided, mark_decision_degraded};
 pub(crate) use l3_worker::{

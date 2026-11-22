@@ -48,11 +48,13 @@ fn default_and_partial_matrices_share_the_credential_and_marking_inventory() {
 
 #[test]
 fn gateway_default_excludes_sql_and_explicit_rule_enables_it() {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
+    let gateway = |gates: ScanGateMatrix| {
+        SecurityGateway::new(
+            GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1).with_gates(gates),
+        )
+        .unwrap()
+    };
+    let scanner = gateway(ScanGateMatrix::default());
     let text = "password = CorrectHorseBatteryStaple\nSELECT * FROM customer;";
     let results = scanner.scan_all(text).native;
     assert!(results
@@ -65,14 +67,14 @@ fn gateway_default_excludes_sql_and_explicit_rule_enables_it() {
         .any(|s| s.label == "dlp.content.sql"));
     assert!(!results.iter().any(|r| r.model == "native:mcp_policy"));
 
-    scanner.set_execution_gates(ScanGateMatrix::default().with_rule("dlp_sql_statement", true));
+    let scanner = gateway(ScanGateMatrix::default().with_rule("dlp_sql_statement", true));
     assert!(scanner
         .scan_all(text)
         .native
         .iter()
         .flat_map(|r| &r.evidence_spans)
         .any(|s| s.label == "dlp.content.sql"));
-    scanner.set_execution_gates(ScanGateMatrix::default());
+    let scanner = gateway(ScanGateMatrix::default());
     assert!(!scanner
         .scan_all(text)
         .native

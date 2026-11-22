@@ -154,11 +154,11 @@ fn hf_short_german_greeting_is_not_an_injection() {
         );
         config.core.cache_root = Some(model_dir());
         config.core.download = DownloadPolicy::Missing;
+        config.core.execution_backend = patronus_ark_core::ExecutionBackend::Cpu;
+        config.l3_strategy = L3Strategy::Multi;
         config
     })
     .unwrap();
-    scanner.set_l3_strategy(L3Strategy::Multi);
-    scanner.set_execution_backend(patronus_ark_core::ExecutionBackend::Cpu);
     scanner.warmup().unwrap();
 
     let results = scanner
@@ -401,14 +401,6 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
         SecurityCategory::Injection,
         SecurityCategory::SensitiveDocument,
     ];
-    let mut scanner = SecurityGateway::new({
-        let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
-        config.core.cache_root = Some(model_dir.clone());
-        config.core.download = DownloadPolicy::Missing;
-        config.core.download_categories = Some(categories.clone());
-        config
-    })
-    .unwrap();
     let mut policy = L3SchedulerPolicy::default();
     policy.ttl_ms.insert("injection".to_string(), 120_000);
     policy
@@ -416,7 +408,17 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
         .insert("wolf-defender-small".to_string(), 120_000);
     let mut gates = ScanGateMatrix::all_enabled();
     gates.set_l3_policy(policy);
-    scanner.set_execution_gates(gates);
+    let mut scanner = SecurityGateway::new(
+        {
+            let mut config = GatewayConfig::new(categories.clone(), SecurityLevel::L3);
+            config.core.cache_root = Some(model_dir.clone());
+            config.core.download = DownloadPolicy::Missing;
+            config.core.download_categories = Some(categories.clone());
+            config
+        }
+        .with_gates(gates),
+    )
+    .unwrap();
 
     scanner.warmup().unwrap();
     let wolf = patronus_ark_core::warmup::wolf_bundle_dir(

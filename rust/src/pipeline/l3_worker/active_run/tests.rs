@@ -208,13 +208,17 @@ impl WolfFixture {
         job.model = crate::assets::WOLF_PIPELINE_MODEL.into();
         job.input = L3WorkerInput::Text(Arc::from(text));
         job.inference_timeout_ms = timeout_ms;
-        job.execution.set_backend(crate::ExecutionBackend::Cpu);
         let mut gates = crate::ScanGateMatrix::default();
         gates.set_l3_policy(crate::L3SchedulerPolicy {
             progress: crate::L3ProgressMode::Progress,
             ..Default::default()
         });
-        job.execution.set_gates(gates);
+        job.execution =
+            crate::ScanExecution::from_core(Arc::new(patronus_ark_core::ScannerConfig {
+                gates,
+                execution_backend: crate::ExecutionBackend::Cpu,
+                ..Default::default()
+            }));
         job
     }
 }

@@ -64,15 +64,18 @@ Compare `l3_strategy="dedicated"` vs `"multi"` with the [local benchmark](run-lo
 
 ## Tune ONNX execution
 
-Pick a backend and thread counts to match your hardware:
+Pick a backend and thread counts to match your hardware with the config keys
+`execution_backend` and `onnx_runtime`:
 
 ```rust
-scanner.set_execution_backend(ExecutionBackend::CoreMl); // or Cpu, Cuda, Auto, ...
-scanner.set_onnx_runtime_options(OnnxRuntimeOptions {
+let mut config = GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L3);
+config.core.execution_backend = ExecutionBackend::CoreMl; // or Cpu, Cuda, Auto, ...
+config.core.onnx_runtime = OnnxRuntimeOptions {
     intra_threads: Some(2),
     inter_threads: Some(1),
     spinning: Some(false),
-});
+};
+let scanner = SecurityGateway::new(config)?;
 ```
 
 ## Batch L3 fallback inference

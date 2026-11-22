@@ -723,9 +723,8 @@ cut, and every fired Cedar policy sets at least its level. Its `confidence` is
 | `verdict` | The full `patronus.verdict/1`: cuts, model score and top features, fired policies (id, tier, title, decision, where), allowlisted policies and the `patronus.facts/1` of the command. |
 
 Policies are Cedar files in one format. The core tier ships compiled in
-(`ark-core/src/detectors/shell/data/core.cedar`) and cannot be lowered; user policies are `.cedar`
-files given to `SecurityGateway::set_shell_command_policy_config`
-(`ShellPolicyConfig::add_cedar_dir` reads a directory) or listed in the Core `ShellConfig.policy_dirs`
+(`ark-core/src/detectors/shell/data/core.cedar`) and cannot be lowered; user policies are the `.cedar`
+files of the directories listed in the Core `ShellConfig.policy_dirs`
 (see [Check shell commands](../how-to/check-shell-commands.md)). Each policy is `forbid` only, carries
 `@id("user.…")` and `@decision("block")` or `@decision("ask")` (optional `@title`), applies to
 `Action::"segment"` or `Action::"command"` and is validated against the facts schema

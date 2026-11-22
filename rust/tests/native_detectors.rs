@@ -722,18 +722,20 @@ fn native_l1_relationship_heuristics_reject_code_logs_and_documentation() {
         );
     }
 
-    let actions = SecurityGateway::new(GatewayConfig::new(
-        vec![
-            SecurityCategory::Exfiltration,
-            SecurityCategory::UnsafeAction,
-        ],
-        SecurityLevel::L1,
-    ))
+    let actions = SecurityGateway::new(
+        GatewayConfig::new(
+            vec![
+                SecurityCategory::Exfiltration,
+                SecurityCategory::UnsafeAction,
+            ],
+            SecurityLevel::L1,
+        )
+        .with_gates(
+            patronus_ark_core::cascade::ScanGateMatrix::default()
+                .with_rule("dlp_mcp_runtime_risk", true),
+        ),
+    )
     .unwrap();
-    actions.set_execution_gates(
-        patronus_ark_core::cascade::ScanGateMatrix::default()
-            .with_rule("dlp_mcp_runtime_risk", true),
-    );
     for (category, model, text) in [
         (
             SecurityCategory::Exfiltration,

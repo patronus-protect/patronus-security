@@ -191,7 +191,7 @@ def parse_ntdb_packages() -> list[NtdbPackage]:
                 model=model,
                 repo=repo,
                 revision=revision,
-                source_prefix=re.search(r'with_source_prefix\("([^"]*)"\)', block).group(1),
+                source_prefix=_spec_arguments(block)[4],
                 destination_path=destination,
             )
         )
@@ -225,12 +225,28 @@ def wolf_model_lines() -> list[str]:
     return lines
 
 
+CORE_MODEL_ASSETS = ROOT / "ark-core/src/model_assets.rs"
+
+
+def _spec_arguments(block: str) -> list[str]:
+    """The resolved arguments of a block's `ModelSpec::new(...)`, or of the Core
+    `model_assets::<NAME>` spec it names (`ModelSpec::new` or `ntdb_package`)."""
+    core = re.search(r"model_assets::([A-Z0-9_]+)", block)
+    if core and "ModelSpec::new(" not in block:
+        registry = CORE_MODEL_ASSETS.read_text()
+        block = registry.split(f"pub const {core.group(1)}: ModelSpec =", 1)[1].split(";", 1)[0]
+    call = re.search(r"(?:ModelSpec::new|ntdb_package)\(", block)
+    if not call:
+        raise ValueError(f"No model spec in block: {block}")
+    arguments = block[call.end() :].split(")", 1)[0]
+    return [_resolve(value.strip()).strip('"') for value in arguments.split(",") if value.strip()]
+
+
 def _model_spec(block: str) -> list[str]:
-    """The `id, repository, revision, cache_subdir` of a block's `ModelSpec::new(...)`."""
-    arguments = block.split("ModelSpec::new(", 1)[1].split(")", 1)[0]
-    values = [_resolve(value.strip()).strip('"') for value in arguments.split(",") if value.strip()]
+    """The `id, repository, revision, cache_subdir` of a block's model spec."""
+    values = _spec_arguments(block)[:4]
     if len(values) != 4:
-        raise ValueError(f"Unexpected ModelSpec::new arguments: {arguments}")
+        raise ValueError(f"Unexpected model spec in block: {block}")
     return values
 
 
@@ -244,7 +260,11 @@ def _field(block: str, name: str) -> str:
 def _resolve(value: str) -> str:
     # A string constant of `specs.rs` itself, such as the injection model name.
     specs = (ROOT / "rust/src/assets/specs.rs").read_text()
-    local = re.search(rf'^(?:pub )?const {re.escape(value)}: &str\s*=\s*([^;\n]+);', specs, re.M)
+    local = re.search(
+        rf'^(?:pub )?const {re.escape(value)}: &str\s*=\s*([^;\n]+);',
+        specs + "\n" + CORE_MODEL_ASSETS.read_text(),
+        re.M,
+    )
     if local:
         return _resolve(local.group(1).strip())
     # Core's Wolf Small pin, which the injection L2 package shares.

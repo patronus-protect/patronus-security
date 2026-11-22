@@ -25,15 +25,15 @@ use serde::Deserialize;
 const MODES: [ScoreMode; 2] = [ScoreMode::Strict, ScoreMode::Balanced];
 
 fn scan(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Pii],
-        SecurityLevel::L1,
-    ))
+    let scanner = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1).with_gates(
+            ScanGateMatrix {
+                pii_mode: mode,
+                ..Default::default()
+            },
+        ),
+    )
     .unwrap();
-    scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
-        ..Default::default()
-    });
     scanner
         .scan_category(SecurityCategory::Pii, text)
         .native

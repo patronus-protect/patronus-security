@@ -19,9 +19,9 @@ use crate::{
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::{NtdbExecutor, NtdbModelChunkInferences, PreparedNtdbChunk},
     pipeline::{L3Worker, RequestRegistry},
-    DynamicPiiConfig, EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input,
-    GatewayConfig, LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
-    SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
+    DynamicPiiConfig, EvaluationResult, ExternalL1Detector, ExternalL1Input, GatewayConfig,
+    LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, SecurityCategory,
+    SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
 use patronus_ark_core::{
@@ -35,6 +35,7 @@ mod direct_l3;
 mod injection_l1;
 mod ntdb_l2;
 mod request_queue;
+pub use request_queue::{ScanRequest, ScanRequestOptions};
 mod warmup;
 
 use ntdb_l2::{ntdb_l2_cache_namespace, ntdb_l2_error_scan_result};
@@ -192,17 +193,17 @@ mod distributed_plan_tests {
         }
     }
 
-    fn injection_gateway() -> SecurityGateway {
-        SecurityGateway::new(GatewayConfig::new(
-            vec![SecurityCategory::Injection],
-            SecurityLevel::L2,
-        ))
+    fn injection_gateway(gates: crate::ScanGateMatrix) -> SecurityGateway {
+        SecurityGateway::new(
+            GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L2)
+                .with_gates(gates),
+        )
         .unwrap()
     }
 
     #[test]
     fn distributed_l2_plan_skips_modules_l1_decided() {
-        let gateway = injection_gateway();
+        let gateway = injection_gateway(Default::default());
         let execution = ScanExecution::with_gates(SecurityLevel::L2, cascade_gates());
         let metadata = serde_json::json!({});
 
@@ -244,7 +245,12 @@ mod distributed_plan_tests {
     where
         T: From<String>,
     {
-        let request_id = gateway.enqueue_categories(vec![SecurityCategory::Injection], text, None);
+        let request_id = gateway
+            .enqueue(ScanRequest {
+                categories: Some(vec![SecurityCategory::Injection]),
+                ..ScanRequest::new(text)
+            })
+            .unwrap();
         let mut levels = Vec::new();
         loop {
             let event = gateway
@@ -273,8 +279,7 @@ mod distributed_plan_tests {
 
     #[test]
     fn queued_request_runs_l2_only_for_modules_l1_left_undecided() {
-        let gateway = injection_gateway();
-        gateway.set_execution_gates(cascade_gates());
+        let gateway = injection_gateway(cascade_gates());
 
         let decided = queued_levels(&gateway, L1_ATTACK);
         assert!(decided.iter().all(|level| level == "L1"), "{decided:?}");
@@ -286,12 +291,11 @@ mod distributed_plan_tests {
     #[test]
     fn queue_and_distributed_plan_mark_the_same_final_l1_results() {
         // Up to L1 only, an undecided module ends clear at L1 in both paths.
-        let gateway = SecurityGateway::new(GatewayConfig::new(
-            vec![SecurityCategory::Injection],
-            SecurityLevel::L1,
-        ))
+        let gateway = SecurityGateway::new(
+            GatewayConfig::new(vec![SecurityCategory::Injection], SecurityLevel::L1)
+                .with_gates(cascade_gates()),
+        )
         .unwrap();
-        gateway.set_execution_gates(cascade_gates());
         let queued = queued_events(&gateway, "ordinary prose", |result| {
             format!("{}:{:?}", result.level, decided_by(&result))
         });
@@ -358,7 +362,7 @@ mod distributed_plan_tests {
             }))
             .unwrap()
         };
-        let gateway = injection_gateway();
+        let gateway = injection_gateway(gates());
         let prose = [ExternalL1Input::new(
             SecurityCategory::Injection,
             "ordinary prose",
@@ -378,7 +382,6 @@ mod distributed_plan_tests {
         assert_eq!(outcome(l1), Some(crate::StageOutcome::Detected));
         assert_eq!(decided_by(l1), Some(crate::Stage::Heuristic));
 
-        gateway.set_execution_gates(gates());
         let queued = queued_events(&gateway, "ordinary prose", |result| {
             format!("{}:{:?}", result.level, outcome(&result))
         });
@@ -390,7 +393,7 @@ mod distributed_plan_tests {
 
     fn plan_with(gates: serde_json::Value, level: SecurityLevel) -> DistributedL2Plan {
         let gates = serde_json::from_value::<crate::ScanGateMatrix>(gates).unwrap();
-        injection_gateway().plan_distributed_l2(
+        injection_gateway(Default::default()).plan_distributed_l2(
             &[ExternalL1Input::new(
                 SecurityCategory::Injection,
                 "ordinary prose",
@@ -443,7 +446,7 @@ mod distributed_plan_tests {
     #[test]
     fn without_a_cascade_l2_runs_as_before_and_nothing_is_marked() {
         // An L1 detection does not stop L2, in the queue and the distributed plan.
-        let gateway = injection_gateway();
+        let gateway = injection_gateway(Default::default());
         let queued = queued_events(&gateway, L1_ATTACK, |result| {
             format!("{}:{:?}", result.level, decided_by(&result))
         });
@@ -633,8 +636,9 @@ pub struct SecurityGatewayCore {
     external_l1: Mutex<HashMap<SecurityCategory, Vec<Arc<dyn ExternalL1Detector>>>>,
     /// Request-independent configuration for the L3-only dynamic entity pipeline.
     dynamic_pii_config: Mutex<DynamicPiiConfig>,
-    /// User policies and allowlist of the `shell_command` verdict.
-    shell_command_policy_config: Mutex<ShellPolicyConfig>,
+    /// User policies and allowlist of the `shell_command` verdict, loaded
+    /// from Core's `shell.policy_dirs` and `shell.allowlist`.
+    shell_command_policy_config: ShellPolicyConfig,
     /// Cat's bundle (`shell`): its directory (unset: below the cache root)
     /// and the release manifest warmup accepts.
     shell: ShellConfig,
@@ -827,14 +831,6 @@ impl SecurityGateway {
             .store(worker_count.max(1), Ordering::Relaxed);
     }
 
-    /// Set ONNX Runtime session options for subsequent scans.
-    pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions) {
-        self.execution
-            .lock()
-            .expect("scan execution mutex poisoned")
-            .set_onnx_runtime_options(options);
-    }
-
     /// Create a gateway from its config (see [`GatewayConfig`]); refuses an
     /// invalid config, unreadable `shell` policies and a persistent cache
     /// that does not open. Persistent caching is enabled only when
@@ -851,37 +847,36 @@ impl SecurityGateway {
             cache,
         } = config;
         let warmup = core.warmup_options();
-        let shell = core.shell.unwrap_or_default();
+        let shell = core.shell.clone().unwrap_or_default();
         let shell_policies = ShellPolicyConfig::load(&shell.policy_dirs, &shell.allowlist)
             .map_err(|error| format!("shell: {error}"))?;
-        let mut execution = ScanExecution::with_gates(core.max_level, core.gates);
-        execution.set_wolf(core.wolf.unwrap_or_default())?;
-        execution.set_backend(core.execution_backend);
+        let core = Arc::new(core);
+        let mut execution = ScanExecution::from_core(Arc::clone(&core));
+        execution.set_wolf(core.wolf.clone().unwrap_or_default())?;
         if let Some(mode) = onnx_batch_mode {
             execution.set_onnx_batch_mode(mode);
         }
-        execution.set_onnx_runtime_options(core.onnx_runtime);
         execution.set_ntdb_operating_point(ntdb_operating_point);
         execution.set_ntdb_decision_threshold_point(ntdb_decision_threshold_point);
         execution.set_l3_strategy(l3_strategy);
         let requests = Arc::new(RequestRegistry::default());
         let l3_worker = L3Worker::start_with_cache(Arc::clone(&requests), cache)
             .map_err(|error| format!("cache: {error}"))?;
-        let categories = core.categories;
+        let categories = core.categories.clone();
         let max_level = core.max_level;
         let native_engine = NativeEngine::new(&categories);
         native_engine.prepare(execution.gates());
         let core = SecurityGatewayCore {
             categories,
             max_level,
-            cache_root: core.cache_root,
+            cache_root: core.cache_root.clone(),
             max_input_bytes: core.max_input_bytes,
             max_findings: core.max_findings,
             warmup,
             execution: Mutex::new(execution),
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(dynamic_pii.validated()?),
-            shell_command_policy_config: Mutex::new(shell_policies),
+            shell_command_policy_config: shell_policies,
             shell,
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
@@ -1063,30 +1058,12 @@ impl SecurityGateway {
         self.warmup.download_for(category) == DownloadPolicy::Missing
     }
 
-    /// Replace the execution gate matrix used by subsequent scans. The
-    /// native rules the new gates enable are built here, not on a scan.
-    pub fn set_execution_gates(&self, gates: ScanGateMatrix) {
-        self.native_engine.prepare(&gates);
-        self.execution
-            .lock()
-            .expect("execution mutex poisoned")
-            .set_gates(gates);
-    }
-
     /// Replace the ONNX batch mode used by subsequent batch scans.
     pub fn set_onnx_batch_mode(&self, mode: OnnxBatchMode) {
         self.execution
             .lock()
             .expect("execution mutex poisoned")
             .set_onnx_batch_mode(mode);
-    }
-
-    /// Replace the execution backend and apply its default L3 mode.
-    pub fn set_execution_backend(&self, backend: ExecutionBackend) {
-        self.execution
-            .lock()
-            .expect("execution mutex poisoned")
-            .set_backend(backend);
     }
 
     /// Select the calibrated NTDB operating point used by subsequent scans.
@@ -1418,26 +1395,10 @@ impl SecurityGateway {
         Ok(())
     }
 
-    /// Replace the user policies and allowlist of the `shell_command` verdict.
-    /// A loaded pipeline applies them at once (a refused configuration changes
-    /// nothing); otherwise `warmup` applies them.
-    pub fn set_shell_command_policy_config(&self, config: ShellPolicyConfig) -> Result<(), String> {
-        if let Some(pipeline) = &self.shell_command_pipeline {
-            pipeline.configure(&config)?;
-        }
-        *self
-            .shell_command_policy_config
-            .lock()
-            .expect("shell_command policy config mutex poisoned") = config;
-        Ok(())
-    }
-
-    /// Return the configured `shell_command` user policies and allowlist.
-    pub fn shell_command_policy_config(&self) -> ShellPolicyConfig {
-        self.shell_command_policy_config
-            .lock()
-            .expect("shell_command policy config mutex poisoned")
-            .clone()
+    /// Return the `shell_command` user policies and allowlist that `warmup`
+    /// applies, loaded from Core's `shell` key.
+    pub fn shell_command_policy_config(&self) -> &ShellPolicyConfig {
+        &self.shell_command_policy_config
     }
 
     /// Return the currently configured `dynamic-pii` settings.

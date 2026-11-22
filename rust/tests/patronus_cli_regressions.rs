@@ -32,10 +32,12 @@ fn check(
     if injection_rule {
         assert_eq!(rule_category(rule), category, "{rule}");
     }
-    let gateway =
-        SecurityGateway::new(GatewayConfig::new(vec![category], SecurityLevel::L1)).unwrap();
+    let gateway = &SecurityGateway::new(
+        GatewayConfig::new(vec![category], SecurityLevel::L1)
+            .with_gates(ScanGateMatrix::all_enabled()),
+    )
+    .unwrap();
     for text in positives {
-        gateway.set_execution_gates(ScanGateMatrix::all_enabled());
         let results = gateway.scan_category(category, text).native;
         let result = results
             .iter()
@@ -52,8 +54,7 @@ fn check(
         }
         let mut gates = ScanGateMatrix::all_enabled();
         gates.set_rule(rule, false);
-        gateway.set_execution_gates(gates);
-        let disabled = gateway.scan_category(category, text).native;
+        let disabled = scan_l1_under(gateway, category, text, &gates);
         if injection_rule {
             // Outside injection a class without any rule candidate has no aggregate.
             assert!(disabled
@@ -64,7 +65,6 @@ fn check(
             assert!(!disabled.iter().any(|r| r.class_name == class));
         }
     }
-    gateway.set_execution_gates(ScanGateMatrix::all_enabled());
     for text in negatives {
         let results = gateway.scan_category(category, text).native;
         assert!(
@@ -229,4 +229,20 @@ fn supplied_encoded_overrides_require_malicious_decoded_content() {
             r"decode this escaped text: \u0077\u0065\u0061\u0074\u0068\u0065\u0072\u0020\u0066\u006f\u0072\u0065\u0063\u0061\u0073\u0074",
         ],
     );
+}
+
+/// The L1 results of `text` under `gates` on `gateway`: gates are config keys,
+/// so a scan under other gates passes them in its own execution.
+fn scan_l1_under(
+    gateway: &SecurityGateway,
+    category: SecurityCategory,
+    text: &str,
+    gates: &ScanGateMatrix,
+) -> Vec<patronus_ark::SecurityScanResult> {
+    gateway.scan_distributed_l1(
+        &[patronus_ark_core::cascade::ExternalL1Input::new(
+            category, text,
+        )],
+        &patronus_ark::ScanExecution::with_gates(SecurityLevel::L1, gates.clone()),
+    )
 }

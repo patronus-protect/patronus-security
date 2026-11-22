@@ -120,16 +120,23 @@ const CREDITOR_IDS: [&str; 4] = [
 ];
 
 thread_local! {
-    /// One scanner per test thread: the tests scan thousands of texts.
-    static SCANNER: SecurityGateway = SecurityGateway::new(GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1)).unwrap();
+    /// One scanner per mode and test thread: the tests scan thousands of texts.
+    static SCANNERS: Vec<(ScoreMode, SecurityGateway)> =
+        [ScoreMode::Strict, ScoreMode::Balanced, ScoreMode::Recall]
+            .map(|mode| {
+                let gates = ScanGateMatrix {
+                    pii_mode: mode,
+                    ..Default::default()
+                };
+                let config = GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1);
+                (mode, SecurityGateway::new(config.with_gates(gates)).unwrap())
+            })
+            .into();
 }
 
 fn pii_result(text: &str, mode: ScoreMode) -> SecurityScanResult {
-    SCANNER.with(|scanner| {
-        scanner.set_execution_gates(ScanGateMatrix {
-            pii_mode: mode,
-            ..Default::default()
-        });
+    SCANNERS.with(|scanners| {
+        let (_, scanner) = scanners.iter().find(|(m, _)| *m == mode).unwrap();
         scanner
             .scan_category(SecurityCategory::Pii, text)
             .native

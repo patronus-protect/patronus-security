@@ -68,9 +68,15 @@ def _worker_config(gateway):
     return {key: deepcopy(gateway._config[key]) for key in _WORKER_KEYS if key in gateway._config}
 
 
-def _set_gates(gateway, gates):
-    """Swap the gates of a warm gateway between benchmark phases; `None` restores the defaults."""
-    gateway.rust_gateway.set_execution_gates(None if gates is None else json.dumps(gates))
+def _with_gates(gateway, gates):
+    """A warm gateway of `gateway`'s config with the gate keys `gates` on top;
+    `gateway` itself when `gates` is empty. Gates are config keys, so a benchmark
+    phase with other gates runs on its own gateway."""
+    if not gates:
+        return gateway
+    gated = type(gateway)({**gateway._config, **gates})
+    gated.warmup()
+    return gated
 
 
 def _set_dynamic_pii(gateway, config):
@@ -279,8 +285,7 @@ def _classifier_modes(gateway):
 
 
 def _run_classifier_mode(gateway, samples, category, tool_gates, model, mode_gates):
-    gates = dict(mode_gates)
-    _set_gates(gateway, gates or None)
+    gateway = _with_gates(gateway, mode_gates)
 
     expected, predicted, latencies, rows = [], [], [], []
     l3_scans = 0
@@ -355,7 +360,6 @@ def _run_classifier(gateway, limit_per_pipeline):
             )
         pipelines[name] = {"model": model, "modes": modes}
 
-    _set_gates(gateway, None)
     return {"pipelines": pipelines}
 
 
@@ -859,33 +863,30 @@ def _run_native_l1_10kb(
 
     results = {}
     sequence = 0
-    try:
-        for name, categories, gates, head, match_tail in profiles:
-            _set_gates(gateway, gates)
-            results[name] = {
-                "categories": categories,
-                "benign": _native_l1_case(
-                    gateway,
-                    categories,
-                    head,
-                    "",
-                    iterations,
-                    warmup_iterations,
-                    sequence,
-                ),
-                "match_at_end": _native_l1_case(
-                    gateway,
-                    categories,
-                    head,
-                    match_tail,
-                    iterations,
-                    warmup_iterations,
-                    sequence + warmup_iterations + iterations,
-                ),
-            }
-            sequence += 2 * (warmup_iterations + iterations)
-    finally:
-        _set_gates(gateway, None)
+    for name, categories, gates, head, match_tail in profiles:
+        scanner = _with_gates(gateway, gates)
+        results[name] = {
+            "categories": categories,
+            "benign": _native_l1_case(
+                scanner,
+                categories,
+                head,
+                "",
+                iterations,
+                warmup_iterations,
+                sequence,
+            ),
+            "match_at_end": _native_l1_case(
+                scanner,
+                categories,
+                head,
+                match_tail,
+                iterations,
+                warmup_iterations,
+                sequence + warmup_iterations + iterations,
+            ),
+        }
+        sequence += 2 * (warmup_iterations + iterations)
 
     return {
         "text_bytes": NATIVE_L1_TEXT_BYTES,

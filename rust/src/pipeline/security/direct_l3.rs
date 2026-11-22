@@ -158,18 +158,18 @@ mod tests {
             patronus_ark_core::test_fixtures::TOKENIZER_MMBPE,
         )
         .unwrap();
-        let gateway = SecurityGateway::new({
+
+        SecurityGateway::new({
             let mut config = GatewayConfig::new(
                 vec![SecurityCategory::Injection, SecurityCategory::ToolTags],
                 SecurityLevel::L3,
             );
             config.core.cache_root = Some(base);
+            config.core.gates = ScanGateMatrix::levels(false, false, true);
+            config.l3_strategy = L3Strategy::Multi;
             config
         })
-        .unwrap();
-        gateway.set_l3_strategy(L3Strategy::Multi);
-        gateway.set_execution_gates(ScanGateMatrix::levels(false, false, true));
-        gateway
+        .unwrap()
     }
 
     #[test]

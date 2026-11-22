@@ -194,7 +194,7 @@ There is one mechanism everywhere: a `rules` map from stable rule id to `true`/`
 | Core, Python | `Scanner({"rules": {"pii_email": False}})` |
 | Core, Rust | `config.gates.rules.insert("pii_email".into(), false)` |
 | Ark, Python | `SecurityGateway({"categories": ..., "rules": {...}})` or per `enqueue` |
-| Ark, Rust | `gateway.set_execution_gates(ScanGateMatrix::default().with_rule("pii_email", false))` |
+| Ark, Rust | `GatewayConfig::new(..).with_gates(ScanGateMatrix::default().with_rule("pii_email", false))` |
 | HTTP | form field `config={"gates": {"rules": {"pii_email": false}}}` |
 
 ```python

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::GatewayConfig;
+use patronus_ark::{ScanRequest, ScanRequestOptions};
 use std::time::Duration;
 
 use patronus_ark::{DynamicPiiConfig, QueuedSecurityEvent, SecurityGateway};
@@ -48,14 +49,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         l3_policy: None,
     }])?;
 
-    let request_id = gateway.enqueue_with_metadata(
-        "fn main() { println!(\"hello\"); }",
-        serde_json::json!({
-            "tool": {"name": "read_file", "action": "read"},
-            "content": {"format": "source_code", "mime_type": "text/x-rust"}
-        }),
-        Some(gates),
-    );
+    let request_id = gateway
+        .enqueue(ScanRequest {
+            options: ScanRequestOptions {
+                gates: Some(gates),
+                metadata: serde_json::json!({
+                    "tool": {"name": "read_file", "action": "read"},
+                    "content": {"format": "source_code", "mime_type": "text/x-rust"}
+                }),
+                ..Default::default()
+            },
+            ..ScanRequest::new("fn main() { println!(\"hello\"); }")
+        })
+        .unwrap();
 
     while let Some(event) = gateway.consume_next_event(Some(Duration::from_secs(2))) {
         match event {

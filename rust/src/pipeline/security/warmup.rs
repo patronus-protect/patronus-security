@@ -126,7 +126,7 @@ impl SecurityGateway {
             let pipeline = ShellRiskPipeline::from_pinned_bundle_dir(&dir, &shell.manifest_sha256)
                 .map_err(std::io::Error::other)?;
             pipeline
-                .configure(&self.shell_command_policy_config())
+                .configure(self.shell_command_policy_config())
                 .map_err(std::io::Error::other)?;
             let (ask, block) = pipeline.model().cuts();
             log::info!(

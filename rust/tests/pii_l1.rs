@@ -10,16 +10,14 @@ fn pii_result(text: &str) -> SecurityScanResult {
 }
 
 fn pii_result_with_explain(text: &str, explain: bool) -> SecurityScanResult {
-    let scanner = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Pii],
-        SecurityLevel::L1,
-    ))
-    .unwrap();
     let gates = patronus_ark_core::cascade::ScanGateMatrix {
         explain,
         ..Default::default()
     };
-    scanner.set_execution_gates(gates);
+    let scanner = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Pii], SecurityLevel::L1).with_gates(gates),
+    )
+    .unwrap();
     scanner
         .scan_category(SecurityCategory::Pii, text)
         .native

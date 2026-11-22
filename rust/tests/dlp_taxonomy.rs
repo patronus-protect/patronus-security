@@ -237,14 +237,11 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
 ];
 
 fn scan_with(gates: Option<ScanGateMatrix>, text: &str) -> SecurityScanResult {
-    let gateway = SecurityGateway::new(GatewayConfig::new(
-        vec![SecurityCategory::Dlp],
-        SecurityLevel::L1,
-    ))
+    let gateway = SecurityGateway::new(
+        GatewayConfig::new(vec![SecurityCategory::Dlp], SecurityLevel::L1)
+            .with_gates(gates.unwrap_or_default()),
+    )
     .unwrap();
-    if let Some(gates) = gates {
-        gateway.set_execution_gates(gates);
-    }
     gateway
         .scan_category(SecurityCategory::Dlp, text)
         .native

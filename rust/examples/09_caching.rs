@@ -5,6 +5,7 @@
 //!   cargo run --example 09_caching
 //!   cargo run --example 09_caching -- /tmp/patronus-cache.redb
 
+use patronus_ark::ScanRequest;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -39,7 +40,7 @@ Confidential legal contract: the employee salary ledger and customer account
 records must not be disclosed."#;
 
 fn scan_events(scanner: &SecurityGateway, text: &str) -> Vec<QueuedSecurityEvent> {
-    let request_id = scanner.enqueue(text, None);
+    let request_id = scanner.enqueue(ScanRequest::new(text)).unwrap();
     let mut events = Vec::new();
     loop {
         let event = scanner
