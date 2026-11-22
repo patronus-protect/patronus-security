@@ -77,6 +77,12 @@ Mail, JSON-Wert), zählt wie ein Feldname (+25) und setzt `carrier=indirect`.
 Kandidaten: R+A+L, B1, B4, B5. Ein eigener heutiger Scorer existiert nicht; die vier `leak.*`-Regeln sind
 Merkmale im Injection-Scorer 0.1.7, der deshalb als B0-Vergleich mitläuft.
 
+Stand PX02 (2026-11-22): gewählt ist der fastText-Kandidat (S11-Setup), TPR@0,1 % auf den Kalibrierzeilen 99,4,
+`gandalf` 62,1 bei gematchter 0,1-%-FPR (ATR 22,8), ~4 ms je 100 KiB, default aus. Er erkennt das Thema
+(Passwort, Systemprompt), nicht die Absicht: auf den Goldens flaggt er 18/30 englische Hard Negatives und findet
+keine deutsche Extraktion. Zahlen und offene Punkte in
+[`../scoreboard/prompt-extraction-scorer.md`](../scoreboard/prompt-extraction-scorer.md).
+
 ## 8. Policies (später)
 
 - `extraction.with_sink`: `prompt_extraction` ∧ Senke aus `exfiltration` → `block`.
@@ -140,3 +146,19 @@ Klauselanfang (oder eine Frage an „du/you“), das Ziel des Modells selbst (`y
   dekodierten Sichten (T05).
 - Offen: Passwort-/Geheimnis-Extraktion aus dem Systemprompt (Mosscap/Gandalf) als eigene Familie
   (TRIAGE); Werte auf dem Scoreboard.
+
+## 14. Stand PX02 (2026-11-22)
+
+Scorer-Wahl unter `S04`/`S09`-Kandidaten auf den Kalibrierzeilen (S11-Setup: `train_dev` + `generated`,
+Template-disjunkt; 7 600 Positive, davon 7 566 Mosscap; 27 267 Benign-Zeilen inkl. Chat-Pool):
+`FT` 99,4 bei 4,05 ms p95, `B4` 99,8 bei ~15 ms, `B1` 99,7 bei 7 MB RAM — nur `FT` liegt im Budget. Über der
+besten Heuristik (Dev 3,6 ATR, `gandalf` 22,8 ATR) liegt er auf beiden (99,4; `gandalf` 62,1 matched).
+
+- Goldens: zehn neue Passwort-/Geheimnis-Extraktionen (DE/EN, Chat, E-Mail, Web) sind Regel-Lücken (`known_gap`);
+  `FT` nimmt die fünf englischen, keine deutsche. Ihre Look-alikes (eigenes Konto, Kollegenfrage,
+  Passwortrichtlinie, Kreuzworträtsel, Abwehr-Prompt, Testdaten) bleiben für die Regeln frei.
+- Benannte Regression (Modell konfiguriert): Hard Negatives der Goldens am Detect-Schnitt 18/30 EN, 2/29 DE;
+  Dev-Hard-Benigns 2/1 085, Twins 0/830. Der Benign-Pool enthält keine Extraktions-Look-alikes, deshalb sieht die
+  Kalibrierung das nicht.
+- Offen: deutsche Extraktionspositive (Dev hat keine), Extraktions-Look-alikes als Trainingsnegative, eigene
+  Familie für Passwort-/Geheimnis-Extraktion in den Regeln (TRIAGE).

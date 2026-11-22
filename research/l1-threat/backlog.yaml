@@ -431,6 +431,7 @@ tasks:
       regression named; latency A/B in the PR; if no candidate beats the heuristic, the PR names the best
       reachable value
   - id: PX02
+    status: done
     title: prompt_extraction scorer — choose among the S04 and S09 candidates by dev TPR@0.1% FPR within the L1 budget; PX01 rules stay as the precise layer
     type: scorer
     deps: [PX01, S05, S10, S11]
