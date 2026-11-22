@@ -650,3 +650,14 @@ def test_calibrate_reports_the_rules_only_number_and_the_clear_cut_per_language(
         assert cell["clear"]["tp"] == sum(label and s > clear for s, label in scores)
         assert cell["clear"]["fp"] == sum(not label and s > clear for s, label in scores)
         assert cell["clear"]["tp"] >= cell["tp"]
+
+
+def test_calibration_markdown_shows_the_clear_cut_and_the_rules_only_number(tmp_path):
+    source = tmp_path / "rows.jsonl"
+    source.write_text("".join(json.dumps(r) + "\n" for r in toy_rows(20) + benign_pool(40)), encoding="utf-8")
+    out, md = tmp_path / "calibration.json", tmp_path / "calibration.md"
+    assert MODULE.main(["calibrate", "--rows", str(source), "--class", CLS, "--out", str(out),
+                        "--markdown", str(md)]) == 0
+    header = next(line for line in md.read_text(encoding="utf-8").splitlines()
+                  if line.startswith("| Class | Language |"))
+    assert "TPR at clear" in header and "rules-only TPR" in header
