@@ -3816,6 +3816,34 @@ mod tests {
             assert_eq!(clause == Context::Counter, counter, "{category:?}");
         }
     }
+
+    #[test]
+    fn toxic_moderation_log_fields_damp_but_a_reporter_is_no_moderation() {
+        // A journalist is a target like anyone else; only the log field
+        // ("reporter=7781") marks a moderation log.
+        for (text, rule) in [
+            (
+                "You are a worthless reporter.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Du bist ein wertloser Reporter.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "I'm going to stab you tonight, reporter.",
+                "ark.threat.tx_threat",
+            ),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
+        for text in [
+            "2026-11-23 09:12 mod action=remove reason=threat msg=\"Im gonna stab you\" reporter=7781",
+            "2026-11-23 09:12 reason=insult msg=\"you worthless idiot\" reporter=7781",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
+        }
+    }
 }
 
 #[cfg(test)]

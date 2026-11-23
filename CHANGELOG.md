@@ -334,6 +334,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   that already stayed quiet do not report. These new forms and the added words report at the lowest
   accepted score, so a `toxic_language` score above it still comes only from the earlier forms and
   words, and a threshold set above the acceptance score keeps its earlier results.
+- **Detection change:** (`toxic_language`) a moderation log is recognised by its fields
+  (`mod action`, `reporter=`), not by the word "reporter": abuse of a journalist ("You are a
+  worthless reporter", "Du bist ein wertloser Reporter") reports again.
 - **Detection change:** (`toxic_language`) a threat reports only when its violence verb has the
   person as object ("I will kill you", "ich werde dich umbringen"), not when the verb has another
   object ("I will help you kill the process"); harassment reports only its full phrases ("bring

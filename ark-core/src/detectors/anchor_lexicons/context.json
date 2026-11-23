@@ -1424,7 +1424,7 @@
   {
     "id": "toxic.moderation",
     "kind": "counter",
-    "description": "Moderation: Richtlinie, gemeldeter oder gelöschter Beitrag, Sicherheitsleitfaden; Moderationsprotokoll (mod action, reporter)",
+    "description": "Moderation: Richtlinie, gemeldeter oder gelöschter Beitrag, Sicherheitsleitfaden; Moderationsprotokoll (mod action, reporter=)",
     "en": [
       "moderation",
       "moderator*",
@@ -1449,7 +1449,7 @@
     ],
     "shared": [
       "mod action",
-      "reporter"
+      "reporter="
     ],
     "cased": [],
     "origin": {
@@ -1472,7 +1472,7 @@
       "melde sie": "hand",
       "nutzungsregeln": "hand",
       "mod action": "hand",
-      "reporter": "hand"
+      "reporter=": "hand"
     },
     "sources": [
       "research/l1-threat/categories/toxic_language.md"
