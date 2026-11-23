@@ -376,11 +376,11 @@ synthetisch (zwei Quellen je Sprache); toxic_language und harmful_content brauch
 `include_bytes!`, kein Download): gepackte Form `ark-core/models/l1/<klasse>.ftpack` (gefaltete Bucket-Werte als f64,
 262 KB je Modell statt 11 MB `model.json`, 2,8 MB für alle elf; bitgleich, `category_model.py pack`). Die Kaskade nennt sie
 mit `cascade.modules.<kategorie>.l1_model: {"builtin": "<klasse>"}` (opt-in; ohne Kaskade unverändert, ARK nimmt dieselbe
-Config). Ein Modell trägt die DE/EN-Schnitte aus S12 und wendet den Schnitt der erkannten Sprache an, sonst den strengsten.
+Config). Ein Modell trägt DE/EN-Schnitte und wendet den Schnitt der erkannten Sprache an, sonst den strengsten; die
+Schnitte sind je erkannter Sprache kalibriert und halten 0,1 % FPR auch je Label-Sprache (`routed_detect_cuts`).
 `scoreboard/cascade-config.json` nennt alle elf, `cascade.md` neu gerendert; Zahlen je Klasse und Sprache auf der
-S12-Kalibrierhälfte in [`scoreboard/builtin-models.md`](scoreboard/builtin-models.md). Offen: agent_config_tampering
-DE 0,13 % FPR (Schnitte je Label-Sprache kalibriert, Core wählt nach erkannter Sprache → Schnitte je erkannter Sprache
-kalibrieren); Wolf-Edge-fp32-Spalte in `cascade.md` nicht gerendert (Wolf-Bundle auf dem Host nicht vorbereitet).
+S12-Kalibrierhälfte in [`scoreboard/builtin-models.md`](scoreboard/builtin-models.md); jede Klasse ≤ 0,1 % FPR in DE
+und EN (agent_config_tampering DE 0,13 % → 0,09 %). Offen: Wolf-Edge-fp32-Spalte in `cascade.md` nicht gerendert (Wolf-Bundle auf dem Host nicht vorbereitet).
 
 **Stand TP02.** Erste Ablations-Entscheidung: `tool_poisoning` behält `B0` (Punkte-Regeln mit
 Klauselkontext, kein gelerntes Modell); Zahlen und Regel-Ergänzungen in
