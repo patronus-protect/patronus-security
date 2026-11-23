@@ -859,6 +859,22 @@ def test_refresh_rerenders_after_a_dev_refreeze_or_new_cached_baselines_without_
     assert MODULE.main(args) == 0 and len(built) == 3
 
 
+def test_refresh_rerenders_after_a_set_moves_between_dev_and_report_with_the_same_contents(split, tmp_path,
+                                                                                          main_tree, capsys):
+    tree, first, built = main_tree
+    args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]
+    assert MODULE.main(args) == 0
+    path = tree / MODULE.SCOREBOARD_DIR / "baseline.md"
+    recorded = MODULE.recorded_inputs(path)
+    since = commit_files(tree, {str(MODULE.SCOREBOARD_DIR / "baseline.md"): path.read_text()}, "scoreboard")
+    args += ["--since", since]
+    # The report set is re-frozen into dev scope: same JSONL bytes and hashes, only its role changes.
+    freeze(split / "report", [row("rep", 0, ["jailbreak"]), row("rep", 1, benign=True)], role="dev")
+    capsys.readouterr()
+    assert MODULE.main(args) == 0 and len(built) == 2
+    assert MODULE.recorded_inputs(path) != recorded
+
+
 def test_refresh_keeps_a_report_whose_numbers_did_not_change(split, tmp_path, main_tree, capsys):
     tree, first, _ = main_tree
     args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]

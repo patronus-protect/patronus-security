@@ -1119,11 +1119,12 @@ def changed_paths(tree: Path, since: str, commit: str) -> list[str]:
 
 
 def inputs_fingerprint(sets: list[SetFile], baseline_cache: Path | None = None) -> str:
-    """Fingerprint of the data a report reads: every set's id and SHA-256 and, with ``baseline_cache``, the
-    cached baseline prediction files (their metadata names baseline, version, set and corpus hash)."""
+    """Fingerprint of the data a report reads: every set's id, SHA-256 and role (dev or report scope) and, with
+    ``baseline_cache``, the cached baseline prediction files (their metadata names baseline, version, set and
+    corpus hash)."""
     digest = hashlib.sha256()
     for entry in sorted(sets):
-        digest.update(f"set\0{entry.set_id}\0{entry.sha256}\n".encode())
+        digest.update(f"set\0{entry.set_id}\0{entry.sha256}\0{entry.role}\n".encode())
     if baseline_cache is not None and baseline_cache.is_dir():
         for meta in sorted(baseline_cache.glob("*/*/*.json")):
             digest.update(f"baseline\0{meta.relative_to(baseline_cache).as_posix()}\n".encode())
