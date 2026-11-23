@@ -2042,7 +2042,7 @@ classes:
         de: [<du> <Beleidigung>]
         en: [<you> <insult>]
       carriers: [chat, email, web, document, tool_output]
-      existing_rules: [ark.threat.tx_insult_addressee]
+      existing_rules: [ark.threat.tx_insult_addressee, ark.threat.tx_insult_vocative, ark.threat.tx_insult_verdict]
       baseline_coverage: {nemo: partial}
       gap: No L1 detector
     - id: harassment

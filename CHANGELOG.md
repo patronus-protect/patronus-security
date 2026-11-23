@@ -321,6 +321,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
   ships with the scanner; leetspeak and umlaut spellings are folded before the lookup. Counter-speech
   ("the claim that … is false"), moderation guidelines and reports, quoted messages and a negated
   insult ("you are not an idiot") do not report. Before, `toxic_language` found nothing on L1.
+- **Detection change:** (`toxic_language`) the rules now also report toxic text the way people
+  write it: a threat in a colloquial first-person future ("Im gonna stab you", "I ll beat you",
+  "ich werd dich abstechen"), a group dehumanised through a pronoun or demonstrative subject or a
+  behaviour comparison ("they're just like rats", "diese Leute benehmen sich wie Tiere"), more group
+  names, an insult as a vocative ("shut up, you worthless idiot", "Halt's Maul, du dreckiger
+  Bastard") and a verdict on the person or their work ("your mind is like garbage", "dein Charakter
+  ist so wertlos wie Müll", "du bist schlimmer als Tiere"). The hashed word list grew with insult,
+  dehumanising and violence words taken from openly licensed German and English hate-speech and
+  insult data. Animal words said of animals ("these insects are pests"), a question ("do you think
+  it's dumb?"), profanity without a target and the counter-speech, moderation and news contexts
+  that already stayed quiet do not report. These new forms and the added words report at the lowest
+  accepted score, so a `toxic_language` score above it still comes only from the earlier forms and
+  words, and a threshold set above the acceptance score keeps its earlier results.
+- **Detection change:** (`toxic_language`) a moderation log is recognised by its fields
+  (`mod action`, `reporter=`), not by the word "reporter": abuse of a journalist ("You are a
+  worthless reporter", "Du bist ein wertloser Reporter") reports again.
 - **Detection change:** (`toxic_language`) a threat reports only when its violence verb has the
   person as object ("I will kill you", "ich werde dich umbringen"), not when the verb has another
   object ("I will help you kill the process"); harassment reports only its full phrases ("bring

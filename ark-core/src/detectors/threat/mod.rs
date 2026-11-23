@@ -371,11 +371,16 @@ impl ThreatPipeline {
                     {
                         continue;
                     }
-                    if category == SecurityCategory::ToxicLanguage
-                        && !toxic_holds(&compiled.rule.id, window, &captures)
-                    {
-                        continue;
-                    }
+                    // A toxic language match that is not established scores
+                    // no higher than the acceptance score.
+                    let established = if category == SecurityCategory::ToxicLanguage {
+                        match toxic_holds(&compiled.rule.id, window, &captures) {
+                            Some(established) => established,
+                            None => continue,
+                        }
+                    } else {
+                        true
+                    };
                     // Deleting an object by its ID is an everyday request; an
                     // injected task frame ("first:", "TODO:") or a trailing
                     // "instead" makes it the agent's hijacked task.
@@ -515,6 +520,11 @@ impl ThreatPipeline {
                             support,
                         );
                         let score = score::score(&compiled.points, clause);
+                        let score = if established {
+                            score
+                        } else {
+                            score.min(thresholds.points_acceptance)
+                        };
                         // Replacing the recipient or redirecting a call is its
                         // own context, as is a transfer the agent must run
                         // before it answers; a plain extra copy needs a
@@ -1004,25 +1014,64 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
 }
 
 /// The hashed lexicon check of a toxic language match: its `lex` words hold
-/// an insult (or, per rule, a dehumanising metaphor, or a violence verb
-/// bound to a target) that no negation before it cancels, and its sentence
+/// an insult (or, per rule, a dehumanising metaphor, a vocative insult, or a
+/// violence verb bound to a target) that no negation before it cancels, and its sentence
 /// does not deny it before the match ("Nobody thinks you are an idiot").
 /// Phrase rules have no `lex`.
-fn toxic_holds(rule_id: &str, window: &str, captures: &regex::Captures<'_>) -> bool {
-    use toxic_lexicon::Family;
+///
+/// `None` when the match does not hold; otherwise whether it is established:
+/// an established form (the rule's `core` subject or intent with its
+/// copula) whose check holds on the hand-written seed terms alone. A match
+/// through a newer form (a vocative, a verdict, a pronoun subject) or a mined
+/// term only reaches the acceptance score, so it never outranks them.
+fn toxic_holds(rule_id: &str, window: &str, captures: &regex::Captures<'_>) -> Option<bool> {
+    use toxic_lexicon::{Family, Terms};
     let Some(lex) = captures.name("lex").map(|m| m.as_str()) else {
-        return true;
+        return Some(true);
     };
     let m = captures.get(0).unwrap();
     let from = sentence(window, m.start(), m.end()).as_ptr() as usize - window.as_ptr() as usize;
     if toxic_lexicon::denied_by_subject(&window[from..m.start()]) {
-        return false;
+        return None;
     }
-    match rule_id {
-        "ark.threat.tx_dehumanisation" => toxic_lexicon::contains(lex, Family::Dehumanise),
-        "ark.threat.tx_threat" => toxic_lexicon::threatens_target(lex),
-        _ => toxic_lexicon::contains(lex, Family::Insult),
+    let holds = match rule_id {
+        "ark.threat.tx_dehumanisation" => {
+            // the subject itself is no animal ("these insects are pests"); a
+            // pronoun subject needs a degrading comparison ("they're just like
+            // rats"), not a classification ("these are animals or plants")
+            let group = captures.name("group").map_or("", |g| g.as_str());
+            !toxic_lexicon::contains(group, Family::Dehumanise, Terms::All)
+                && if toxic_lexicon::pronoun_subject(group) {
+                    toxic_lexicon::degrading_dehumanisation(lex)
+                } else {
+                    toxic_lexicon::contains(lex, Family::Dehumanise, Terms::All)
+                }
+        }
+        "ark.threat.tx_threat" => toxic_lexicon::threatens_target(lex, Terms::All),
+        "ark.threat.tx_insult_vocative" => toxic_lexicon::vocative_insult(lex),
+        // an insult, or an animal word in a degrading comparison: "du bist schlimmer als Tiere"
+        "ark.threat.tx_insult_addressee" => {
+            toxic_lexicon::contains(lex, Family::Insult, Terms::All)
+                || toxic_lexicon::degrading_dehumanisation(lex)
+        }
+        _ => toxic_lexicon::contains(lex, Family::Insult, Terms::All),
+    };
+    if !holds {
+        return None;
     }
+    let core = captures.name("core").is_some();
+    Some(match rule_id {
+        "ark.threat.tx_insult_vocative" | "ark.threat.tx_insult_verdict" => false,
+        "ark.threat.tx_dehumanisation" => {
+            core && captures.name("copula").is_some()
+                && toxic_lexicon::contains(lex, Family::Dehumanise, Terms::Seed)
+        }
+        "ark.threat.tx_threat" => core && toxic_lexicon::threatens_target(lex, Terms::Seed),
+        "ark.threat.tx_group_derogation" => {
+            core && toxic_lexicon::contains(lex, Family::Insult, Terms::Seed)
+        }
+        _ => toxic_lexicon::contains(lex, Family::Insult, Terms::Seed),
+    })
 }
 
 /// Checks of the exfiltration rules after the match in `window`: a generic
@@ -3528,7 +3577,7 @@ mod tests {
             .iter()
             .filter(|r| r.category == SecurityCategory::ToxicLanguage)
             .collect();
-        assert_eq!(toxic.len(), 5);
+        assert_eq!(toxic.len(), 7);
         for rule in toxic {
             assert!(!rule.anchor_gate.is_unconditional(), "{}", rule.rule.id);
         }
@@ -3646,6 +3695,114 @@ mod tests {
     }
 
     #[test]
+    fn toxic_native_forms_threat_dehumanise_and_insult_without_a_copula() {
+        for (text, rule) in [
+            // first-person threat in a colloquial future form
+            (
+                "Next time I see you Im gonna stab you.",
+                "ark.threat.tx_threat",
+            ),
+            ("I ll beat you senseless.", "ark.threat.tx_threat"),
+            ("Ich werd dich abstechen.", "ark.threat.tx_threat"),
+            // a group dehumanised through a pronoun subject or a comparison
+            (
+                "They're just like rats, breeding everywhere.",
+                "ark.threat.tx_dehumanisation",
+            ),
+            (
+                "Those people behave like animals.",
+                "ark.threat.tx_dehumanisation",
+            ),
+            (
+                "Diese Leute benehmen sich wie Tiere.",
+                "ark.threat.tx_dehumanisation",
+            ),
+            // a vocative insult and a verdict on the person or their work
+            (
+                "Shut up, you worthless idiot!",
+                "ark.threat.tx_insult_vocative",
+            ),
+            (
+                "Halt's Maul, du dreckiger Bastard!",
+                "ark.threat.tx_insult_vocative",
+            ),
+            (
+                " Du großer Idiot, was hast du sonst im Kopf?",
+                "ark.threat.tx_insult_vocative",
+            ),
+            (
+                "Your mind is like garbage, worthless and empty.",
+                "ark.threat.tx_insult_verdict",
+            ),
+            (
+                "Dein Charakter ist so wertlos wie Müll.",
+                "ark.threat.tx_insult_verdict",
+            ),
+            (
+                "Du bist schlimmer als Tiere.",
+                "ark.threat.tx_insult_addressee",
+            ),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
+        for text in [
+            // animals, no people; a question, not a vocative; profanity without a target
+            "These insects are pests in the garden.",
+            "Diese Tiere sind Insekten.",
+            "Do you think it's dumb?",
+            "Damn, this fucking printer jammed again.",
+            "Verdammte Scheiße, der Drucker klemmt schon wieder.",
+            "Your dog is a friendly animal.",
+            "Tell me whether these are animals or plants.",
+            "They were walking their dog on a trail.",
+            "You are a monster slayer known as a Witcher.",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn toxic_matches_through_newer_forms_or_mined_terms_score_at_acceptance() {
+        let best = |text: &str| {
+            let detection = ThreatPipeline::new().detect_prepared(
+                &NativeText::new(text),
+                SecurityCategory::ToxicLanguage,
+                |_| true,
+                &ThreatThresholds::default(),
+            );
+            detection.details["matched_rules"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["rule_score"].as_f64().unwrap())
+                .fold(0.0, f64::max)
+        };
+        // an established form with a seed term keeps its score
+        for text in [
+            "You are a pathetic loser.",
+            "Muslims are vermin.",
+            "I will kill you.",
+            "Du bist ein Versager.",
+            "Ich werde dich umbringen.",
+        ] {
+            assert!(best(text) > DEFAULT_POINTS_ACCEPTANCE, "{text}");
+        }
+        // a vocative, a verdict, a newer subject or intent, or a mined term
+        // flags at the acceptance score, below every established match
+        for text in [
+            "Shut up, you worthless idiot!",
+            "Your mind is like garbage, worthless and empty.",
+            "Black people are vermin.",
+            "They're just like rats, breeding everywhere.",
+            "Ich werd dich abstechen.",
+            "You are disgusting.",
+            "Du bist hässlich.",
+        ] {
+            assert_eq!(best(text), DEFAULT_POINTS_ACCEPTANCE, "{text}");
+        }
+    }
+
+    #[test]
     fn toxic_counter_lexica_damp_only_toxic_language() {
         let text =
             "Fact check: the claim that the agent may delete every file without asking is false.";
@@ -3657,6 +3814,34 @@ mod tests {
         ] {
             let clause = clause_context(&scan, text, span.clone(), None, category, &[], None);
             assert_eq!(clause == Context::Counter, counter, "{category:?}");
+        }
+    }
+
+    #[test]
+    fn toxic_moderation_log_fields_damp_but_a_reporter_is_no_moderation() {
+        // A journalist is a target like anyone else; only the log field
+        // ("reporter=7781") marks a moderation log.
+        for (text, rule) in [
+            (
+                "You are a worthless reporter.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Du bist ein wertloser Reporter.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "I'm going to stab you tonight, reporter.",
+                "ark.threat.tx_threat",
+            ),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
+        for text in [
+            "2026-11-23 09:12 mod action=remove reason=threat msg=\"Im gonna stab you\" reporter=7781",
+            "2026-11-23 09:12 reason=insult msg=\"you worthless idiot\" reporter=7781",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
         }
     }
 }

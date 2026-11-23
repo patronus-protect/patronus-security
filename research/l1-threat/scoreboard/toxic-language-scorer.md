@@ -59,3 +59,66 @@ of the three is wired; `cascade.modules.toxic_language.l1_model` could load an F
   lexicon is still the hand seed (TX01); recall on native toxic text comes with the mined lexicon.
 - Latency A/B of this change in the default scan: 0 (no model; the new check runs only on a toxic lexicon match,
   on at most its sentence).
+
+## T30 rerun with native positives (2026-11-23)
+
+Base `5fbfb7ee`, `DEV` generation 23. Same command as above (`ablation.py calibrate --rows train_dev --rows
+generated --oversample-de 4 --report-rows report --class toxic_language --stage <FT|B4|B1>`, facts from the
+T30 release build), untimed (the model architectures and their cost are unchanged from the table above). The
+positives are now native: DynaHate (EN, dehumanisation and threats) and XSafety-DE (insults) next to
+`nemotron_safety_v3`; calibration half 478 positives (DE 112, EN 366), 27 236 benign rows.
+
+| Stage | TPR@0.1% dev | DE (own cut) | EN (own cut) | report TPR at dev cut | report benign FPR at dev cut | RAM KiB |
+|---|---|---|---|---|---|---|
+| **B0 rules (kept)** | rules only on the same rows: DE 16.2, EN 5.4 (0 FP) | – | – | 18 / 2 216 | **0.00 %** (0 / 9 669) | 0 |
+| FT | 53.6 | 83.9 | 50.3 | 43 / 2 216 (`civil_comments` 36 / 144, `textdetox_de` 7 / 2 072) | 4.86 % (`civil_comments` 7.7 %) | 256 |
+| B4 | 46.2 | 71.4 | 39.6 | 71 / 2 216 | 17.2 % (`civil_comments` 26.1 %) | 576 |
+| B1 | 52.2 | 91.1 | 41.5 | 131 / 2 216 | 18.3 % (`civil_comments` 27.2 %, `textdetox_de` 1.1 %) | 6 793 |
+
+**Decision: `B0` stays; no learned model for `toxic_language`.** With native positives the models are strong in
+distribution (FT 53.6 %, B1 52.2 % at 0.1 % FPR), but they learn the topic of the two sources (groups, race,
+religion; the XSafety address style), not toxicity: on the report sets, never trained or calibrated on, they
+flag 7.7 % (FT) to 27 % (B4, B1) of the *benign* `civil_comments` comments at their dev cut — 50 to 270 times
+the 0.1 % budget — and find 0.3–4 % of the native German `textdetox_de` positives. The rules stay at 0 benign
+flags on every dev and report set. A model is worth revisiting with a benign pool that discusses the same
+groups and topics without toxicity (news comments, GermEval 2018 non-offensive rows) as calibration negatives.
+
+Rules after T30 (release build, L1 alone, `toxic_language` flags; eval half = rows whose SHA-256 of the id has an
+odd first byte, the half the lexicon was not mined from):
+
+| | before (`5fbfb7ee`) | after |
+|---|---|---|
+| scored eval half DE (`xsafety_de`, `nemotron_safety_v3`) | 4 / 111 (3.6 %) | 42 / 111 (37.8 %) |
+| scored eval half EN (`dynahate`, `nemotron_safety_v3`) | 9 / 389 (2.3 %) | 21 / 389 (5.4 %) |
+| `dynahate` eval half | 9 / 367 | 20 / 367 |
+| `xsafety_de` eval half | 4 / 83 | 42 / 83 |
+| report `civil_comments` (positives, benign FP) | 4 / 144, 0 / 5 856 | 5 / 144, 0 / 5 856 |
+| report `textdetox_de` (positives, benign FP) | 9 / 2 072, 0 / 2 492 | 13 / 2 072, 0 / 2 492 |
+| benign flags DE / EN (all dev and report sets) | 0 / 26 153, 0 / 38 165 | 0 / 26 153, 0 / 38 165 |
+| hard-benign flags DE / EN | 0 / 841, 0 / 1 571 | 0 / 841, 0 / 1 571 |
+
+No benign row carries a `toxic_language` flag, so TPR@0.1 % FPR equals the flag rate. Open in DynaHate: imperative
+and passive threats against a group ("just kill the …", "… should be euthanised", "execute all …"), slurs as the
+group term (no `slur` family yet), dehumanisation without a copula or comparison ("the average … gets …").
+
+Latency A/B (release `threat_cascade`, all eleven classes in one scan, 10 × 100 KiB `germanquad` windows, 3 runs
+each, interleaved): L1 median 155 → 158 ms, p95 265 → 263 ms per window — within the run-to-run spread
+(143–169 ms). The new checks run only on a regex match of a toxic rule; the anchor gates of the two new rules
+read existing and added `toxic.addressee` words.
+
+### Gate round 2: score tiers (2026-11-23)
+
+The first gate run failed on the holdout: `toxic_language` TPR@0.1 % FPR all 4.13 → 2.48 %, EN 2.78 → 1.85 %.
+The dev pools had no benign `toxic_language` score in either build, so the loss comes from holdout benign rows
+that the new forms or mined terms scored at the established tiers (0.65–0.9): enough of them push the matched
+cut above positives the base rules already found. Fix: a match is *established* only through the base forms
+(`core` capture of the subject or intent, the copula of the dehumanisation rule) and a check that holds on the
+hand seed alone (`origins` of the lexicon, `Terms::Seed`); every other match (vocative, verdict, the wider group
+and pronoun subjects, colloquial intents, mined terms) is capped at the points acceptance score 0.5. The worst
+case on any benign pool is a cut of 0.5, which every base match (≥ 0.55 on dev) still exceeds, so TPR at
+matched FPR cannot fall below base; with a cut of 0 the new matches count as before.
+
+Dev check (release `threat_cascade`, all dev and report rows, 96 092): score tiers of the established matches
+equal the base build row for row (0.55: 2, 0.65: 6, 0.8: 30, 0.9: 11, no row above base); the 98 rows that only
+the new forms or terms find score 0.5; flagged rows unchanged against the first T30 build (147); benign rows
+with a score 0 in both. Latency not re-measured: the change adds one seed-only lexicon pass per toxic match that already holds, nothing on texts without one.

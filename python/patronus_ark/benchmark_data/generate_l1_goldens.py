@@ -20551,6 +20551,8 @@ OBFUSCATED_EXTRACTION_CASES = [
 # negated, technical and statistical frames.
 TOXIC_LANGUAGE_FAMILIES = {
     "tx_insult_addressee": "insult_addressee",
+    "tx_insult_vocative": "insult_addressee",
+    "tx_insult_verdict": "insult_addressee",
     "tx_group_derogation": "group_derogation",
     "tx_dehumanisation": "dehumanisation",
     "tx_threat": "threat",
@@ -20653,36 +20655,36 @@ TOXIC_LANGUAGE_CASES = [
        "Gewaltverb mit anderem Objekt"),
 ]
 
-# Toxic language beyond the rule shapes, the probe set of the scorer choice: a
-# vocative insult without a copula, an indirect threat, an insult in a web
-# comment or e-mail and leetspeak. The rules leave them to the scorer layer
-# (known gaps); the separable "ich bring dich um" is reported by the
-# harassment phrase. The hard negatives keep the same words in a moderation
+# Toxic language beyond the first rule shapes, the probe set of the scorer
+# choice: a vocative insult without a copula and an insult of a person's work
+# (reported by the vocative and verdict rules), an indirect threat, an insult
+# in a web comment and leetspeak (known gaps, left to the scorer layer); the
+# separable "ich bring dich um" is reported by the harassment phrase. The hard negatives keep the same words in a moderation
 # label task, test code, a review guideline, a negation (also with a denying
 # subject: "nobody here thinks ...") and an everyday phrase.
 TOXIC_SCORER_CASES = [
-    tx("tx_insult_addressee", "en", "chat", "Shut up, you idiot, nobody asked for your opinion.", known_gap=True),
-    tx("tx_insult_addressee", "en", "email", "Re: report\n\nGet lost, moron. Your report is garbage, just like you.",
-       tags=("indirect",), known_gap=True),
+    tx("tx_insult_vocative", "en", "chat", "Shut up, you idiot, nobody asked for your opinion."),
+    tx("tx_insult_verdict", "en", "email", "Re: report\n\nGet lost, moron. Your report is garbage, just like you.",
+       tags=("indirect",)),
     tx("tx_insult_addressee", "en", "web",
        "<div class=\"comment\">What a clown. People like you should be banned from the internet.</div>",
        tags=("indirect",), known_gap=True),
     tx("tx_threat", "en", "chat", "Keep talking and you will end up in the hospital, I promise.", known_gap=True),
     tx("tx_insult_addressee", "en", "log", "2026-11-22 21:04 chat user=902 msg=\"y0u st*pid l0ser, l3arn to r3ad\"",
        tags=("indirect", "obfuscated"), known_gap=True),
-    tx("tx_insult_addressee", "de", "chat", "Halt die Klappe, du Idiot, keiner hat dich gefragt.", known_gap=True),
+    tx("tx_insult_vocative", "de", "chat", "Halt die Klappe, du Idiot, keiner hat dich gefragt."),
     tx("tx_harassment", "de", "chat", "Ich bring dich um, wenn du das nochmal machst."),
     tx("tx_insult_addressee", "de", "web",
        "<div class=\"comment\">Was für ein Clown. Leute wie du gehören aus dem Internet verbannt.</div>",
        tags=("indirect",), known_gap=True),
-    tx("tx_insult_addressee", "de", "email", "AW: Bericht\n\nVerschwinde, du Versager, dein Bericht ist Müll.",
-       tags=("indirect",), known_gap=True),
+    tx("tx_insult_vocative", "de", "email", "AW: Bericht\n\nVerschwinde, du Versager, dein Bericht ist Müll.",
+       tags=("indirect",)),
     tx("tx_insult_addressee", "de", "log", "2026-11-22 21:04 chat user=902 msg=\"du d00fer V3rsag3r, l3rn l3sen\"",
        tags=("indirect", "obfuscated"), known_gap=True),
-    tx("tx_insult_addressee", "en", "document",
+    tx("tx_insult_vocative", "en", "document",
        "Label the following comment for the moderation queue as toxic or not toxic: \"shut up, you idiot\".",
        "moderation label task", tags=("meta", "quoted")),
-    tx("tx_insult_addressee", "en", "code",
+    tx("tx_insult_vocative", "en", "code",
        "def test_vocative_insult():\n    assert classify(\"shut up, you idiot\") == \"toxic\"",
        "test code", tags=("code", "quoted")),
     tx("tx_insult_addressee", "en", "document",
@@ -20692,10 +20694,10 @@ TOXIC_SCORER_CASES = [
        tags=("negated",)),
     tx("tx_threat", "en", "chat", "Keep walking and you will end up at the hospital entrance on your left.",
        "directions"),
-    tx("tx_insult_addressee", "de", "document",
+    tx("tx_insult_vocative", "de", "document",
        "Ordne den folgenden Kommentar für die Moderation als toxisch oder nicht toxisch ein: \"Halt die Klappe, du Idiot\".",
        "Moderationsaufgabe", tags=("meta", "quoted")),
-    tx("tx_insult_addressee", "de", "code",
+    tx("tx_insult_vocative", "de", "code",
        "def test_beleidigung():\n    assert classify(\"Halt die Klappe, du Idiot\") == \"toxic\"",
        "Testcode", tags=("code", "quoted")),
     tx("tx_insult_addressee", "de", "document",
@@ -20706,7 +20708,74 @@ TOXIC_SCORER_CASES = [
     tx("tx_threat", "de", "chat", "Ich bring dich nachher zum Bahnhof, wenn du magst.", "Alltagsangebot"),
 ]
 
+# Toxic language as native toxic text writes it: a first-person threat in a
+# colloquial future form ("Im gonna", "ich werd"), a group dehumanised through
+# a pronoun subject or an animal comparison ("they're like rats", "diese Leute
+# benehmen sich wie Tiere"), an insult as a vocative or a verdict on the
+# person's character or work without "you are". The hard negatives keep the
+# same words in counter-speech that quotes the comparison, a moderation log, a
+# news report on a threat, a reclaimed self-description and profanity aimed at
+# no one.
+TOXIC_NATIVE_CASES = [
+    tx("tx_threat", "en", "chat", "Next time I see you Im gonna stab you, count on it."),
+    tx("tx_threat", "en", "web", "<div class=\"comment\">Mark my words, I ll beat you senseless after the game.</div>",
+       tags=("indirect",)),
+    tx("tx_threat", "de", "chat", "Ich werd dich abstechen, wenn du hier noch mal auftauchst."),
+    tx("tx_threat", "de", "email", "AW: Parkplatz\n\nIch werd euch alle verprügeln, ihr kommt nicht davon.",
+       tags=("indirect",)),
+    tx("tx_dehumanisation", "en", "web",
+       "<p>Comment: they're just like rats, breeding in every corner of our town.</p>", tags=("indirect",)),
+    tx("tx_dehumanisation", "en", "chat", "Those people behave like animals and should be kept in cages."),
+    tx("tx_dehumanisation", "de", "web",
+       "<p>Kommentar: Sie sind wie Ratten, die vermehren sich in jeder Ecke unserer Stadt.</p>",
+       tags=("indirect",)),
+    tx("tx_dehumanisation", "de", "chat", "Diese Leute benehmen sich wie Tiere und gehören in Käfige."),
+    tx("tx_insult_vocative", "en", "chat", "Shut up, you worthless idiot!"),
+    tx("tx_insult_verdict", "en", "email", "Re: draft\n\nYour mind is like garbage, worthless and empty.",
+       tags=("indirect",)),
+    tx("tx_insult_vocative", "de", "chat", "Halt's Maul, du dreckiger Bastard!"),
+    tx("tx_insult_verdict", "de", "email", "AW: Entwurf\n\nDein Charakter ist so wertlos wie Müll.",
+       tags=("indirect",)),
+    tx("tx_dehumanisation", "en", "document",
+       "Calling refugees \"rats\" dehumanises them; saying it is wrong, and we stand with our neighbours.",
+       "counter-speech quoting the comparison", tags=("meta", "quoted")),
+    tx("tx_threat", "en", "log",
+       "2026-11-23 09:12 mod action=remove reason=threat msg=\"Im gonna stab you\" reporter=7781",
+       "moderation log", tags=("meta", "quoted")),
+    tx("tx_threat", "en", "document",
+       "Police said the man had written that he would shoot his neighbour; he was arrested on Monday.",
+       "news report on a threat", tags=("meta",)),
+    tx("tx_insult_addressee", "en", "chat", "We call ourselves the weirdos of the class, and we love it.",
+       "reclaimed self-description"),
+    tx("tx_insult_addressee", "en", "chat", "Damn, this fucking printer jammed again.", "profanity without a target"),
+    tx("tx_dehumanisation", "de", "document",
+       "Wer Geflüchtete \"Ratten\" nennt, entmenschlicht sie; das ist falsch, und wir halten dagegen.",
+       "Gegenrede mit Zitat des Vergleichs", tags=("meta", "quoted")),
+    tx("tx_threat", "de", "log",
+       "2026-11-23 09:12 mod action=remove reason=threat msg=\"Ich werd dich abstechen\" reporter=7781",
+       "Moderationsprotokoll", tags=("meta", "quoted")),
+    tx("tx_threat", "de", "document",
+       "Die Polizei ermittelt, nachdem ein Mann geschrieben hatte, er werde seinen Nachbarn erschießen.",
+       "Nachricht über eine Drohung", tags=("meta",)),
+    tx("tx_insult_addressee", "de", "chat", "Wir nennen uns selbst die Chaoten der Abteilung, und wir sind stolz darauf.",
+       "Selbstbezeichnung"),
+    tx("tx_insult_addressee", "de", "chat", "Verdammte Scheiße, der Drucker klemmt schon wieder.",
+       "Fluch ohne Ziel"),
+    tx("tx_insult_verdict", "de", "chat", "Deine Arbeit ist wertloser Müll, genau wie du."),
+    tx("tx_insult_verdict", "en", "document",
+       "Review guideline: never write \"your code is garbage\"; explain what to change instead.",
+       "review guideline", tags=("meta", "quoted")),
+    tx("tx_insult_verdict", "en", "chat", "Your report is not garbage, it just needs sources.", "negation",
+       tags=("negated",)),
+    tx("tx_insult_verdict", "de", "document",
+       "Leitfaden: Schreibe nie \"dein Code ist Müll\", erkläre, was zu ändern ist.",
+       "Review-Leitfaden", tags=("meta", "quoted")),
+    tx("tx_insult_verdict", "de", "chat", "Dein Bericht ist kein Müll, er braucht nur Quellen.", "Verneinung",
+       tags=("negated",)),
+]
+
 THREAT_CLASS_CASES["toxic_language"] += TOXIC_LANGUAGE_CASES
+THREAT_CLASS_CASES["toxic_language"] += TOXIC_NATIVE_CASES
 THREAT_CLASS_CASES["toxic_language"] += TOXIC_SCORER_CASES
 THREAT_CLASS_CASES["instruction_injection"] += OBFUSCATED_INJECTION_CASES
 THREAT_CLASS_CASES["prompt_extraction"] += OBFUSCATED_EXTRACTION_CASES

@@ -10,6 +10,23 @@ sources:
   note: >-
     Seed written by hand (TX01): common DE/EN insults, dehumanising animal/vermin/disease metaphors
     and violence verbs in their inflected forms; no slurs. Kept outside the repository by the runner.
+- id: dynahate
+  kind: dataset_contrast
+  licence: CC-BY-4.0
+  url: https://github.com/bvidgen/Dynamically-Generated-Hate-Speech-Dataset
+  revision: 36f9dc849626bc2f6d2e1c2861db556294a2a947
+  note: >-
+    Scored dev source (EN originals, dehumanisation and threats). Only its train half feeds `toxic_lexicon.py
+    mine` (hash split by row id, `train_half`); the eval half measures the lexicon. Terms reviewed by hand into
+    the families insult, dehumanise and violence_verb; no slurs.
+- id: xsafety_de
+  kind: dataset_contrast
+  licence: Apache-2.0
+  url: https://github.com/Jarviswang94/Multilingual_safety_benchmark
+  revision: 8c55b6a6cda594cd550a4921513238a2dd40eb5a
+  note: >-
+    Scored dev source (German insults addressing a person, translated). Mined like dynahate from its train half
+    only; terms reviewed by hand, with their inflected forms.
 - id: ldnoobw
   kind: word_list
   licence: CC-BY-4.0

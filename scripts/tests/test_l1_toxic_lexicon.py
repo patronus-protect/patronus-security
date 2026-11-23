@@ -37,7 +37,8 @@ def test_build_hashes_terms_per_family_without_plaintext():
     lexicon = MODULE.build(terms, USABLE)
     assert lexicon["families"]["insult"] == [MODULE.term_hash("blorf")]
     assert "blorf" not in json.dumps(lexicon)
-    assert lexicon["sources"] == [{"id": "hand", "licence": "MIT", "revision": "1", "terms": 4}]
+    assert lexicon["sources"] == [{"id": "hand", "licence": "MIT", "revision": "1", "terms": 3}]
+    assert lexicon["origins"] == {MODULE.term_hash(term): "hand" for term in ("blorf", "grub", "zap")}
     assert MODULE.check(lexicon, USABLE) == []
     assert MODULE.families_of("You are a BL0RF and a grub.", lexicon) == {"insult", "dehumanise"}
 
@@ -71,3 +72,34 @@ def test_committed_lexicon_and_sources_check_clean(tmp_path):
     rows = tmp_path / "rows.jsonl"
     rows.write_text(json.dumps({"text": "a friendly note"}) + "\n", encoding="utf-8")
     assert MODULE.count(rows, lexicon) == {"rows": 1, "insult": 0, "dehumanise": 0, "violence_verb": 0}
+
+
+def test_build_keeps_committed_hashes_with_their_origin():
+    old = MODULE.build([("insult", "blorf", "hand")], USABLE)
+    legacy = {**old, "schema_version": 1}
+    del legacy["origins"]
+    sources = {**USABLE, "mined": {"id": "mined", "kind": "dataset_contrast", "licence": "CC-BY-4.0", "url": "x",
+                                   "revision": "abc"}}
+    lexicon = MODULE.build([("insult", "blorf", "mined"), ("dehumanise", "grub", "mined"),
+                            ("violence_verb", "zap", "mined")], sources, MODULE.kept_hashes(legacy))
+    assert lexicon["origins"][MODULE.term_hash("blorf")] == "hand"
+    assert lexicon["origins"][MODULE.term_hash("grub")] == "mined"
+    assert MODULE.check(lexicon, sources) == []
+    lexicon["origins"].pop(MODULE.term_hash("grub"))
+    assert "lexicon: origins must name the source of every hash" in MODULE.check(lexicon, sources)
+
+
+def test_mine_reads_only_the_train_half_and_names_the_source(tmp_path):
+    rows = []
+    for i in range(400):
+        rows.append({"id": f"tox:{i}", "text": "you blorf grub", "classes": ["toxic_language"], "benign": False,
+                     "dataset": "tox"})
+        rows.append({"id": f"ok:{i}", "text": "you are kind", "classes": [], "benign": True, "dataset": "ok"})
+    path = tmp_path / "rows.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+    train = sum(MODULE.train_half(f"tox:{i}") for i in range(400))
+    assert 150 < train < 250
+    candidates = {c["term"]: c for c in MODULE.mine([path], "toxic_language", top=10)}
+    assert candidates["blorf"]["count"] == train
+    assert candidates["blorf"]["source"] == "tox"
+    assert "kind" not in candidates

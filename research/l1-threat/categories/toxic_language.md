@@ -105,6 +105,19 @@ civil_comments 4/144, textdetox_de 9/2072 — der Recall kommt erst mit dem geer
 einer erlaubten Train-Quelle, dann `lexicons.py mine` → Durchsicht → `toxic_lexicon.py build`). Latenz:
 `toxic_language` allein ≈ 4 ms je 100-KiB-Fenster deutschen Texts (Release, germanquad), alle elf Klassen
 zusammen ≈ 130 ms ± 5 % mit und ohne die Klasse (im Rauschen).
+T30 (2026-11-23, native toxische Texte): Lexikon aus der Train-Hälfte (Hash-Split über die Zeilen-ID,
+`toxic_lexicon.py mine`/`train_half`) von DynaHate (EN) und XSafety-DE geerntet, von Hand je Familie
+durchgesehen, gehasht; jeder Hash nennt seine Quelle (`origins`, Schema 2; Hand-Seed bleibt `ark_hand_seed`).
+Neue Formen: Drohung in erster Person im Umgangs-Futur („Im gonna“, „I ll“, „ich werd“); Entmenschlichung mit
+Pronomen-/Demonstrativ-Subjekt (they, these/those …, sie, diese/solche …) oder Verhaltensvergleich (act/behave
+like, benehmen sich wie) und weitere Gruppenbezeichnungen — ein Pronomen-Subjekt braucht einen abwertenden
+Vergleich oder eine Beleidigung vor dem Tierwort, ein Subjekt, das selbst ein Tierwort ist („these insects“),
+zählt nicht; Vokativ-Beleidigung `tx_insult_vocative` („…, du dreckiger Bastard!“: nur Beleidigungen und
+Verstärker zwischen Anrede und Satzzeichen); Urteil über Person oder Werk `tx_insult_verdict` („dein Charakter
+ist so wertlos wie Müll“, „you look like …“); `tx_insult_addressee` hält auch bei einem Tierwort im Vergleich
+(„du bist schlimmer als Tiere“). Dev-Eval-Hälfte DE 3,6 → 37,8 %, EN 2,3 → 5,4 % bei 0 Benign- und 0
+Hard-Benign-Treffern; FT/B4/B1 mit nativen Positiven neu kalibriert, `B0` bleibt (Report-Benign-FPR 4,9–18 %).
+Zahlen: [`scoreboard/toxic-language-scorer.md`](../scoreboard/toxic-language-scorer.md#t30-rerun-with-native-positives-2026-11-23).
 Davor: keine L1-Regeln. L2/L3-Label `toxic_or_harmful` mappt primär hierher (X03).
 
 TX02 (2026-11-22, Punkte und Ablations-Entscheidung): **`B0` bleibt**, kein gelerntes Modell, keine eigenen
