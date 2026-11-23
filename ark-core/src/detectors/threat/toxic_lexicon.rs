@@ -3,7 +3,8 @@
 //! plain text: each family holds 64-bit FNV-1a hashes over a salt and the
 //! normalised term, built by `scripts/l1_threat/toxic_lexicon.py`, which
 //! normalises and hashes the same way. The lexicon also records the source
-//! of every hash (`origins`), which only the builder reads.
+//! of every hash (`origins`): terms of the hand-written seed are told apart
+//! from mined ones, whose matches score lower ([`Terms`]).
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -30,14 +31,28 @@ impl Family {
     }
 }
 
+/// Which terms a lookup reads: every term, or only the hand-written seed.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Terms {
+    All,
+    Seed,
+}
+
+/// The source id of the hand-written seed in `origins`.
+const SEED_ORIGIN: &str = "ark_hand_seed";
+/// The family bits of a seed term sit above the bits of all its families.
+const SEED_SHIFT: u32 = 3;
+const FAMILY_MASK: u8 = (1 << SEED_SHIFT) - 1;
+
 #[derive(Deserialize)]
 struct Lexicon {
     schema_version: u32,
     salt: String,
     families: HashMap<String, Vec<String>>,
+    origins: HashMap<String, String>,
 }
 
-/// Hash -> family bits, loaded once.
+/// Hash -> family bits (low bits: every term, high bits: seed terms), loaded once.
 fn table() -> &'static HashMap<u64, u8> {
     static TABLE: OnceLock<HashMap<u64, u8>> = OnceLock::new();
     TABLE.get_or_init(|| {
@@ -52,9 +67,15 @@ fn table() -> &'static HashMap<u64, u8> {
                 "violence_verb" => Family::ViolenceVerb,
                 other => panic!("unknown toxic lexicon family {other}"),
             };
-            for hash in hashes {
-                let hash = u64::from_str_radix(hash, 16).expect("16-hex toxic lexicon hash");
-                *table.entry(hash).or_insert(0) |= family.bit();
+            for hex in hashes {
+                let seed = lexicon.origins.get(hex).map(String::as_str) == Some(SEED_ORIGIN);
+                let hash = u64::from_str_radix(hex, 16).expect("16-hex toxic lexicon hash");
+                let bits = if seed {
+                    family.bit() | family.bit() << SEED_SHIFT
+                } else {
+                    family.bit()
+                };
+                *table.entry(hash).or_insert(0) |= bits;
             }
         }
         table
@@ -99,10 +120,22 @@ const NEGATIONS: &[&str] = &[
     "not", "no", "never", "nicht", "kein", "keine", "keiner", "nie", "niemals",
 ];
 
+/// The family bits of a table entry among `terms`.
+fn families(entry: u8, terms: Terms) -> u8 {
+    match terms {
+        Terms::All => entry & FAMILY_MASK,
+        Terms::Seed => entry >> SEED_SHIFT,
+    }
+}
+
 /// Walks the words of `span` until `visit` decides. `visit` gets each raw
-/// word, whether it is a negation and the family bits of the word or of the
-/// pair it ends. An undecided walk returns `visit(None)`.
-fn walk(span: &str, mut visit: impl FnMut(Option<(&str, bool, u8)>) -> Option<bool>) -> bool {
+/// word, whether it is a negation and the family bits among `terms` of the
+/// word or of the pair it ends. An undecided walk returns `visit(None)`.
+fn walk(
+    span: &str,
+    terms: Terms,
+    mut visit: impl FnMut(Option<(&str, bool, u8)>) -> Option<bool>,
+) -> bool {
     let table = table();
     let mut word = String::new();
     let mut previous = String::new();
@@ -112,7 +145,7 @@ fn walk(span: &str, mut visit: impl FnMut(Option<(&str, bool, u8)>) -> Option<bo
         .filter(|w| !w.is_empty())
     {
         normalize(raw, &mut word);
-        let bits = |key: &str| table.get(&hash(key)).copied().unwrap_or(0);
+        let bits = |key: &str| families(table.get(&hash(key)).copied().unwrap_or(0), terms);
         let mut family = bits(&word);
         if !previous.is_empty() {
             pair.clear();
@@ -129,10 +162,10 @@ fn walk(span: &str, mut visit: impl FnMut(Option<(&str, bool, u8)>) -> Option<bo
     visit(None).unwrap_or(false)
 }
 
-/// Whether a word of `span` (a word or a word pair) is in `family`, without
-/// a negation before it.
-pub(super) fn contains(span: &str, family: Family) -> bool {
-    walk(span, |word| match word? {
+/// Whether a word of `span` (a word or a word pair) among `terms` is in
+/// `family`, without a negation before it.
+pub(super) fn contains(span: &str, family: Family, terms: Terms) -> bool {
+    walk(span, terms, |word| match word? {
         (_, true, _) => Some(false),
         (_, _, bits) if bits & family.bit() != 0 => Some(true),
         _ => None,
@@ -178,7 +211,7 @@ pub(super) fn vocative_insult(span: &str) -> bool {
             return false;
         }
         normalize(raw, &mut word);
-        let bits = table.get(&hash(&word)).copied().unwrap_or(0);
+        let bits = families(table.get(&hash(&word)).copied().unwrap_or(0), Terms::All);
         previous = Some(if bits == 0 && is_one_of(VOCATIVE_MODIFIERS, &word) {
             MODIFIER
         } else {
@@ -222,7 +255,7 @@ const DEGRADING: &[&str] = &[
 /// not a plain classification ("these are animals or plants").
 pub(super) fn degrading_dehumanisation(span: &str) -> bool {
     let mut degraded = false;
-    walk(span, |word| {
+    walk(span, Terms::All, |word| {
         let (raw, negation, bits) = word?;
         if negation {
             return Some(false);
@@ -304,15 +337,15 @@ fn is_one_of(words: &[&str], word: &str) -> bool {
     words.iter().any(|w| w.eq_ignore_ascii_case(word))
 }
 
-/// Whether `span` holds a violence verb, without a negation before it, whose
+/// Whether `span` holds a violence verb among `terms`, without a negation before it, whose
 /// object is a target: the target right after the verb ("kill you"), or
 /// before it when no determiner opens another object after the verb ("dich
 /// umbringen", but not "help you kill the process").
-pub(super) fn threatens_target(span: &str) -> bool {
+pub(super) fn threatens_target(span: &str, terms: Terms) -> bool {
     let mut target_before = false;
     // After a violence verb: whether a target came before it.
     let mut after_verb: Option<bool> = None;
-    walk(span, |word| {
+    walk(span, terms, |word| {
         let Some((raw, negation, bits)) = word else {
             return after_verb;
         };
@@ -358,24 +391,42 @@ mod tests {
 
     #[test]
     fn words_are_looked_up_folded_and_negation_cancels() {
-        assert!(contains(" a pathetic 1d10t", Family::Insult));
-        assert!(contains(" ein erbärmlicher Trottel", Family::Insult));
-        assert!(!contains(" not an idiot", Family::Insult));
-        assert!(!contains(" kein Idiot", Family::Insult));
-        assert!(!contains(" a great colleague", Family::Insult));
-        assert!(contains(" nothing but vermin", Family::Dehumanise));
-        assert!(!contains(" nothing but vermin", Family::Insult));
-        assert!(contains(" dich umbringen", Family::ViolenceVerb));
+        assert!(contains(" a pathetic 1d10t", Family::Insult, Terms::All));
+        assert!(contains(
+            " ein erbärmlicher Trottel",
+            Family::Insult,
+            Terms::All
+        ));
+        assert!(!contains(" not an idiot", Family::Insult, Terms::All));
+        assert!(!contains(" kein Idiot", Family::Insult, Terms::All));
+        assert!(!contains(" a great colleague", Family::Insult, Terms::All));
+        assert!(contains(
+            " nothing but vermin",
+            Family::Dehumanise,
+            Terms::All
+        ));
+        assert!(!contains(" nothing but vermin", Family::Insult, Terms::All));
+        assert!(contains(
+            " dich umbringen",
+            Family::ViolenceVerb,
+            Terms::All
+        ));
     }
 
     #[test]
     fn a_threat_binds_its_violence_verb_to_a_target() {
-        assert!(threatens_target(" kill you"));
-        assert!(threatens_target(" dich nach der Arbeit umbringen"));
-        assert!(threatens_target(" dich umbringen und abhauen"));
-        assert!(!threatens_target(" kill the process"));
-        assert!(!threatens_target(" help you kill the process"));
-        assert!(!threatens_target(" show you how to kill a process"));
-        assert!(!threatens_target(" never kill you"));
+        assert!(threatens_target(" kill you", Terms::All));
+        assert!(threatens_target(
+            " dich nach der Arbeit umbringen",
+            Terms::All
+        ));
+        assert!(threatens_target(" dich umbringen und abhauen", Terms::All));
+        assert!(!threatens_target(" kill the process", Terms::All));
+        assert!(!threatens_target(" help you kill the process", Terms::All));
+        assert!(!threatens_target(
+            " show you how to kill a process",
+            Terms::All
+        ));
+        assert!(!threatens_target(" never kill you", Terms::All));
     }
 }
