@@ -50,14 +50,17 @@ Tests: `scripts/tests/test_l1_threat_lexicons.py`.
 `toxic_lexicon.py` baut `ark-core/src/detectors/threat/toxic_lexicon.json`: je Familie (`insult`,
 `dehumanise`, `violence_verb`) sortierte FNV-1a-64-Hashes über Salz + normalisierten Begriff (NFKC,
 Kleinschreibung, ä/ö/ü/ß ausgeschrieben, Leetspeak gefaltet). Der Klartext bleibt außerhalb des Repos:
-Kandidaten kommen per `lexicons.py mine` aus dem Train-Split einer gelisteten Quelle oder aus einer
-gelisteten permissiven Wortliste; nach Durchsicht stehen sie als `familie<TAB>begriff<TAB>quelle` in einer
-Datei außerhalb des Repos. `build` verweigert Quellen, die in `research/l1-threat/toxic_lexicon_sources.yaml`
+Kandidaten kommen per `toxic_lexicon.py mine` aus der Train-Hälfte gewerteter Sätze (Hash-Split über die
+Zeilen-ID, `train_half`; die andere Hälfte misst das Lexikon) oder aus einer gelisteten permissiven
+Wortliste; nach Durchsicht stehen sie als `familie<TAB>begriff<TAB>quelle` in einer Datei außerhalb des
+Repos. Jeder Hash nennt seine Quelle (`origins`, Schema 2); `build --keep` übernimmt die Hashes des
+eingecheckten Lexikons mit ihrer Quelle. `build` verweigert Quellen, die in `research/l1-threat/toxic_lexicon_sources.yaml`
 fehlen, `use: false` tragen oder keine erlaubte Lizenz haben (GAHD und HateCheck sind Holdout-Quellen und
 bleiben aus).
 
 ```bash
-python3 scripts/l1_threat/toxic_lexicon.py build TERMS.tsv     # schreibt das Hash-Lexikon
+python3 scripts/l1_threat/toxic_lexicon.py mine $ARK_L1_DEV_DATA/*/*.jsonl --class toxic_language > /tmp/cand.json
+python3 scripts/l1_threat/toxic_lexicon.py build TERMS.tsv --keep  # schreibt das Hash-Lexikon
 python3 scripts/l1_threat/toxic_lexicon.py check               # Exit 1 bei jedem Problem
 python3 scripts/l1_threat/toxic_lexicon.py count TEXTS.jsonl   # nur Trefferzahlen je Familie
 ```
