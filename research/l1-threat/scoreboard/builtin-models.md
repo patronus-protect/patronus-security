@@ -94,4 +94,5 @@ Defaults are unchanged (no model loads or runs without a cascade that names one)
 and `scripts/l1_dlp/latency.py` measure the same default path. The model stage itself: the S12 per-model cost (p95
 3.2–4.4 ms per 100 KiB, `text_model_latency`) is unchanged (same Rust inference, the packed form loads the same
 values). In `cascade.md`, the whole scan with all eleven models named goes from p50 0.31 / p95 1.51 ms per dev row
-(heuristic only) to the figures in its latency table.
+(heuristic only) to p50 0.83 / p95 5.48 ms with every row escalated to the models of all eleven classes (the
+native L1 producers alone stay at p50 0.21 / p95 1.57 ms); that cost is opt-in per named module.
