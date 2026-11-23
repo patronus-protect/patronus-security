@@ -15,11 +15,11 @@ ark-core alone, as a cascade: the L1 heuristic, then the L1 model, then L3 (Wolf
 
 | class | lang | pos | neg | TPR | FPR | hard-benign FPR | decided heuristic % | decided l1_model % | decided l3 % | escalated % |
 |---|---|---|---|---|---|---|---|---|---|---|
-| instruction_injection | all | 3387 | 54060 | 90.3 | 0.06 | 0.5 (9/1823) | 4.0 | 96.0 | 0.0 | 96.0 |
-| instruction_injection | de | 268 | 23367 | 95.5 | 0.05 | 1.6 (9/547) | 0.7 | 99.3 | 0.0 | 99.3 |
+| instruction_injection | all | 3387 | 54060 | 90.3 | 0.05 | 0.3 (5/1823) | 4.0 | 96.0 | 0.0 | 96.0 |
+| instruction_injection | de | 268 | 23367 | 95.5 | 0.03 | 0.9 (5/547) | 0.7 | 99.3 | 0.0 | 99.3 |
 | instruction_injection | en | 3119 | 30693 | 89.9 | 0.06 | 0.0 (0/1276) | 6.3 | 93.7 | 0.0 | 93.7 |
-| jailbreak | all | 2606 | 54060 | 93.8 | 0.05 | 0.7 (12/1823) | 0.2 | 99.8 | 0.0 | 99.8 |
-| jailbreak | de | 492 | 23367 | 99.2 | 0.03 | 0.5 (3/547) | 0.1 | 99.9 | 0.0 | 99.9 |
+| jailbreak | all | 2606 | 54060 | 93.8 | 0.05 | 0.8 (14/1823) | 0.2 | 99.8 | 0.0 | 99.8 |
+| jailbreak | de | 492 | 23367 | 99.2 | 0.04 | 0.9 (5/547) | 0.1 | 99.9 | 0.0 | 99.9 |
 | jailbreak | en | 2114 | 30693 | 92.5 | 0.06 | 0.7 (9/1276) | 0.2 | 99.8 | 0.0 | 99.8 |
 | prompt_extraction | all | 15457 | 54060 | 99.5 | 0.06 | 0.4 (8/1823) | 0.1 | 99.9 | 0.0 | 99.9 |
 | prompt_extraction | de | 387 | 23367 | 98.7 | 0.07 | 1.3 (7/547) | 0.0 | 100.0 | 0.0 | 100.0 |
@@ -27,20 +27,20 @@ ark-core alone, as a cascade: the L1 heuristic, then the L1 model, then L3 (Wolf
 | tool_poisoning | all | 83 | 54060 | 100.0 | 0.07 | 0.0 (0/1823) | 0.2 | 99.8 | 0.0 | 99.8 |
 | tool_poisoning | de | 42 | 23367 | 100.0 | 0.06 | 0.0 (0/547) | 0.2 | 99.8 | 0.0 | 99.8 |
 | tool_poisoning | en | 41 | 30693 | 100.0 | 0.07 | 0.0 (0/1276) | 0.1 | 99.9 | 0.0 | 99.9 |
-| agent_config_tampering | all | 87 | 54060 | 100.0 | 0.14 | 2.5 (45/1823) | 0.2 | 99.8 | 0.0 | 99.8 |
-| agent_config_tampering | de | 45 | 23367 | 100.0 | 0.18 | 3.7 (20/547) | 0.2 | 99.8 | 0.0 | 99.8 |
-| agent_config_tampering | en | 42 | 30693 | 100.0 | 0.10 | 2.0 (25/1276) | 0.1 | 99.9 | 0.0 | 99.9 |
-| memory_poisoning | all | 83 | 54060 | 100.0 | 0.06 | 0.1 (1/1823) | 0.2 | 99.8 | 0.0 | 99.8 |
-| memory_poisoning | de | 42 | 23367 | 100.0 | 0.08 | 0.2 (1/547) | 0.2 | 99.8 | 0.0 | 99.8 |
-| memory_poisoning | en | 41 | 30693 | 100.0 | 0.05 | 0.0 (0/1276) | 0.1 | 99.9 | 0.0 | 99.9 |
-| exfiltration | all | 548 | 54060 | 99.8 | 0.05 | 0.0 (0/1823) | 0.7 | 99.3 | 0.0 | 99.3 |
-| exfiltration | de | 151 | 23367 | 100.0 | 0.02 | 0.0 (0/547) | 0.6 | 99.4 | 0.0 | 99.4 |
+| agent_config_tampering | all | 87 | 54060 | 100.0 | 0.11 | 2.1 (38/1823) | 0.2 | 99.8 | 0.0 | 99.8 |
+| agent_config_tampering | de | 45 | 23367 | 100.0 | 0.15 | 3.7 (20/547) | 0.2 | 99.8 | 0.0 | 99.8 |
+| agent_config_tampering | en | 42 | 30693 | 100.0 | 0.08 | 1.4 (18/1276) | 0.1 | 99.9 | 0.0 | 99.9 |
+| memory_poisoning | all | 83 | 54060 | 100.0 | 0.05 | 0.1 (1/1823) | 0.2 | 99.8 | 0.0 | 99.8 |
+| memory_poisoning | de | 42 | 23367 | 100.0 | 0.07 | 0.2 (1/547) | 0.2 | 99.8 | 0.0 | 99.8 |
+| memory_poisoning | en | 41 | 30693 | 100.0 | 0.04 | 0.0 (0/1276) | 0.1 | 99.9 | 0.0 | 99.9 |
+| exfiltration | all | 548 | 54060 | 99.8 | 0.07 | 0.0 (0/1823) | 0.7 | 99.3 | 0.0 | 99.3 |
+| exfiltration | de | 151 | 23367 | 100.0 | 0.08 | 0.0 (0/547) | 0.6 | 99.4 | 0.0 | 99.4 |
 | exfiltration | en | 397 | 30693 | 99.7 | 0.07 | 0.0 (0/1276) | 0.7 | 99.3 | 0.0 | 99.3 |
 | unsafe_action | all | 807 | 54060 | 97.4 | 0.06 | 0.0 (0/1823) | 1.0 | 99.0 | 0.0 | 99.0 |
-| unsafe_action | de | 164 | 23367 | 93.3 | 0.05 | 0.0 (0/547) | 0.2 | 99.8 | 0.0 | 99.8 |
-| unsafe_action | en | 643 | 30693 | 98.4 | 0.07 | 0.0 (0/1276) | 1.6 | 98.4 | 0.0 | 98.4 |
+| unsafe_action | de | 164 | 23367 | 93.9 | 0.06 | 0.0 (0/547) | 0.2 | 99.8 | 0.0 | 99.8 |
+| unsafe_action | en | 643 | 30693 | 98.3 | 0.07 | 0.0 (0/1276) | 1.6 | 98.4 | 0.0 | 98.4 |
 | resource_exhaustion | all | 83 | 54060 | 100.0 | 0.06 | 0.0 (0/1823) | 0.2 | 99.8 | 0.0 | 99.8 |
-| resource_exhaustion | de | 42 | 23367 | 100.0 | 0.06 | 0.0 (0/547) | 0.2 | 99.8 | 0.0 | 99.8 |
+| resource_exhaustion | de | 42 | 23367 | 100.0 | 0.07 | 0.0 (0/547) | 0.2 | 99.8 | 0.0 | 99.8 |
 | resource_exhaustion | en | 41 | 30693 | 100.0 | 0.05 | 0.0 (0/1276) | 0.1 | 99.9 | 0.0 | 99.9 |
 | harmful_content | all | 899 | 54060 | 55.1 | 0.05 | 0.1 (1/1823) | 0.0 | 100.0 | 0.0 | 100.0 |
 | harmful_content | de | 316 | 23367 | 73.7 | 0.05 | 0.0 (0/547) | 0.0 | 100.0 | 0.0 | 100.0 |
@@ -53,10 +53,10 @@ ark-core alone, as a cascade: the L1 heuristic, then the L1 model, then L3 (Wolf
 
 | class | source | rows | FP | FPR |
 |---|---|---|---|---|
-| instruction_injection | twins | 1310 | 9 | 0.7 |
+| instruction_injection | twins | 1310 | 5 | 0.4 |
 | instruction_injection | wildguardmix | 490 | 0 | 0.0 |
 | instruction_injection | wildjailbreak | 23 | 0 | 0.0 |
-| jailbreak | twins | 1310 | 3 | 0.2 |
+| jailbreak | twins | 1310 | 5 | 0.4 |
 | jailbreak | wildguardmix | 490 | 0 | 0.0 |
 | jailbreak | wildjailbreak | 23 | 9 | 39.1 |
 | prompt_extraction | twins | 1310 | 7 | 0.5 |
@@ -65,7 +65,7 @@ ark-core alone, as a cascade: the L1 heuristic, then the L1 model, then L3 (Wolf
 | tool_poisoning | twins | 1310 | 0 | 0.0 |
 | tool_poisoning | wildguardmix | 490 | 0 | 0.0 |
 | tool_poisoning | wildjailbreak | 23 | 0 | 0.0 |
-| agent_config_tampering | twins | 1310 | 45 | 3.4 |
+| agent_config_tampering | twins | 1310 | 38 | 2.9 |
 | agent_config_tampering | wildguardmix | 490 | 0 | 0.0 |
 | agent_config_tampering | wildjailbreak | 23 | 0 | 0.0 |
 | memory_poisoning | twins | 1310 | 1 | 0.1 |
@@ -131,16 +131,16 @@ TPR at matched document FPR on the L1 score (the view the gate checks), hard-ben
 
 | class | lang | pos | neg | TPR | FPR | hard-benign FPR | decided heuristic % | decided l1_model % | decided l3 % | escalated % |
 |---|---|---|---|---|---|---|---|---|---|---|
-| instruction_injection | all | 998 | 9669 | 96.3 | 0.65 | – | 4.1 | 95.9 | 0.0 | 95.9 |
+| instruction_injection | all | 998 | 9669 | 96.3 | 0.61 | – | 4.1 | 95.9 | 0.0 | 95.9 |
 | instruction_injection | en | 998 | 7177 | 96.3 | 0.32 | – | 5.3 | 94.7 | 0.0 | 94.7 |
-| jailbreak | all | 544 | 9669 | 21.3 | 2.03 | – | 0.5 | 99.5 | 0.0 | 99.5 |
+| jailbreak | all | 544 | 9669 | 21.3 | 2.06 | – | 0.5 | 99.5 | 0.0 | 99.5 |
 | jailbreak | en | 544 | 7177 | 21.3 | 2.12 | – | 0.6 | 99.4 | 0.0 | 99.4 |
 | prompt_extraction | all | 998 | 9669 | 82.6 | 1.45 | – | 0.3 | 99.7 | 0.0 | 99.7 |
 | prompt_extraction | en | 998 | 7177 | 82.6 | 1.42 | – | 0.5 | 99.5 | 0.0 | 99.5 |
 | harmful_content | all | 2271 | 9669 | 24.3 | 0.02 | – | 0.0 | 100.0 | 0.0 | 100.0 |
 | harmful_content | en | 2271 | 7177 | 24.3 | 0.03 | – | 0.0 | 100.0 | 0.0 | 100.0 |
-| toxic_language | all | 2216 | 9669 | 3.8 | 4.09 | – | 0.1 | 99.9 | 0.0 | 99.9 |
-| toxic_language | de | 2072 | 2492 | 2.6 | 1.85 | – | 0.2 | 99.8 | 0.0 | 99.8 |
+| toxic_language | all | 2216 | 9669 | 4.2 | 4.17 | – | 0.1 | 99.9 | 0.0 | 99.9 |
+| toxic_language | de | 2072 | 2492 | 3.0 | 2.17 | – | 0.2 | 99.8 | 0.0 | 99.8 |
 | toxic_language | en | 144 | 7177 | 21.5 | 4.86 | – | 0.1 | 99.9 | 0.0 | 99.9 |
 
 ### Hard-benign rows per source (report-only sets, language all)
@@ -171,6 +171,6 @@ Milliseconds per row in the prediction run (one process per set): the whole scan
 
 | lang | rows | scan p50 / p95 | L1 p50 / p95 | L3 p50 / p95 (rows it ran) | L3 ran on | L3 mean per row |
 |---|---|---|---|---|---|---|
-| all | 94863 | 0.83 / 5.48 | 0.21 / 1.57 | – | 0.0 % | 0.00 |
-| de | 30083 | 0.71 / 2.59 | 0.18 / 0.81 | – | 0.0 % | 0.00 |
-| en | 64780 | 0.93 / 5.98 | 0.24 / 1.74 | – | 0.0 % | 0.00 |
+| all | 94863 | 0.92 / 5.91 | 0.24 / 1.80 | – | 0.0 % | 0.00 |
+| de | 30083 | 0.81 / 3.03 | 0.21 / 0.97 | – | 0.0 % | 0.00 |
+| en | 64780 | 0.99 / 6.47 | 0.26 / 1.96 | – | 0.0 % | 0.00 |

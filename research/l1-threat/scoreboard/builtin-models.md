@@ -101,4 +101,6 @@ and `scripts/l1_dlp/latency.py` measure the same default path. The model stage i
 3.2–4.4 ms per 100 KiB, `text_model_latency`) is unchanged (same Rust inference, the packed form loads the same
 values). In `cascade.md`, the whole scan with all eleven models named goes from p50 0.31 / p95 1.51 ms per dev row
 (heuristic only) to p50 0.83 / p95 5.48 ms with every row escalated to the models of all eleven classes (the
-native L1 producers alone stay at p50 0.21 / p95 1.57 ms); that cost is opt-in per named module.
+native L1 producers alone stay at p50 0.21 / p95 1.57 ms); that cost is opt-in per named module. The re-render with
+the cuts per detected language does the same work per row (only the cut values moved) and measured p50 0.92 / p95
+5.91 ms (native L1 0.24 / 1.80 ms), run-to-run noise of the shared host.
