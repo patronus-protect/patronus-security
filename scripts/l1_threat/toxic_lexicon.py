@@ -13,14 +13,22 @@ side (``toxic_lexicon.rs``) normalises and hashes the same way; the parity case 
 Sources and their licences are listed in ``research/l1-threat/toxic_lexicon_sources.yaml``. The
 plaintext stays outside the repository:
 
-1. candidate terms come from the train split of a listed dataset by frequency and contrast
-   (``lexicons.py mine TRAIN.jsonl --label <toxic>``) or from a listed permissive word list;
+1. candidate terms come from the train half of a listed dataset by frequency and contrast
+   (``mine``) or from a listed permissive word list;
 2. a reviewer keeps the terms that belong to a family and writes ``family<TAB>term<TAB>source``
    lines into a file outside the repository;
 3. ``build`` refuses a source that is not listed or whose licence is not allowed and writes the
-   hashed lexicon.
+   hashed lexicon with the source of every hash (``origins``); ``--keep`` carries the hashes of
+   the committed lexicon over with their origins (a schema-1 lexicon names one source for all).
 
-    python3 scripts/l1_threat/toxic_lexicon.py build TERMS.tsv [TERMS.tsv ...]
+``mine`` reads scored rows (``id``, ``text``, ``classes``, ``benign``, ``dataset``), keeps only the
+train half (``train_half``: a hash split by row id; the other half evaluates the lexicon) and ranks
+the normalised words and word pairs of the ``--class`` positives against the benign rows by
+weighted log-odds (``lexicons.rank``). Each candidate names the dataset it occurs in most often
+among the positives; the list is printed for review and never written into the repository.
+
+    python3 scripts/l1_threat/toxic_lexicon.py mine ROWS.jsonl [...] --class toxic_language [--top 300]
+    python3 scripts/l1_threat/toxic_lexicon.py build TERMS.tsv [TERMS.tsv ...] [--keep]
     python3 scripts/l1_threat/toxic_lexicon.py check
     python3 scripts/l1_threat/toxic_lexicon.py count TEXTS.jsonl [--field text]
 
@@ -30,6 +38,7 @@ plaintext stays outside the repository:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -41,10 +50,14 @@ from typing import Any, Iterable
 import yaml
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+from lexicons import rank  # noqa: E402
+
 ROOT = HERE.parents[1]
 LEXICON_PATH = ROOT / "ark-core" / "src" / "detectors" / "threat" / "toxic_lexicon.json"
 SOURCES_PATH = ROOT / "research" / "l1-threat" / "toxic_lexicon_sources.yaml"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SALT = "ark-toxic-v1\0"
 FAMILIES = ("insult", "dehumanise", "violence_verb")
 ALLOWED_LICENCES = ("MIT", "Apache-2.0", "BSD-3-Clause", "CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0")
@@ -59,6 +72,17 @@ FNV_PRIME = 0x100000001B3
 def normalize(term: str) -> str:
     """The lookup form of a term, the same as ``toxic_lexicon::normalize`` in Rust."""
     return " ".join(unicodedata.normalize("NFKC", term).lower().translate(FOLD).split())
+
+
+def train_half(row_id: str) -> bool:
+    """Whether a row belongs to the mining half: the first SHA-256 byte of its id is even."""
+    return hashlib.sha256(row_id.encode("utf-8")).digest()[0] % 2 == 0
+
+
+def terms_of(text: str) -> set[str]:
+    """The normalised words and word pairs of a text: the keys the lookup hashes."""
+    words = [normalize(word) for word in WORD.findall(text)]
+    return set(words) | {f"{a} {b}" for a, b in zip(words, words[1:])}
 
 
 def term_hash(term: str) -> str:
@@ -96,29 +120,71 @@ def read_terms(paths: Iterable[Path]) -> list[tuple[str, str, str]]:
     return terms
 
 
-def build(terms: list[tuple[str, str, str]], sources: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def kept_hashes(lexicon: dict[str, Any]) -> list[tuple[str, str, str]]:
+    """``(family, hash, source)`` of every hash of a built lexicon."""
+    origins = lexicon.get("origins", {})
+    single = [entry["id"] for entry in lexicon.get("sources", [])]
+    kept = []
+    for family, values in lexicon["families"].items():
+        for value in values:
+            source = origins.get(value) or (single[0] if len(single) == 1 else None)
+            if source is None:
+                raise ValueError(f"lexicon: hash {value} has no origin")
+            kept.append((family, value, source))
+    return kept
+
+
+def build(terms: list[tuple[str, str, str]], sources: dict[str, dict[str, Any]],
+          kept: Iterable[tuple[str, str, str]] = ()) -> dict[str, Any]:
     problems = source_problems(sources)
     hashes: dict[str, set[str]] = {family: set() for family in FAMILIES}
-    used: Counter[str] = Counter()
-    for family, term, source_id in terms:
+    origins: dict[str, str] = {}
+    entries = [(family, term_hash(term), source_id) for family, term, source_id in terms if normalize(term)]
+    for family, value, source_id in [*kept, *entries]:
         if family not in FAMILIES:
             problems.append(f"unknown family {family!r}")
         elif source_id not in sources or not sources[source_id].get("use", True):
             problems.append(f"source {source_id!r} is not listed for use in {SOURCES_PATH.name}")
-        elif normalize(term):
-            hashes[family].add(term_hash(term))
-            used[source_id] += 1
+        else:
+            hashes[family].add(value)
+            origins.setdefault(value, source_id)
     if problems:
         raise ValueError("; ".join(sorted(set(problems))))
+    used = Counter(origins.values())
     return {
         "schema_version": SCHEMA_VERSION,
         "hash": "fnv1a64",
         "salt": SALT.rstrip("\0"),
         "families": {family: sorted(values) for family, values in hashes.items()},
+        "origins": dict(sorted(origins.items())),
         "sources": [{"id": source_id, "licence": sources[source_id]["licence"],
                      "revision": sources[source_id]["revision"], "terms": count}
                     for source_id, count in sorted(used.items())],
     }
+
+
+def mine(paths: Iterable[Path], class_name: str, *, top: int = 300, min_count: int = 3) -> list[dict[str, Any]]:
+    """Candidate terms of the train-half ``class_name`` positives against the train-half benign rows."""
+    target: Counter[str] = Counter()
+    other: Counter[str] = Counter()
+    datasets: dict[str, Counter[str]] = {}
+    for path in paths:
+        with path.open(encoding="utf-8") as lines:
+            for line in lines:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if not train_half(row["id"]):
+                    continue
+                keys = terms_of(row["text"])
+                if row["benign"]:
+                    other.update(keys)
+                elif class_name in row["classes"]:
+                    target.update(keys)
+                    for key in keys:
+                        datasets.setdefault(key, Counter())[row["dataset"]] += 1
+    return [{**candidate, "source": datasets[candidate["term"]].most_common(1)[0][0]}
+            for candidate in rank(target, other, top=top, min_count=min_count)]
 
 
 def check(lexicon: dict[str, Any], sources: dict[str, dict[str, Any]]) -> list[str]:
@@ -133,6 +199,12 @@ def check(lexicon: dict[str, Any], sources: dict[str, dict[str, Any]]) -> list[s
             problems.append(f"lexicon: family {family} is empty")
         if values != sorted(set(values)) or not all(HEX.match(value) for value in values):
             problems.append(f"lexicon: family {family} is not a sorted list of 16-hex hashes")
+    hashed = {value for values in lexicon.get("families", {}).values() for value in values}
+    if set(lexicon.get("origins", {})) != hashed:
+        problems.append("lexicon: origins must name the source of every hash")
+    listed = {entry.get("id") for entry in lexicon.get("sources", [])}
+    if not set(lexicon.get("origins", {}).values()) <= listed:
+        problems.append("lexicon: an origin is not among the listed sources")
     for entry in lexicon.get("sources", []):
         source = sources.get(entry.get("id"))
         if source is None or source.get("licence") != entry.get("licence") or not source.get("use", True):
@@ -141,8 +213,7 @@ def check(lexicon: dict[str, Any], sources: dict[str, dict[str, Any]]) -> list[s
 
 
 def families_of(text: str, lexicon: dict[str, Any]) -> set[str]:
-    words = [normalize(word) for word in WORD.findall(text)]
-    keys = {term_hash(word) for word in words} | {term_hash(f"{a} {b}") for a, b in zip(words, words[1:])}
+    keys = {term_hash(term) for term in terms_of(text)}
     return {family for family, values in lexicon["families"].items() if keys & set(values)}
 
 
@@ -163,6 +234,12 @@ def main(argv: list[str] | None = None) -> int:
     build_parser = commands.add_parser("build")
     build_parser.add_argument("terms", nargs="+", type=Path)
     build_parser.add_argument("--out", type=Path, default=LEXICON_PATH)
+    build_parser.add_argument("--keep", action="store_true", help="keep the hashes of the committed lexicon")
+    mine_parser = commands.add_parser("mine")
+    mine_parser.add_argument("rows", nargs="+", type=Path)
+    mine_parser.add_argument("--class", dest="class_name", required=True)
+    mine_parser.add_argument("--top", type=int, default=300)
+    mine_parser.add_argument("--min-count", type=int, default=3)
     commands.add_parser("check")
     count_parser = commands.add_parser("count")
     count_parser.add_argument("texts", type=Path)
@@ -171,9 +248,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         sources = load_sources()
         if args.command == "build":
-            lexicon = build(read_terms(args.terms), sources)
+            kept = kept_hashes(json.loads(LEXICON_PATH.read_text(encoding="utf-8"))) if args.keep else ()
+            lexicon = build(read_terms(args.terms), sources, kept)
             args.out.write_text(json.dumps(lexicon, indent=1) + "\n", encoding="utf-8")
             print(f"{args.out}: " + ", ".join(f"{f} {len(v)}" for f, v in lexicon["families"].items()))
+            return 0
+        if args.command == "mine":
+            print(json.dumps(mine(args.rows, args.class_name, top=args.top, min_count=args.min_count),
+                             ensure_ascii=False, indent=1))
             return 0
         lexicon = json.loads(LEXICON_PATH.read_text(encoding="utf-8"))
         if args.command == "check":

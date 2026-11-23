@@ -1004,8 +1004,8 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
 }
 
 /// The hashed lexicon check of a toxic language match: its `lex` words hold
-/// an insult (or, per rule, a dehumanising metaphor, or a violence verb
-/// bound to a target) that no negation before it cancels, and its sentence
+/// an insult (or, per rule, a dehumanising metaphor, a vocative insult, or a
+/// violence verb bound to a target) that no negation before it cancels, and its sentence
 /// does not deny it before the match ("Nobody thinks you are an idiot").
 /// Phrase rules have no `lex`.
 fn toxic_holds(rule_id: &str, window: &str, captures: &regex::Captures<'_>) -> bool {
@@ -1019,8 +1019,20 @@ fn toxic_holds(rule_id: &str, window: &str, captures: &regex::Captures<'_>) -> b
         return false;
     }
     match rule_id {
-        "ark.threat.tx_dehumanisation" => toxic_lexicon::contains(lex, Family::Dehumanise),
+        "ark.threat.tx_dehumanisation" => {
+            // the subject itself is no animal: "these insects are pests"
+            !captures
+                .name("group")
+                .is_some_and(|group| toxic_lexicon::contains(group.as_str(), Family::Dehumanise))
+                && toxic_lexicon::contains(lex, Family::Dehumanise)
+        }
         "ark.threat.tx_threat" => toxic_lexicon::threatens_target(lex),
+        "ark.threat.tx_insult_vocative" => toxic_lexicon::vocative_insult(lex),
+        // an insult or an animal word said of the person: "du bist schlimmer als Tiere"
+        "ark.threat.tx_insult_addressee" => {
+            toxic_lexicon::contains(lex, Family::Insult)
+                || toxic_lexicon::contains(lex, Family::Dehumanise)
+        }
         _ => toxic_lexicon::contains(lex, Family::Insult),
     }
 }
@@ -3669,8 +3681,14 @@ mod tests {
                 "ark.threat.tx_dehumanisation",
             ),
             // a vocative insult and a verdict on the person or their work
-            ("Shut up, you worthless idiot!", "ark.threat.tx_insult_vocative"),
-            ("Halt's Maul, du dreckiger Bastard!", "ark.threat.tx_insult_vocative"),
+            (
+                "Shut up, you worthless idiot!",
+                "ark.threat.tx_insult_vocative",
+            ),
+            (
+                "Halt's Maul, du dreckiger Bastard!",
+                "ark.threat.tx_insult_vocative",
+            ),
             (
                 "Your mind is like garbage, worthless and empty.",
                 "ark.threat.tx_insult_verdict",

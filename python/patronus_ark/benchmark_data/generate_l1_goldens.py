@@ -20642,7 +20642,7 @@ TOXIC_NATIVE_CASES = [
        "<p>Comment: they're just like rats, breeding in every corner of our town.</p>", tags=("indirect",)),
     tx("tx_dehumanisation", "en", "chat", "Those people behave like animals and should be kept in cages."),
     tx("tx_dehumanisation", "de", "web",
-       "<p>Kommentar: Die sind wie Ratten, die vermehren sich in jeder Ecke unserer Stadt.</p>",
+       "<p>Kommentar: Sie sind wie Ratten, die vermehren sich in jeder Ecke unserer Stadt.</p>",
        tags=("indirect",)),
     tx("tx_dehumanisation", "de", "chat", "Diese Leute benehmen sich wie Tiere und gehören in Käfige."),
     tx("tx_insult_addressee", "en", "chat", "Shut up, you worthless idiot!"),

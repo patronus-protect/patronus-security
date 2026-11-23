@@ -655,7 +655,7 @@ Each rule reports under the category of its attack class: a jailbreak rule under
 | `ark.injection.tool_call.injected` | `injection` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `injection` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (85)
+## Threat rules (87)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -742,6 +742,8 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.ex_dns_channel` | `exfiltration` | `dns_channel` |  |
 | `ark.threat.ex_link_smuggling` | `exfiltration` | `link_smuggling` |  |
 | `ark.threat.tx_insult_addressee` | `toxic_language` | `insult_addressee` |  |
+| `ark.threat.tx_insult_vocative` | `toxic_language` | `insult_addressee` |  |
+| `ark.threat.tx_insult_verdict` | `toxic_language` | `insult_addressee` |  |
 | `ark.threat.tx_group_derogation` | `toxic_language` | `group_derogation` |  |
 | `ark.threat.tx_dehumanisation` | `toxic_language` | `dehumanisation` |  |
 | `ark.threat.tx_threat` | `toxic_language` | `threat` |  |

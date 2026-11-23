@@ -2,7 +2,8 @@
 //! The hashed word lists of the `toxic_language` rules. No term is stored in
 //! plain text: each family holds 64-bit FNV-1a hashes over a salt and the
 //! normalised term, built by `scripts/l1_threat/toxic_lexicon.py`, which
-//! normalises and hashes the same way.
+//! normalises and hashes the same way. The lexicon also records the source
+//! of every hash (`origins`), which only the builder reads.
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -41,7 +42,7 @@ fn table() -> &'static HashMap<u64, u8> {
     static TABLE: OnceLock<HashMap<u64, u8>> = OnceLock::new();
     TABLE.get_or_init(|| {
         let lexicon: Lexicon = serde_json::from_str(LEXICON).expect("valid toxic lexicon");
-        assert_eq!(lexicon.schema_version, 1);
+        assert_eq!(lexicon.schema_version, 2);
         assert_eq!(lexicon.salt.as_bytes(), &SALT[..SALT.len() - 1]);
         let mut table = HashMap::new();
         for (name, hashes) in &lexicon.families {
@@ -136,6 +137,54 @@ pub(super) fn contains(span: &str, family: Family) -> bool {
         (_, _, bits) if bits & family.bit() != 0 => Some(true),
         _ => None,
     })
+}
+
+/// Words that may stand before the insult of a vocative: "you little …",
+/// "du alter …". Other words before it read as a clause ("you think it's …").
+const VOCATIVE_MODIFIERS: &[&str] = &[
+    "little",
+    "big",
+    "old",
+    "fucking",
+    "damn",
+    "bloody",
+    "stupid",
+    "kleiner",
+    "kleine",
+    "alter",
+    "alte",
+    "verdammter",
+    "verdammte",
+    "elender",
+    "elende",
+];
+
+/// Whether `span`, the words after a vocative "you"/"du"/"ihr", is an insult:
+/// its last word is an insult or a dehumanising word and every word before it
+/// is an insult or a modifier ("you worthless idiot", "du dreckiger Bastard").
+pub(super) fn vocative_insult(span: &str) -> bool {
+    const MODIFIER: u8 = u8::MAX;
+    let table = table();
+    let mut word = String::new();
+    // The family bits of the word before, `MODIFIER` for a modifier.
+    let mut previous = None;
+    for raw in span
+        .split(|c: char| !(c.is_alphanumeric() || matches!(c, '@' | '$' | '*' | '\'' | '-')))
+        .filter(|w| !w.is_empty())
+    {
+        if matches!(previous, Some(bits) if bits != MODIFIER && bits & Family::Insult.bit() == 0) {
+            return false;
+        }
+        normalize(raw, &mut word);
+        let bits = table.get(&hash(&word)).copied().unwrap_or(0);
+        previous = Some(if bits == 0 && is_one_of(VOCATIVE_MODIFIERS, &word) {
+            MODIFIER
+        } else {
+            bits
+        });
+    }
+    matches!(previous, Some(bits) if bits != MODIFIER
+        && bits & (Family::Insult.bit() | Family::Dehumanise.bit()) != 0)
 }
 
 /// Subjects that deny what follows when a verb of saying or believing comes

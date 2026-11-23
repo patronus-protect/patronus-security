@@ -108,6 +108,26 @@ def _ngrams(text: str) -> set[str]:
     return set(words) | {f"{a} {b}" for a, b in zip(words, words[1:])}
 
 
+def rank(target: Counter[str], other: Counter[str], *, top: int = 50, min_count: int = 5,
+         prior: float = 0.01) -> list[dict[str, Any]]:
+    """The ``top`` terms of ``target`` by weighted log-odds z-score against ``other`` (z > 0 only)."""
+    total = target + other
+    n_target, n_other, n_total = sum(target.values()), sum(other.values()), sum(total.values())
+    alpha0 = prior * n_total
+    candidates = []
+    for term, count in total.items():
+        if target[term] < min_count:
+            continue
+        alpha = alpha0 * count / n_total
+        y_t, y_o = target[term] + alpha, other[term] + alpha
+        delta = math.log(y_t / (n_target + alpha0 - y_t)) - math.log(y_o / (n_other + alpha0 - y_o))
+        z = delta / math.sqrt(1 / y_t + 1 / y_o)
+        if z > 0:
+            candidates.append({"term": term, "z": round(z, 4), "count": target[term]})
+    candidates.sort(key=lambda candidate: (-candidate["z"], candidate["term"]))
+    return candidates[:top]
+
+
 def mine(
     path: Path,
     target_label: Any,
@@ -129,22 +149,9 @@ def mine(
             if line.strip():
                 row = json.loads(line)
                 (target if row[label_field] == target_label else other).update(_ngrams(row[text_field]))
-    total = target + other
-    n_target, n_other, n_total = sum(target.values()), sum(other.values()), sum(total.values())
-    alpha0 = prior * n_total
-    candidates = []
-    for term, count in total.items():
-        if target[term] < min_count:
-            continue
-        alpha = alpha0 * count / n_total
-        y_t, y_o = target[term] + alpha, other[term] + alpha
-        delta = math.log(y_t / (n_target + alpha0 - y_t)) - math.log(y_o / (n_other + alpha0 - y_o))
-        z = delta / math.sqrt(1 / y_t + 1 / y_o)
-        if z > 0:
-            candidates.append({"term": term, "z": round(z, 4), "count": target[term]})
-    candidates.sort(key=lambda candidate: (-candidate["z"], candidate["term"]))
+    candidates = rank(target, other, top=top, min_count=min_count, prior=prior)
     origin = f"mined:{split_hash(path)}"
-    return [{**candidate, "origin": origin} for candidate in candidates[:top]]
+    return [{**candidate, "origin": origin} for candidate in candidates]
 
 
 def main(argv: list[str] | None = None) -> int:
