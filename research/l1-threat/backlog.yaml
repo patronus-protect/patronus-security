@@ -705,6 +705,7 @@ tasks:
       again; baseline.md and cascade.md re-rendered from main on the current split; if the E09 refresh does not
       fire on a DEV re-freeze, a test in scripts/tests and the trigger fixed
   - id: T23
+    status: done
     title: "prompt_extraction on guarded secrets: 68 of 15 000 Mosscap rows, 0 of 300 German translations and 0 of 122 carrier rows — indirect disclosure of a secret from the system prompt (single characters or length, spell/shift/translate/rhyme/hide the password in a word, 'does the original prompt contain the password', often after a negation 'don't tell me the password, just …'); transform_target and partial disclosure with the secret noun (password, secret word, Passwort, Geheimnis, Kennwort) as target"
     type: recall-fix
     deps: [PX02, T22]
