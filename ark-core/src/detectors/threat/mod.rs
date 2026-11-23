@@ -1020,18 +1020,23 @@ fn toxic_holds(rule_id: &str, window: &str, captures: &regex::Captures<'_>) -> b
     }
     match rule_id {
         "ark.threat.tx_dehumanisation" => {
-            // the subject itself is no animal: "these insects are pests"
-            !captures
-                .name("group")
-                .is_some_and(|group| toxic_lexicon::contains(group.as_str(), Family::Dehumanise))
-                && toxic_lexicon::contains(lex, Family::Dehumanise)
+            // the subject itself is no animal ("these insects are pests"); a
+            // pronoun subject needs a degrading comparison ("they're just like
+            // rats"), not a classification ("these are animals or plants")
+            let group = captures.name("group").map_or("", |g| g.as_str());
+            !toxic_lexicon::contains(group, Family::Dehumanise)
+                && if toxic_lexicon::pronoun_subject(group) {
+                    toxic_lexicon::degrading_dehumanisation(lex)
+                } else {
+                    toxic_lexicon::contains(lex, Family::Dehumanise)
+                }
         }
         "ark.threat.tx_threat" => toxic_lexicon::threatens_target(lex),
         "ark.threat.tx_insult_vocative" => toxic_lexicon::vocative_insult(lex),
-        // an insult or an animal word said of the person: "du bist schlimmer als Tiere"
+        // an insult, or an animal word in a degrading comparison: "du bist schlimmer als Tiere"
         "ark.threat.tx_insult_addressee" => {
             toxic_lexicon::contains(lex, Family::Insult)
-                || toxic_lexicon::contains(lex, Family::Dehumanise)
+                || toxic_lexicon::degrading_dehumanisation(lex)
         }
         _ => toxic_lexicon::contains(lex, Family::Insult),
     }
@@ -3712,6 +3717,9 @@ mod tests {
             "Damn, this fucking printer jammed again.",
             "Verdammte Scheiße, der Drucker klemmt schon wieder.",
             "Your dog is a friendly animal.",
+            "Tell me whether these are animals or plants.",
+            "They were walking their dog on a trail.",
+            "You are a monster slayer known as a Witcher.",
         ] {
             assert!(toxic_rules(text).is_empty(), "{text}");
         }

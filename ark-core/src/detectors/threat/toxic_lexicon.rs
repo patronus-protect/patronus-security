@@ -187,6 +187,52 @@ pub(super) fn vocative_insult(span: &str) -> bool {
         && bits & (Family::Insult.bit() | Family::Dehumanise.bit()) != 0)
 }
 
+/// Pronoun and demonstrative subjects of a dehumanising statement.
+const PRONOUN_SUBJECTS: &[&str] = &["they", "these", "those", "such", "sie", "diese", "solche"];
+
+/// Whether the subject `group` opens with a pronoun or demonstrative ("they're", "diese Leute").
+pub(super) fn pronoun_subject(group: &str) -> bool {
+    group
+        .split(|c: char| !c.is_alphanumeric())
+        .find(|w| !w.is_empty())
+        .is_some_and(|w| is_one_of(PRONOUN_SUBJECTS, w))
+}
+
+/// Words that make an animal word a verdict on people: a comparison ("like
+/// rats", "schlimmer als Tiere") or a reduction ("nothing but", "nur").
+const DEGRADING: &[&str] = &[
+    "like",
+    "than",
+    "worse",
+    "just",
+    "nothing",
+    "only",
+    "wie",
+    "als",
+    "schlimmer",
+    "nichts",
+    "nur",
+    "einfach",
+];
+
+/// Whether `span` degrades its subject: a degrading word or an insult before
+/// a dehumanising word ("just like rats", "disgusting insects", "wie Tiere"),
+/// not a plain classification ("these are animals or plants").
+pub(super) fn degrading_dehumanisation(span: &str) -> bool {
+    let mut degraded = false;
+    walk(span, |word| {
+        let (raw, negation, bits) = word?;
+        if negation {
+            return Some(false);
+        }
+        if degraded && bits & Family::Dehumanise.bit() != 0 {
+            return Some(true);
+        }
+        degraded |= is_one_of(DEGRADING, raw) || bits & Family::Insult.bit() != 0;
+        None
+    })
+}
+
 /// Subjects that deny what follows when a verb of saying or believing comes
 /// after them: "nobody thinks you are …", "niemand sagt, du bist …".
 const DENYING_SUBJECTS: &[&str] = &["nobody", "noone", "niemand", "keiner"];
