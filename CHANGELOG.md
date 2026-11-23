@@ -1031,6 +1031,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   result (for example an attack class with no candidate) now gets Ark Core's clear decision in
   Ark too, instead of none.
 
+- **Threat scoreboard follows a new evaluation split:** `scoreboard.py refresh` names the inputs
+  it read (the hashes of the evaluation sets and, for the baseline report, the cached baseline
+  predictions) in each report and re-renders when they change, even if no code changed; before,
+  a re-frozen evaluation split or newly cached baselines left the published reports stale.
+
 ## [0.1.17] - 2026-11-16
 
 This release changes only the prompt-injection model (Wolf Defender) on top of 0.1.16.
