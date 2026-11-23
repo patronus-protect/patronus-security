@@ -138,6 +138,60 @@ pub(super) fn contains(span: &str, family: Family) -> bool {
     })
 }
 
+/// Subjects that deny what follows when a verb of saying or believing comes
+/// after them: "nobody thinks you are …", "niemand sagt, du bist …".
+const DENYING_SUBJECTS: &[&str] = &["nobody", "noone", "niemand", "keiner"];
+const BELIEF_VERBS: &[&str] = &[
+    "think",
+    "thinks",
+    "thought",
+    "believe",
+    "believes",
+    "say",
+    "says",
+    "said",
+    "denkt",
+    "glaubt",
+    "sagt",
+    "meint",
+    "findet",
+    "behauptet",
+];
+
+/// Conjunctions that open a new, affirmed clause after a denial: anywhere
+/// ("nobody thinks so but you are …"), or after a comma ("…, and I will …").
+const ADVERSATIVES: &[&str] = &["but", "yet", "aber", "sondern", "doch", "jedoch"];
+const COORDINATORS: &[&str] = &["and", "or", "so", "und", "oder"];
+
+/// Whether `lead` (the sentence before a match) holds a denying subject
+/// ("nobody", "no one", "niemand", "keiner") followed by a verb of saying or
+/// believing, and no later conjunction opens a new clause that the denial
+/// does not govern.
+pub(super) fn denied_by_subject(lead: &str) -> bool {
+    let mut subject = false;
+    let mut denied = false;
+    let mut previous_no = false;
+    for (clause, part) in lead.split(',').enumerate() {
+        for (i, word) in part
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .enumerate()
+        {
+            if is_one_of(ADVERSATIVES, word)
+                || (clause > 0 && i == 0 && is_one_of(COORDINATORS, word))
+            {
+                subject = false;
+                denied = false;
+            }
+            denied |= subject && is_one_of(BELIEF_VERBS, word);
+            subject |= is_one_of(DENYING_SUBJECTS, word)
+                || (previous_no && word.eq_ignore_ascii_case("one"));
+            previous_no = word.eq_ignore_ascii_case("no");
+        }
+    }
+    denied
+}
+
 /// Target words of a threat: the addressed person, a third person or a group.
 const TARGETS: &[&str] = &[
     "you", "him", "her", "them", "y'all", "dich", "euch", "ihn", "sie", "dir",

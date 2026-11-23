@@ -246,9 +246,9 @@ pub(crate) mod tests {
 
     #[test]
     fn a_fasttext_bundle_runs_as_a_class_scorer_at_its_cuts() {
-        // The jailbreak and prompt-extraction scorer candidates are
-        // fastText-type models; the module's L1 slot loads them at their
-        // calibrated cuts like any other category model.
+        // The jailbreak, prompt-extraction and toxic-language scorer
+        // candidates are fastText-type models; the module's L1 slot loads them
+        // at their calibrated cuts like any other category model.
         const FASTTEXT: &[u8] = include_bytes!("testdata/synthetic_fasttext_model.json");
         let own = CategoryModel::from_json_slice(FASTTEXT)
             .unwrap()
@@ -258,6 +258,10 @@ pub(crate) mod tests {
             (
                 "l1_model_fasttext_prompt_extraction",
                 SecurityCategory::PromptExtraction,
+            ),
+            (
+                "l1_model_fasttext_toxic_language",
+                SecurityCategory::ToxicLanguage,
             ),
         ] {
             let (dir, pin) = write_bundle(

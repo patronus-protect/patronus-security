@@ -427,6 +427,13 @@ Klauselkontext: ein abgeschlossener Satz auf einer Zeile über einer Notiz an de
 Lead-in mehr (Dev 77 → 83 von 83, 0 Benign-Treffer). Zahlen und Latenz in
 [`categories/memory_poisoning.md` §14](categories/memory_poisoning.md#14-stand-mp02-2026-11-22-punkte-und-ablations-entscheidung).
 
+**Stand TX02.** `toxic_language` behält `B0` (TX01-Regeln mit gehashtem Lexikon); kein gelerntes Modell.
+`B1`/`B4` (Zeichen-N-Gramm-LR) erreichen in der Verteilung 80–82 % TPR@0,1 %, `FT` 66 %, aber alle Dev-Positiven
+stammen aus einer Quelle von Anfragen nach toxischem Inhalt; auf nativem toxischem Text der Report-Sets finden
+die Modelle 0–1,4 % (Regeln 0,6 % bei 0 FP), auf den Goldens 1 von 32. Neue Regel-Prüfung: verneinendes Subjekt
+mit Verb des Glaubens/Sagens vor einer Beleidigung. Offen: native Trainingspositive (Owner: `DEV` auf
+Generation 23 neu einfrieren, plus GermEval 2018 Train). Zahlen in [`scoreboard/toxic-language-scorer.md`](scoreboard/toxic-language-scorer.md).
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
