@@ -157,6 +157,8 @@ const VOCATIVE_MODIFIERS: &[&str] = &[
     "verdammte",
     "elender",
     "elende",
+    "grosser",
+    "grosse",
 ];
 
 /// Whether `span`, the words after a vocative "you"/"du"/"ihr", is an insult:

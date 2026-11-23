@@ -3695,6 +3695,10 @@ mod tests {
                 "ark.threat.tx_insult_vocative",
             ),
             (
+                " Du großer Idiot, was hast du sonst im Kopf?",
+                "ark.threat.tx_insult_vocative",
+            ),
+            (
                 "Your mind is like garbage, worthless and empty.",
                 "ark.threat.tx_insult_verdict",
             ),
