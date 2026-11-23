@@ -52,7 +52,10 @@ twins) and what the train-negative cut would have flagged; ``--report-rows`` (se
 Per language (``de``, ``en``) the report adds that language's own cuts at the same FPRs on its benign rows
 alone (``language_thresholds`` in ``calibration``), the TPR and FPR at its own detect cut, its FPR per benign
 source and its TPR per positive source (generator and template family, else the set), the TPR and FPR at its own
-clear cut, and next to it the rules-only number (a rule finding of the class, ``R``) on the same rows.
+clear cut, and next to it the rules-only number (a rule finding of the class, ``R``) on the same rows. A row's
+language here is the one Core detects in its text (the facts' ``language``), the key Core picks the cut by, not
+its label; ``routed`` gives the TPR and FPR per labelled language with each row at Core's cut (its detected
+language's, else the strictest).
 ``--oversample-de N`` repeats every German train positive ``N`` times. ``--baseline-rows`` (some of the
 ``--rows`` files) also trains a baseline, without oversampling, on the candidate's train rows from those files
 alone (the candidate's split, not one of their own) and calibrates it on the candidate's calibration rows, so a
@@ -440,17 +443,25 @@ def positive_source(row: dict) -> str:
     return template_key(row) if row.get("generator") else row["dataset"]
 
 
-def _detections(scores: list[tuple[dict, int, float]], cut: float) -> dict[str, Any]:
-    """TPR and FPR at ``cut`` (``score > cut``) per language, the FPR per benign source and the TPR per
-    positive source."""
+def detected_language(row: dict) -> str:
+    """The language Core detects in a row's text (its facts' ``language``): the key Core picks a model's
+    per-language cut by."""
+    return row["facts"]["language"]
+
+
+def _detections(scores: list[tuple[dict, int, float]], cut: float | Callable[[dict], float], *,
+                language_of: Callable[[dict], str | None] = lambda row: row.get("language")) -> dict[str, Any]:
+    """TPR and FPR at ``cut`` (``score > cut``; a callable gives each row its own cut) per language
+    (``language_of``, by default the row's label), the FPR per benign source and the TPR per positive source."""
+    cut_of = cut if callable(cut) else lambda _row: cut
     out: dict[str, Any] = {}
     for language in LANGUAGES:
-        chosen = [(row, label, score) for row, label, score in scores
-                  if language == "all" or row.get("language") == language]
+        chosen = [(row, label, score > cut_of(row)) for row, label, score in scores
+                  if language == "all" or language_of(row) == language]
         positives = sum(label for _, label, _ in chosen)
         negatives = len(chosen) - positives
-        tp = sum(label and score > cut for _, label, score in chosen)
-        fp = sum(not label and score > cut for _, label, score in chosen)
+        tp = sum(label and hit for _, label, hit in chosen)
+        fp = sum(not label and hit for _, label, hit in chosen)
         if chosen:
             out[language] = {"positives": positives, "tp": tp, "tpr": tp / positives if positives else None,
                              "negatives": negatives, "fp": fp, "fpr": fp / negatives if negatives else None}
@@ -460,11 +471,11 @@ def _detections(scores: list[tuple[dict, int, float]], cut: float) -> dict[str, 
         if label:
             source = positives_by.setdefault(positive_source(row), {"rows": 0, "tp": 0})
             source["rows"] += 1
-            source["tp"] += score > cut
+            source["tp"] += score > cut_of(row)
         else:
             source = sources.setdefault(SCOREBOARD._benign_source(row), {"rows": 0, "fp": 0})
             source["rows"] += 1
-            source["fp"] += score > cut
+            source["fp"] += score > cut_of(row)
     out["benign_sources"] = {name: {**cell, "fpr": cell["fp"] / cell["rows"]}
                              for name, cell in sorted(sources.items())}
     out["positive_sources"] = {name: {**cell, "tpr": cell["tp"] / cell["rows"]}
@@ -497,14 +508,15 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
     detect, clear = thresholds[MODEL.BLOCK_THRESHOLD], thresholds[MODEL.ASK_THRESHOLD]
     per_language: dict[str, Any] = {}
     for language in LANGUAGES[1:]:
-        chosen = [entry for entry in calibration if entry[0].get("language") == language]
+        chosen = [entry for entry in calibration if detected_language(entry[0]) == language]
         own = [score for _, label, score in chosen if not label]
         if not own:
             continue
         language_cuts = cuts(own, target_fpr, clear_fpr)
-        detections = _detections(chosen, language_cuts[MODEL.BLOCK_THRESHOLD])
+        detections = _detections(chosen, language_cuts[MODEL.BLOCK_THRESHOLD], language_of=detected_language)
         per_language[language] = {"thresholds": language_cuts, **detections[language],
-                                  "clear": _detections(chosen, language_cuts[MODEL.ASK_THRESHOLD])[language],
+                                  "clear": _detections(chosen, language_cuts[MODEL.ASK_THRESHOLD],
+                                                       language_of=detected_language)[language],
                                   "benign_sources": detections["benign_sources"],
                                   "positive_sources": detections["positive_sources"]}
     train_cut = document["thresholds"].get(MODEL.BLOCK_THRESHOLD)
@@ -514,12 +526,20 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
                                                             for row, label, _ in calibration if not label}),
                                   "language_thresholds": {language: cell["thresholds"]
                                                           for language, cell in per_language.items()}}}
+    strict = MODEL.language_safe_thresholds(calibrated)[MODEL.BLOCK_THRESHOLD]
+
+    def routed(row: dict) -> float:
+        # Core's choice: the detect cut of the detected language, else the strict one.
+        own = per_language.get(detected_language(row))
+        return strict if own is None else own["thresholds"][MODEL.BLOCK_THRESHOLD]
+
     report: dict[str, Any] = {
         "class": cls, "model": document["name"], "target_fpr": target_fpr, "clear_fpr": clear_fpr,
         "thresholds": thresholds, "calibration": _detections(calibration, detect), "per_language": per_language,
         "rules": _detections([(row, label, rule_points(row["facts"], SCOREBOARD.category(cls)))
                               for row, label, _ in calibration], 0),
         "escalate_fpr": sum(score > clear for score in benign) / len(benign),
+        "routed": _detections(calibration, routed),
     }
     if train_cut is not None:
         report["train_negative_cut"] = {"threshold": train_cut, **_detections(calibration, train_cut)}
