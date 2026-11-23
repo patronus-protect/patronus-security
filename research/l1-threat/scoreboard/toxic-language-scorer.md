@@ -121,4 +121,4 @@ matched FPR cannot fall below base; with a cut of 0 the new matches count as bef
 Dev check (release `threat_cascade`, all dev and report rows, 96 092): score tiers of the established matches
 equal the base build row for row (0.55: 2, 0.65: 6, 0.8: 30, 0.9: 11, no row above base); the 98 rows that only
 the new forms or terms find score 0.5; flagged rows unchanged against the first T30 build (147); benign rows
-with a score 0 in both. Latency unchanged (one extra seed lookup per accepted toxic match).
+with a score 0 in both. Latency not re-measured: the change adds one seed-only lexicon pass per toxic match that already holds, nothing on texts without one.
