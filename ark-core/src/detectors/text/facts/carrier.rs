@@ -27,10 +27,17 @@ macro_rules! tool_listing_header {
 }
 
 /// Tool and MCP descriptions (also agent-card skills): JSON keys of a tool
-/// definition, or a line of a plain-text tool listing (`tool_listing_header!`).
+/// definition, a line of a plain-text tool listing (`tool_listing_header!`),
+/// a YAML tool list entry (`- name:` directly followed by `description:`;
+/// skill frontmatter has no list dash), a README
+/// tool list line opening with a call signature (`` `read_file(path)`: ``) or
+/// an MCP tool decorator (`@mcp.tool()`) over the docstring.
 const TOOL_DESCRIPTION_MARK: &str = concat!(
     r#""(?:description|inputSchema|input_schema|parameters)"\s*:|(?m:"#,
     tool_listing_header!(),
+    r"|^[ \t]*-[ \t]+name:[ \t]*[A-Za-z][\w.-]{0,60}[ \t]*\r?\n[ \t]*description:",
+    r"|^[ \t]*(?:[-*][ \t]+)?`[A-Za-z_][A-Za-z0-9_]{0,40}\([^`\n)]{0,60}\)`[ \t]*:",
+    r"|^[ \t]*@(?:mcp|server|app)\.tool\(",
     ")"
 );
 
@@ -162,11 +169,25 @@ mod tests {
             assert!(is_tool_metadata(text), "{text}");
             assert!(carriers(text).contains(&"tool_description"), "{text}");
         }
+        // MCP server YAML, README tool lists and MCP tool decorators.
+        for text in [
+            "server: notes\ntools:\n  - name: save_note\n    description: >\n      Saves a note.",
+            "## Tools\n\n`read_file(path)`: reads a file from the workspace.",
+            "- `datei_lesen(pfad)`: liest eine Datei.",
+            "@mcp.tool()\ndef lookup(query: str) -> str:\n    \"\"\"Search the wiki.\"\"\"",
+        ] {
+            assert!(is_tool_metadata(text), "{text}");
+            assert!(carriers(text).contains(&"tool_description"), "{text}");
+        }
         for text in [
             "description: plain prose",
             "Use the add tool.",
             "Tool support: we answer within a day.",
             "The tool add_numbers: adds two numbers.",
+            "name: build\non: push",
+            "---\nname: pdf-export\ndescription: Exports PDFs\n---\nBody",
+            "Call `read_file(path)` to read a file.",
+            "@pytest.fixture()\ndef tool():\n    pass",
         ] {
             assert!(!is_tool_metadata(text), "{text}");
             assert!(!carriers(text).contains(&"tool_description"), "{text}");
