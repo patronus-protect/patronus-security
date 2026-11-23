@@ -544,15 +544,25 @@ Runners) zeigt je Klasse und Sprache beide TPRs, Base -> Head mit KI. Der Holdou
 Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz bleibt beim Runner-Schritt
 `latency_ab`. Aktueller Stand von main: [`scoreboard/baseline.md`](scoreboard/baseline.md) mit der besten Heuristik- und der
 besten Referenzzeile je Zelle (TPR@1 % / 0,1 %, nur Baselines, die die Klasse bewerten); Baselines ohne
-vollständigen Dev-Cache stehen dort mit Namen und Grund.
+vollständigen Dev-Cache stehen dort mit Namen und Grund. Stand 2026-11-23 (T22, Korpus-Generation 23): der Cache
+`~/.cache/ark-l1-threat/baselines` hat die sieben Heuristik-Zeilen und Prompt Guard 2 22M für alle 31 Sätze von
+`DEV` (`train_dev`, `report`, `generated`, `translated`); 22M allein brauchte rund 4 CPU-Stunden. Prompt Guard 2
+86M und ProtectAI v2 fehlen: sie sind ein Vielfaches teurer als 22M und passen nicht in das 90-Minuten-Budget
+einer Runde. Nachfüllen außerhalb einer Runde (Owner, auf der VPS, je Modell mehrere Stunden):
+`~/ark-threat/baselines-venv/bin/python scripts/l1_threat/run_baselines.py run --corpus DEV/train_dev
+--corpus DEV/report --corpus DEV/generated --corpus DEV/translated --cache ~/.cache/ark-l1-threat/baselines
+--models ~/ark-threat/baselines/models --baseline prompt_guard_2_86m --baseline protectai_v2`; der Refresh
+rendert `baseline.md` danach ohne Code-Änderung neu (neue Cache-Einträge ändern den Eingabe-Fingerabdruck).
 
 **Scoreboard von main nach jedem Merge (E09).** Damit jede Klasse eine aktuelle Zahl hat statt einer Base je PR,
 rendert `scoreboard.py refresh` in einem Checkout von main `scoreboard/baseline.md` (L1-Kaskade, mit den
 Baseline-Spalten) und, sobald die kalibrierte Konfiguration `scoreboard/cascade-config.json` auf main liegt, auch
 `scoreboard/cascade.md` aus dem aktuellen Dev-Split neu; eine Zeile nennt den Commit. Der Runner (`ark-l1 refresh`,
-zu Beginn jedes Threat-Laufs, nur Lane a) ruft es auf, sobald sich main bewegt hat, aber nur nach einer Änderung an
-Detektoren oder Scorern (`ark-core`, Cargo-Dateien), an `scripts/l1_threat/`, an der Gold-Bereinigung
-(`scoreboard/gold-dev.json`, `gold-leakage.json`), an `entity_map.yaml` oder an der Kaskaden-Konfiguration. Was
+zu Beginn jedes Threat-Laufs, nur Lane a) ruft es auf, sobald sich main, die Dev-Manifeste oder der Baseline-Cache
+bewegt haben; gerendert wird nach einer Änderung an Detektoren oder Scorern (`ark-core`, Cargo-Dateien), an
+`scripts/l1_threat/`, an der Gold-Bereinigung (`scoreboard/gold-dev.json`, `gold-leakage.json`), an
+`entity_map.yaml` oder an der Kaskaden-Konfiguration, und (T22) wenn ein Bericht andere Eingaben nennt als die
+aktuellen: ein Re-Freeze von `DEV` (SHA-256 der Sätze) oder, für `baseline.md`, neu gecachte Baselines. Was
 sich geändert hat, geht als ein Folge-PR (`threat/scoreboard`, bei jedem Refresh neu gepusht) über den normalen
 Auto-Merge nach main; ein Bericht mit unveränderten Zahlen bleibt stehen. Der Refresh läuft wie ein Gate-Schritt
 in der Sandbox, ohne Netz und ohne Holdout, und teilt Builds und Vorhersagen mit dem Gate.

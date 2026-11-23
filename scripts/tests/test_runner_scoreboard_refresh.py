@@ -38,6 +38,7 @@ def sh(*cmd, cwd=None):
 def runner(tmp_path, monkeypatch):
     """The threat runner with a trusted clone whose origin (a bare repository) has main with a scoreboard."""
     module = load_runner(tmp_path, monkeypatch)
+    monkeypatch.setattr(module, "BASELINE_CACHE", tmp_path / "baselines")
     origin = tmp_path / "origin.git"
     sh("git", "init", "-q", "--bare", "-b", "main", str(origin))
     seed = tmp_path / "seed"
@@ -95,7 +96,8 @@ def test_refresh_pushes_the_rerendered_scoreboard_as_one_follow_up_pr(runner, mo
     assert runner.git("show", f"{pushed}:research/l1-threat/scoreboard/baseline.md") == "# new"
     create = next(c for c in gh_calls if c[2] == "create")
     assert create[create.index("--base") + 1] == "main" and create[create.index("--label") + 1] == "ark-threat"
-    assert json.loads(runner.SCOREBOARD_STATE.read_text()) == {"rendered_from": main}
+    assert json.loads(runner.SCOREBOARD_STATE.read_text()) == {"rendered_from": main,
+                                                               "inputs": runner.scoreboard_inputs()}
     assert not (runner.GATE_TREES / "refresh").exists()
     # main did not move: nothing runs.
     assert runner.cmd_refresh() == 0 and len(calls) == 1 and "up to date" in capsys.readouterr().out
@@ -111,6 +113,31 @@ def test_refresh_passes_since_and_opens_no_pr_when_no_report_changed(runner, mon
     assert cmd[cmd.index("--since") + 1] == "0" * 40
     assert gh_calls == [] and "REFRESH=no report changed" in capsys.readouterr().out
     assert json.loads(runner.SCOREBOARD_STATE.read_text())["rendered_from"] == runner.git("rev-parse", "origin/main")
+
+
+def test_refresh_reruns_on_the_same_main_after_a_dev_refreeze_or_new_cached_baselines(runner, monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(runner, "sandbox", fake_sandbox(calls, text=None))
+    fake_gh(runner, monkeypatch, [])
+    main = runner.git("rev-parse", "origin/main")
+    manifest = runner.DEV_DATA / "generated" / "manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text('{"generator_version": 8}')
+    assert runner.cmd_refresh() == 0 and len(calls) == 1
+    assert runner.cmd_refresh() == 0 and len(calls) == 1 and "up to date" in capsys.readouterr().out
+    # DEV re-frozen, main unchanged: the refresh runs with --since and scoreboard.py compares the inputs.
+    manifest.write_text('{"generator_version": 9}')
+    assert runner.cmd_refresh() == 0 and len(calls) == 2
+    cmd = calls[1]["cmd"]
+    assert cmd[cmd.index("--since") + 1] == main
+    # Baselines cached for the new split: again.
+    meta = runner.BASELINE_CACHE / "atr" / "v1" / "gen-0123456789ab.json"
+    meta.parent.mkdir(parents=True)
+    meta.write_text("{}")
+    assert runner.cmd_refresh() == 0 and len(calls) == 3
+    assert runner.cmd_refresh() == 0 and len(calls) == 3
+    assert json.loads(runner.SCOREBOARD_STATE.read_text()) == {"rendered_from": main,
+                                                               "inputs": runner.scoreboard_inputs()}
 
 
 def test_refresh_failure_keeps_the_last_render_for_the_next_run(runner, monkeypatch, capsys):

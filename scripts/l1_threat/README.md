@@ -459,12 +459,16 @@ Aktueller Stand von main auf Dev: [`research/l1-threat/scoreboard/baseline.md`](
 Predictor von HEAD (Cache wie `gate`, Builds und Vorhersagen werden geteilt), rendert
 `research/l1-threat/scoreboard/baseline.md` aus `--dev` (L1-Kaskade, mit `--baseline-cache` die Baseline-Spalten)
 und, wenn der Checkout `research/l1-threat/scoreboard/cascade-config.json` enthält (Ausgabe von `calibrate`),
-`cascade.md` an deren Arbeitspunkt; der Kopf nennt den Commit. Mit `--since SHA` (Commit des letzten Renderns)
-läuft nichts, solange sich zwischen SHA und HEAD keine Datei unter `REFRESH_PATHS` geändert hat: `ark-core`,
-Cargo-Dateien, `scripts/l1_threat/`, `research/l1-threat/entity_map.yaml`, `gold-dev.json`, `gold-leakage.json`,
-`cascade-config.json`. Ein Bericht, dessen Zahlen gleich bleiben (nur die Commit-Zeile wäre neu), bleibt
-unverändert. Der Runner ruft es zu Beginn jedes Threat-Laufs auf (`ark-l1 refresh`, nur Lane a, sandboxed ohne
-Netz und Holdout) und pusht geänderte Berichte als einen Folge-PR `threat/scoreboard`, den der Auto-Merge landet.
+`cascade.md` an deren Arbeitspunkt; der Kopf nennt den Commit und den Fingerabdruck der Eingaben (SHA-256 aller
+Sätze des Dev-Splits, für `baseline.md` dazu die Liste der gecachten Baseline-Vorhersagen). Mit `--since SHA`
+(Commit des letzten Renderns) läuft nichts, solange sich zwischen SHA und HEAD keine Datei unter `REFRESH_PATHS`
+geändert hat (`ark-core`, Cargo-Dateien, `scripts/l1_threat/`, `research/l1-threat/entity_map.yaml`,
+`gold-dev.json`, `gold-leakage.json`, `cascade-config.json`) und jeder Bericht die aktuellen Eingaben nennt: ein neu
+eingefrorener Dev-Split oder neu gecachte Baselines rendern also auch ohne Code-Änderung neu. Ein Bericht, dessen
+Zahlen und Eingaben gleich bleiben (nur die Commit-Zeile wäre neu), bleibt unverändert. Der Runner ruft es zu
+Beginn jedes Threat-Laufs auf (`ark-l1 refresh`, nur Lane a, sandboxed ohne Netz und Holdout), wenn sich main, die
+Dev-Manifeste oder der Baseline-Cache seit dem letzten Refresh geändert haben, und pusht geänderte Berichte als
+einen Folge-PR `threat/scoreboard`, den der Auto-Merge landet.
 
 ### Kaskade und Kalibrierung
 

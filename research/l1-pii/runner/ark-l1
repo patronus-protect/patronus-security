@@ -57,6 +57,7 @@ from __future__ import annotations
 
 import datetime as dt
 import fnmatch
+import hashlib
 import json
 import os
 import re
@@ -2234,11 +2235,22 @@ def drop_worktree(cur: dict) -> None:
 
 # ── scoreboard of main ───────────────────────────────────────────────────
 
-SCOREBOARD_STATE = STATE / "scoreboard-refresh.json"  # {"rendered_from": main commit of the last refresh}
+SCOREBOARD_STATE = STATE / "scoreboard-refresh.json"  # {"rendered_from": main commit, "inputs": scoreboard_inputs()}
 SCOREBOARD_BRANCH = f"{BRANCH_PREFIX}scoreboard"       # one follow-up PR, force-pushed by every refresh
 SCOREBOARD_DIR = "research/l1-threat/scoreboard"
 SCOREBOARD_REPORTS = ("baseline.md", "cascade.md")     # the files `scoreboard.py refresh` rewrites
 BASELINE_CACHE = HOME / ".cache" / "ark-l1-threat" / "baselines"  # run_baselines.py cache of the runs
+
+
+def scoreboard_inputs() -> str:
+    """Fingerprint of the data the refresh reads besides main: the dev split's manifests and the cached
+    baseline predictions. A re-frozen dev split or new cached baselines re-run the refresh on the same main."""
+    digest = hashlib.sha256()
+    for manifest in sorted(DEV_DATA.glob("*/manifest.json")):
+        digest.update(f"{manifest.relative_to(DEV_DATA).as_posix()}\0".encode() + manifest.read_bytes())
+    for meta in sorted(BASELINE_CACHE.glob("*/*/*.json")):
+        digest.update(f"baseline\0{meta.relative_to(BASELINE_CACHE).as_posix()}\n".encode())
+    return digest.hexdigest()
 
 
 def refresh_commit(tree: Path, main_sha: str) -> str | None:
@@ -2268,14 +2280,17 @@ def cmd_refresh() -> int:
     Runs at the start of every threat run (lane a only, so two hosts never push the branch). The
     refresh runs main's own scoreboard.py in the sandbox like a gate step, without the holdout and
     without network; it skips the render when no detector, scorer or gold path changed since the
-    last refresh. Auto-merge lands the PR like any other green PR of the programme."""
+    last refresh and the dev split and baseline cache are those of the last refresh
+    (``scoreboard_inputs``). Auto-merge lands the PR like any other green PR of the programme."""
     if PROGRAM != "threat" or LANE not in ("", "a"):
         print("REFRESH=none (threat programme, lane a only)")
         return 0
     git("fetch", "--quiet", "origin", "main")
     main_sha = sha("origin/main")
-    since = load(SCOREBOARD_STATE, {}).get("rendered_from")
-    if since == main_sha:
+    state = load(SCOREBOARD_STATE, {})
+    since = state.get("rendered_from")
+    inputs = scoreboard_inputs()
+    if since == main_sha and state.get("inputs") == inputs:
         print(f"REFRESH=up to date ({main_sha[:12]})")
         return 0
     for d in (GATE_TARGET, GATE_HOME / "cargo", GATE_HOME / "cache", CACHE, STATE):
@@ -2320,7 +2335,7 @@ def cmd_refresh() -> int:
         print(f"REFRESH_PR={url}")
     else:
         print(f"REFRESH=no report changed ({summary[0]})")
-    save(SCOREBOARD_STATE, {"rendered_from": main_sha})
+    save(SCOREBOARD_STATE, {"rendered_from": main_sha, "inputs": inputs})
     return 0
 
 
