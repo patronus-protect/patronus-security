@@ -191,13 +191,13 @@ predict/report`, Kaskade bis L1), Base `5fbfb7ee` → Head:
 
 | Zelle | TPR@0,1 % Base → Head | Hard-Benign |
 |---|---|---|
-| prompt_extraction all/all | 0,4 → HEAD_ALL | 0/2 412 |
-| de/all (nur Übersetzungen) | 0,0 → HEAD_DE | 0/841 |
-| en/all | 0,5 → HEAD_EN | 0/1 571 |
-| `gandalf` (report) | 3,7 → HEAD_GANDALF | – |
+| prompt_extraction all/all | 0,4 → 35,1 | 0/2 412 |
+| de/all (nur Übersetzungen) | 0,0 → 39,0 | 0/841 |
+| en/all | 0,5 → 35,0 | 0/1 571 |
+| `gandalf` (report) | 3,7 → 19,5 | – |
 
-Getrennt nach Quelle (Anteil geflaggt): `runner_translations_de` SRC_RT, Carrier (`generators_dev_seed`) DE SRC_CDE /
-EN SRC_CEN, Mosscap SRC_MOSS. Benign-FPR pro Sprache: DE BEN_DE, EN BEN_EN (Flags/Benign-Zeilen).
+Getrennt nach Quelle (Anteil geflaggt): `runner_translations_de` 116/300 (38,7 %), Carrier (`generators_dev_seed`) DE 35/87 (40,2 %) /
+EN 24/70 (34,3 %), Mosscap 5 244/15 000 (35,0 %). Benign-FPR pro Sprache: DE 0/26 153, EN 0/38 165 (Flags/Benign-Zeilen).
 
 Latenz (nur `prompt_extraction`, Release, 100-KiB-Fenster, ein Kern, p50 Base → Head): GermanQuAD 9,8 → 10,9 ms,
 Dolly 11,2 → 11,5 ms; ein Fenster nur aus Passwortspiel-Prompts 36 → 142 ms (Prefilter greift dort überall). Drei
