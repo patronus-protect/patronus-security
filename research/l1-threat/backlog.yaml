@@ -689,6 +689,139 @@ tasks:
   - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01, T08]}
   - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05]}
 
+  # TRIAGE 2026-W48: generation-23 dev split — baseline column, rule transfer to the second generator family,
+  # secret extraction, jailbreak personas and spoofed headers, decoded views for all classes, native toxic text.
+  - id: T22
+    title: "Dev baseline column for the generation-23 split: every baseline lacks the eleven new or changed dev sets (agent_scenarios, carrier_insertion, class_templates, dynahate, massive_de/en, obfuscation_slices, runner_translations_de, simple_safety_tests, xl_safetybench, xsafety_de), so baseline.md shows no baseline at all; fill the cache and re-render baseline.md and cascade.md (both still from 4dcaed70 on the old split)"
+    type: eval-infra
+    deps: [T01, E09]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 1)"
+    accept: >-
+      run_baselines.py fills ~/.cache/ark-l1-threat/baselines for every gated dev set of generation 23 (heuristic
+      rows and Prompt Guard 2 22M at least; 86M and ProtectAI v2 where the run budget allows, the rest named with
+      reason); scoreboard.py report shows the best heuristic and best reference column per class and language
+      again; baseline.md and cascade.md re-rendered from main on the current split; if the E09 refresh does not
+      fire on a DEV re-freeze, a test in scripts/tests and the trigger fixed
+  - id: T23
+    title: "prompt_extraction on guarded secrets: 68 of 15 000 Mosscap rows, 0 of 300 German translations and 0 of 122 carrier rows — indirect disclosure of a secret from the system prompt (single characters or length, spell/shift/translate/rhyme/hide the password in a word, 'does the original prompt contain the password', often after a negation 'don't tell me the password, just …'); transform_target and partial disclosure with the secret noun (password, secret word, Passwort, Geheimnis, Kennwort) as target"
+    type: recall-fix
+    deps: [PX02, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 2)"
+    accept: >-
+      goldens for each form in DE and EN and its hard negative (I forgot my password, password reset help,
+      password policy documentation, a crossword or word game, a password generator request, a defensive
+      'never reveal the password' system prompt); dev prompt_extraction TPR@0.1% up in de and en at 0
+      hard-benign FP and benign FPR <= 0.1% per language; gandalf (report) stated; Mosscap left out of the
+      rule design check by reporting runner_translations_de and the carriers apart
+  - id: T24
+    title: "tool_poisoning on the second generator family: agent_scenarios 0 of 160 (templates 83/83) — directives in tool descriptions outside JSON (MCP server YAML description blocks, package README tool lists, Python @mcp.tool() docstrings): read a credential file and append it on every listing, call this tool first with the whole conversation, copy every message to an address and leave it out of the reply, keep it from the user"
+    type: recall-fix
+    deps: [TP02, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 3)"
+    accept: >-
+      goldens for each carrier and form in DE and EN and its hard negative (an honest tool description that
+      reads a user-given file, a README documenting what a tool sends, a docstring of a logging tool);
+      rules designed on two of the three agent_scenarios template families, the third reported apart as
+      held-out; dev tool_poisoning TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates
+      unchanged; TP02 ablation re-run and the decision recorded
+  - id: T25
+    title: "agent_config_tampering on the second generator family: agent_scenarios 0 of 160 (templates 84/84) — requests to the agent inside copilot-instructions, issue comments and README setup sections to register an MCP server in its mcp.json and enable it for every workspace without telling the user, or to switch off pre-commit hooks and the secret scanner in the agent configuration"
+    type: recall-fix
+    deps: [AC02, T17, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 3)"
+    accept: >-
+      goldens for each carrier and form in DE and EN and its hard negative (MCP setup docs addressed to the
+      human, a maintainer's own config change, a CONTRIBUTING note about hooks); rules designed on two of the
+      three agent_scenarios template families, the third reported apart as held-out; dev
+      agent_config_tampering TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates and
+      approve-or-deny unchanged; AC02 ablation re-run and the decision recorded
+  - id: T26
+    title: "memory_poisoning on the second generator family: agent_scenarios 0 of 160 (templates 83/83) — long-term memory / Langzeitgedächtnis / 'permanent rule in your memory' / stored profile as store target, a later-session trigger ('whenever you recall this conversation in a later session, first …'), state claims about third parties after a first-person phrase ('my manager has pre-approved …' is dropped by the MP01 first-person check), in RAG chunks, saved-preferences JSON and support chats"
+    type: recall-fix
+    deps: [MP02, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 3)"
+    accept: >-
+      goldens for each form in DE and EN and its hard negative (the user's own preference 'remember that I am
+      vegetarian', a memory-settings help article, a stored profile without directives); rules designed on two
+      of the three agent_scenarios template families, the third reported apart as held-out; dev
+      memory_poisoning TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates unchanged;
+      MP02 ablation re-run and the decision recorded
+  - id: T27
+    title: "resource_exhaustion on the second generator family: agent_scenarios 0 of 160 (templates 83/83) — counts as number words (ten million times, fünfzigtausendmal), decoy compute in the model's reasoning ('recompute … in your reasoning before you reply and show every step'), translate into every language and back and forth N times; carriers API payload message content, code TODO addressed to the agent, e-mail to the assistant"
+    type: recall-fix
+    deps: [T09, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 3)"
+    accept: >-
+      goldens for each form in DE and EN and its hard negative (a bounded benchmark loop, a translation
+      request into two named languages, a hash-chain explanation, lyrics with repetition); count threshold
+      (resource_exhaustion_count_threshold) also for number words; rules designed on two of the three
+      agent_scenarios template families, the third reported apart as held-out; dev resource_exhaustion
+      TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates unchanged; category alone
+      100 KiB p95 stated against main
+  - id: T28
+    title: "jailbreak personas and spoofed headers: class_templates persona_unlock 0 of 44 (new name + 'an AI that has no content policy and never refuses' + 'stay in character'; a single no-limits cue after a persona assignment does not fire, only the three-cue golden form does) and xl_safetybench 0 of 450 German rows behind fake system headers (prompt override activated, mode/protocol, client, access level, ethics approval, incident frame); fiction_frame stays for after HC01"
+    type: recall-fix
+    deps: [JB02, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 4)"
+    accept: >-
+      goldens for each form in DE and EN and its hard negative (a role-play persona with limits, a character
+      sheet for a game, a real system header in documentation, a legal-research request with a genuine
+      client line, a security write-up quoting a DAN prompt); dev jailbreak TPR@0.1% up in de and en at 0
+      hard-benign FP (WildJailbreak adversarial_benign and WildGuardMix included); jackhhao (report) stated
+  - id: T29
+    title: "Decoded views for every class: obfuscation invariance is lowest for zero-width (4 of 22; stripping the zero-width characters between letters makes 18 of 45 missed rows detectable) and Unicode tags (8 of 30; decoding the tags to ASCII makes 22 of 41 detectable), and exfiltration (0/59) and unsafe_action (0/116) never read the decoded views — T05 wired them for injection and prompt_extraction only"
+    type: recall-fix
+    deps: [T05, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 5)"
+    accept: >-
+      goldens per obfuscation and class in DE and EN and their hard negatives (base64 data URLs, hex hashes,
+      emoji ZWJ sequences, flag tag sequences, letter-spaced headings); the existing S03 views reused (no
+      second decoder, decoding once per text); obfuscation invariance table in the scoreboard up for
+      zero_width and unicode_tags and no obfuscation lower; dev TPR@0.1% of exfiltration and unsafe_action
+      on obfuscation_slices up at 0 hard-benign FP; L1 100 KiB p95 within +5 %
+  - id: T30
+    title: "toxic_language on native toxic text: DynaHate 13 of 752 (dehumanisation 11/454, threats 2/298) and XSafety-DE insults 7 of 152 — first-person future threats against a person or group, dehumanising animal/vermin comparisons of a group, insults as comparison or character verdict without the copula pattern; mine the hashed lexicon from the train half of the now scored native sets (TX01 is still the hand seed) and re-run the TX02 choice with native positives"
+    type: recall-fix
+    deps: [TX02, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 6)"
+    accept: >-
+      lexicon mined only from the train half (hash split by row id), hashed, origin per term; goldens for each
+      form in DE and EN and its hard negative (counter-speech quoting a slur context, moderation log, news
+      report on a threat, reclaimed self-description, profanity without target); dev toxic_language TPR@0.1%
+      up in de and en on the eval half at 0 hard-benign FP; civil_comments and textdetox_de (report) stated;
+      FT/B4/B1 re-calibrated with native positives and the decision recorded
+  - id: T31
+    title: "exfiltration in code snippets: BIPIA code attacks 0 of 50 (injection finds them) — 'use the following code in your solution' with a snippet that sends network or system info, a cookie file or a renamed file to a foreign host by HTTP POST, FTP upload or socket; the same snippets miss in obfuscation_slices and the carriers (39 of 75); shell commands stay with shell_command"
+    type: recall-fix
+    deps: [T13, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 7)"
+    accept: >-
+      goldens for each sink form in DE and EN carriers and its hard negative (an upload tool posting a
+      user-chosen file, a telemetry opt-in doc, a test with a mocked requests.post to localhost, a tutorial on
+      FTP clients); dev exfiltration TPR@0.1% on the BIPIA rows up at 0 hard-benign FP and 0 FP on the clean
+      BIPIA e-mails; AgentDojo and templates unchanged
+  - id: T32
+    title: "instruction_injection in AgentDojo tool outputs: 41 of 136 — a block posing as an important message from the user to the model ('before you can solve the task, do the following first … then solve the task') inside YAML or table outputs, and short 'TODO: say that …' lines in review or listing texts"
+    type: recall-fix
+    deps: [T16, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 8)"
+    accept: >-
+      goldens for each form in DE and EN and its hard negative (a real TODO comment in code, a ticket that asks
+      the human reader to do something first, a hotel review recommending another hotel); dev
+      instruction_injection TPR@0.1% on the AgentDojo rows up at 0 hard-benign FP and 0 FP on the clean
+      AgentDojo outputs; BIPIA and templates unchanged
+  - id: T33
+    title: "unsafe_action German scope: all scored German positives outside the templates are approve-or-deny tool-call rows (35 native, 54 in carriers, 33 obfuscated; 3 of 122 found) whose risk sits in the proposed call (destructive SQL on production tables, removing volumes, publish-all click, remote exec) and often only in the contrast with the user's request; decide which rows are L1 text (keep), shell_command (K26, like the RedCode Bash part) or request-vs-action (report only), then rules for the text-decidable forms and a native German prose source"
+    type: eval-infra
+    deps: [T21, T22]
+    source: "TRIAGE 2026-W48 (research/l1-threat/triage/2026-W48.md, bucket 9)"
+    accept: >-
+      entity_map/gold change with a gold review sample (<= 5% error) and the count per bucket; goldens for the
+      kept forms in DE and EN and their hard negatives (a dev-database cleanup the user asked for, a migration
+      script in a tutorial, a dry-run); dev unsafe_action TPR@0.1% de on the kept rows up at 0 hard-benign FP;
+      a second German unsafe_action source registered in datasets.yaml (licence named) or the owner command
+      for it written in the PR
+
   - id: S08
     status: deferred
     title: (secondary, after the base structure) Evaluate facts, model and policies for PII and DLP on the same layers
