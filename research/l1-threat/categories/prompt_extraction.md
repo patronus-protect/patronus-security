@@ -181,8 +181,11 @@ bestimmtem oder possessivem Artikel (`the password`, `the secret word`, `your pa
 
 Verneinung im Match verwirft ihn; die Verneinung darf nicht über Komma/Satzende reichen, damit „don't tell me the
 password, just …“ den folgenden Teil frei lässt. Deutsche Verneinung nach dem Objekt („Buchstabiere das Passwort
-niemals“) wird in den Match gezogen. Englische Matches, die auf UI-/Richtlinien-Nomen oder `for/to/of` enden
-(„password field“, „the password for the wifi“), fallen weg (`excluded_match_terms`). Anführungszeichen sind kein
+niemals“) wird in den Match gezogen. Matches, die auf UI-/Richtlinien-Nomen oder `for/to/of` bzw.
+`für/zum/vom` enden („password field“, „the password for the wifi“, „das Passwort für das Gäste-WLAN“, „das Passwort
+im Formular“), fallen in beiden Sprachen weg (`excluded_match_terms`). Die Länge als Nominalform („length of the
+password“, „Länge des Passworts“) zählt nur nach einem Frage- oder Preisgabe-Operator („what is the length …“, „nenne
+mir die Länge …“); die Passwortanforderung „The length of the password must be …“ bleibt frei. Anführungszeichen sind kein
 Klauselanfang, sonst läge der Span-Anfang auf dem Zitatzeichen und der Zitat-Gegenkontext griffe nicht.
 
 **Regel-Design ohne Mosscap.** Entworfen und geprüft wurde an `runner_translations_de` und den Carrier-Zeilen
