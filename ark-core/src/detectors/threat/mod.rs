@@ -3589,6 +3589,32 @@ mod tests {
                 "{text}"
             );
         }
+        // The denial governs only its own proposition: a clause opened by
+        // "but" or a comma and "and" after it is affirmed.
+        for (text, rule) in [
+            (
+                "Nobody thinks this is acceptable, but you are an idiot.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Nobody thinks this is fine but you are an idiot.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Niemand glaubt das, aber du bist ein Trottel.",
+                "ark.threat.tx_insult_addressee",
+            ),
+            (
+                "Nobody believes your excuses, and I will kill you.",
+                "ark.threat.tx_threat",
+            ),
+            (
+                "Keiner glaubt dir, und ich werde dich umbringen.",
+                "ark.threat.tx_threat",
+            ),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
     }
 
     #[test]
