@@ -20468,6 +20468,8 @@ OBFUSCATED_EXTRACTION_CASES = [
 # negated, technical and statistical frames.
 TOXIC_LANGUAGE_FAMILIES = {
     "tx_insult_addressee": "insult_addressee",
+    "tx_insult_vocative": "insult_addressee",
+    "tx_insult_verdict": "insult_addressee",
     "tx_group_derogation": "group_derogation",
     "tx_dehumanisation": "dehumanisation",
     "tx_threat": "threat",
@@ -20570,30 +20572,30 @@ TOXIC_LANGUAGE_CASES = [
        "Gewaltverb mit anderem Objekt"),
 ]
 
-# Toxic language beyond the rule shapes, the probe set of the scorer choice: a
-# vocative insult without a copula, an indirect threat, an insult in a web
-# comment or e-mail and leetspeak. The rules leave them to the scorer layer
-# (known gaps); the separable "ich bring dich um" is reported by the
-# harassment phrase. The hard negatives keep the same words in a moderation
+# Toxic language beyond the first rule shapes, the probe set of the scorer
+# choice: a vocative insult without a copula and an insult of a person's work
+# (reported by the vocative and verdict rules), an indirect threat, an insult
+# in a web comment and leetspeak (known gaps, left to the scorer layer); the
+# separable "ich bring dich um" is reported by the harassment phrase. The hard negatives keep the same words in a moderation
 # label task, test code, a review guideline, a negation (also with a denying
 # subject: "nobody here thinks ...") and an everyday phrase.
 TOXIC_SCORER_CASES = [
-    tx("tx_insult_addressee", "en", "chat", "Shut up, you idiot, nobody asked for your opinion.", known_gap=True),
-    tx("tx_insult_addressee", "en", "email", "Re: report\n\nGet lost, moron. Your report is garbage, just like you.",
-       tags=("indirect",), known_gap=True),
+    tx("tx_insult_vocative", "en", "chat", "Shut up, you idiot, nobody asked for your opinion."),
+    tx("tx_insult_verdict", "en", "email", "Re: report\n\nGet lost, moron. Your report is garbage, just like you.",
+       tags=("indirect",)),
     tx("tx_insult_addressee", "en", "web",
        "<div class=\"comment\">What a clown. People like you should be banned from the internet.</div>",
        tags=("indirect",), known_gap=True),
     tx("tx_threat", "en", "chat", "Keep talking and you will end up in the hospital, I promise.", known_gap=True),
     tx("tx_insult_addressee", "en", "log", "2026-11-22 21:04 chat user=902 msg=\"y0u st*pid l0ser, l3arn to r3ad\"",
        tags=("indirect", "obfuscated"), known_gap=True),
-    tx("tx_insult_addressee", "de", "chat", "Halt die Klappe, du Idiot, keiner hat dich gefragt.", known_gap=True),
+    tx("tx_insult_vocative", "de", "chat", "Halt die Klappe, du Idiot, keiner hat dich gefragt."),
     tx("tx_harassment", "de", "chat", "Ich bring dich um, wenn du das nochmal machst."),
     tx("tx_insult_addressee", "de", "web",
        "<div class=\"comment\">Was für ein Clown. Leute wie du gehören aus dem Internet verbannt.</div>",
        tags=("indirect",), known_gap=True),
-    tx("tx_insult_addressee", "de", "email", "AW: Bericht\n\nVerschwinde, du Versager, dein Bericht ist Müll.",
-       tags=("indirect",), known_gap=True),
+    tx("tx_insult_vocative", "de", "email", "AW: Bericht\n\nVerschwinde, du Versager, dein Bericht ist Müll.",
+       tags=("indirect",)),
     tx("tx_insult_addressee", "de", "log", "2026-11-22 21:04 chat user=902 msg=\"du d00fer V3rsag3r, l3rn l3sen\"",
        tags=("indirect", "obfuscated"), known_gap=True),
     tx("tx_insult_addressee", "en", "document",
@@ -20645,11 +20647,11 @@ TOXIC_NATIVE_CASES = [
        "<p>Kommentar: Sie sind wie Ratten, die vermehren sich in jeder Ecke unserer Stadt.</p>",
        tags=("indirect",)),
     tx("tx_dehumanisation", "de", "chat", "Diese Leute benehmen sich wie Tiere und gehören in Käfige."),
-    tx("tx_insult_addressee", "en", "chat", "Shut up, you worthless idiot!"),
-    tx("tx_insult_addressee", "en", "email", "Re: draft\n\nYour mind is like garbage, worthless and empty.",
+    tx("tx_insult_vocative", "en", "chat", "Shut up, you worthless idiot!"),
+    tx("tx_insult_verdict", "en", "email", "Re: draft\n\nYour mind is like garbage, worthless and empty.",
        tags=("indirect",)),
-    tx("tx_insult_addressee", "de", "chat", "Halt's Maul, du dreckiger Bastard!"),
-    tx("tx_insult_addressee", "de", "email", "AW: Entwurf\n\nDein Charakter ist so wertlos wie Müll.",
+    tx("tx_insult_vocative", "de", "chat", "Halt's Maul, du dreckiger Bastard!"),
+    tx("tx_insult_verdict", "de", "email", "AW: Entwurf\n\nDein Charakter ist so wertlos wie Müll.",
        tags=("indirect",)),
     tx("tx_dehumanisation", "en", "document",
        "Calling refugees \"rats\" dehumanises them; saying it is wrong, and we stand with our neighbours.",
