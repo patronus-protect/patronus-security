@@ -158,24 +158,38 @@ const BELIEF_VERBS: &[&str] = &[
     "behauptet",
 ];
 
+/// Conjunctions that open a new, affirmed clause after a denial: anywhere
+/// ("nobody thinks so but you are …"), or after a comma ("…, and I will …").
+const ADVERSATIVES: &[&str] = &["but", "yet", "aber", "sondern", "doch", "jedoch"];
+const COORDINATORS: &[&str] = &["and", "or", "so", "und", "oder"];
+
 /// Whether `lead` (the sentence before a match) holds a denying subject
 /// ("nobody", "no one", "niemand", "keiner") followed by a verb of saying or
-/// believing.
+/// believing, and no later conjunction opens a new clause that the denial
+/// does not govern.
 pub(super) fn denied_by_subject(lead: &str) -> bool {
     let mut subject = false;
+    let mut denied = false;
     let mut previous_no = false;
-    for word in lead
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
-    {
-        if subject && is_one_of(BELIEF_VERBS, word) {
-            return true;
+    for (clause, part) in lead.split(',').enumerate() {
+        for (i, word) in part
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .enumerate()
+        {
+            if is_one_of(ADVERSATIVES, word)
+                || (clause > 0 && i == 0 && is_one_of(COORDINATORS, word))
+            {
+                subject = false;
+                denied = false;
+            }
+            denied |= subject && is_one_of(BELIEF_VERBS, word);
+            subject |= is_one_of(DENYING_SUBJECTS, word)
+                || (previous_no && word.eq_ignore_ascii_case("one"));
+            previous_no = word.eq_ignore_ascii_case("no");
         }
-        subject |=
-            is_one_of(DENYING_SUBJECTS, word) || (previous_no && word.eq_ignore_ascii_case("one"));
-        previous_no = word.eq_ignore_ascii_case("no");
     }
-    false
+    denied
 }
 
 /// Target words of a threat: the addressed person, a third person or a group.
