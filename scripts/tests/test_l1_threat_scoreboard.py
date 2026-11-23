@@ -816,15 +816,47 @@ def test_refresh_renders_baseline_of_head_with_the_commit_and_both_tprs(split, t
 
 def test_refresh_skips_commits_without_detector_scorer_or_gold_change(split, tmp_path, main_tree, capsys):
     tree, first, built = main_tree
+    args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]
+    assert MODULE.main(args) == 0 and len(built) == 1
+    rendered = (tree / MODULE.SCOREBOARD_DIR / "baseline.md").read_text()
+    first = commit_files(tree, {str(MODULE.SCOREBOARD_DIR / "baseline.md"): rendered}, "scoreboard")
     commit_files(tree, {"README.md": "docs only\n"}, "docs")
-    args = ["refresh", "--tree", str(tree), "--since", first, "--dev", str(split), "--cache", str(tmp_path / "c")]
+    args += ["--since", first]
+    capsys.readouterr()
     assert MODULE.main(args) == 0
-    assert "nothing to render" in capsys.readouterr().out and built == []
-    assert not (tree / MODULE.SCOREBOARD_DIR / "baseline.md").exists()
+    assert "nothing to render" in capsys.readouterr().out and len(built) == 1
     for path in ("ark-core/src/lib.rs", "scripts/l1_threat/scoreboard.py", "research/l1-threat/scoreboard/gold-dev.json"):
         commit_files(tree, {path: f"// {path}\n"}, path)
         assert path in MODULE.changed_paths(tree, first, "HEAD")
+    assert MODULE.main(args) == 0 and len(built) == 2
+
+
+def test_refresh_rerenders_after_a_dev_refreeze_or_new_cached_baselines_without_code_change(split, tmp_path,
+                                                                                            main_tree, capsys):
+    tree, first, built = main_tree
+    cache = tmp_path / "bcache"
+    args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c"),
+            "--baseline-cache", str(cache)]
+    assert MODULE.main(args) == 0
+    path = tree / MODULE.SCOREBOARD_DIR / "baseline.md"
+    recorded = MODULE.recorded_inputs(path)
+    assert recorded == MODULE.inputs_fingerprint(MODULE.split_sets(split), cache)
+    since = commit_files(tree, {str(MODULE.SCOREBOARD_DIR / "baseline.md"): path.read_text()}, "scoreboard")
+    args += ["--since", since]
     assert MODULE.main(args) == 0 and len(built) == 1
+    # The dev split is re-frozen with a new set; main's code is unchanged.
+    freeze(split / "generated", [row("gen", 0, ["tool_poisoning"]), row("gen", 1, benign=True, twin_of="gen:0000000"),
+                                 row("gen2", 0, ["memory_poisoning"])], schema=CORPORA.GENERATED_SCHEMA)
+    capsys.readouterr()
+    assert MODULE.main(args) == 0 and len(built) == 2
+    assert "rewrote research/l1-threat/scoreboard/baseline.md" in capsys.readouterr().out
+    assert '"gen2"' in path.read_text() and MODULE.recorded_inputs(path) != recorded
+    # Baselines cached for the new split re-render the baseline column, again without a code change.
+    recorded = MODULE.recorded_inputs(path)
+    cache_baseline(cache, "atr", "v1", MODULE.split_sets(split), 1)
+    assert MODULE.main(args) == 0 and len(built) == 3
+    assert "| 100.0 / 100.0 (atr) |" in path.read_text() and MODULE.recorded_inputs(path) != recorded
+    assert MODULE.main(args) == 0 and len(built) == 3
 
 
 def test_refresh_keeps_a_report_whose_numbers_did_not_change(split, tmp_path, main_tree, capsys):
