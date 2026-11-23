@@ -172,9 +172,11 @@ ScoreMode = Literal["strict", "balanced", "recall"]
 
 
 class L1ModelConfig(TypedDict):
-    """A module's L1 text model: a pinned release; cuts on its logit scale."""
-    bundle_dir: str
-    manifest_sha256: str
+    """A module's L1 text model: a built-in model by name (`builtin`) or a
+    pinned release (`bundle_dir` with `manifest_sha256`); cuts on its logit scale."""
+    builtin: NotRequired[str]
+    bundle_dir: NotRequired[str]
+    manifest_sha256: NotRequired[str]
     detect_threshold: NotRequired[float]
     clear_threshold: NotRequired[float]
     clear_enabled: NotRequired[bool]

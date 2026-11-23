@@ -41,6 +41,11 @@ impl CategoryModel {
         }
     }
 
+    /// Parse a packed fastText-type model (the built-in model form).
+    pub fn from_packed(bytes: &[u8]) -> Result<Self, String> {
+        FastTextModel::from_packed(bytes, TEXT_MODEL).map(Self::FastText)
+    }
+
     /// Model name recorded in `model.json`.
     pub fn name(&self) -> &str {
         match self {
@@ -54,6 +59,14 @@ impl CategoryModel {
         match self {
             Self::TfidfLr(model) => model.thresholds(),
             Self::FastText(model) => model.thresholds(),
+        }
+    }
+
+    /// The cuts calibrated per text language, if the model has any.
+    pub fn language_thresholds(&self) -> &[(String, L1Thresholds)] {
+        match self {
+            Self::TfidfLr(_) => &[],
+            Self::FastText(model) => model.language_thresholds(),
         }
     }
 

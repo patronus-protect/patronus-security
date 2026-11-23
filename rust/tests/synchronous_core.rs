@@ -438,3 +438,30 @@ fn documented_core_and_ark_only_categories_match_the_scanner() {
         );
     }
 }
+
+/// A built-in L1 model named in the cascade runs in Ark as in Core: no
+/// download, the same module decision.
+#[test]
+fn ark_runs_a_builtin_l1_model_like_core() {
+    use patronus_ark_core::cascade::Stage;
+    let text = "Please summarize the meeting notes.";
+    let gates = serde_json::json!({"cascade": {"modules": {
+        "jailbreak": {"l1_model": {"builtin": "jailbreak"}}
+    }}});
+    let categories = vec![SecurityCategory::Jailbreak];
+    let mut core_config = gates.clone();
+    core_config["categories"] = serde_json::to_value(&categories).unwrap();
+    let mut core = Scanner::new(serde_json::from_value(core_config).unwrap()).unwrap();
+    let gateway = SecurityGateway::new(
+        GatewayConfig::new(categories, SecurityLevel::L1)
+            .with_gates(serde_json::from_value(gates).unwrap()),
+    )
+    .unwrap();
+    let direct = core.scan(text).unwrap();
+    let decision = &direct.decision.unwrap()[0];
+    assert_eq!(decision.decided_by, Stage::L1Model);
+    assert_eq!(
+        untimed_decisions(gateway.scan_all(text).decision.as_deref()),
+        untimed_decisions(Some(std::slice::from_ref(decision)))
+    );
+}

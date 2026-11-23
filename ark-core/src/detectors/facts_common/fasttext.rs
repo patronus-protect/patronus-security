@@ -16,6 +16,12 @@
 //! plus `bias[1] - bias[0]` — the positive minus the negative logit. Training
 //! and the Python reference live in `scripts/l1_threat/category_model.py`;
 //! the order of every operation matches it bit for bit.
+//!
+//! The packed form ([`FastTextModel::from_packed`]) stores the folded values
+//! themselves: `ARKFT1\0\0`, a little-endian `u32` header length, a JSON
+//! header (`kind: fasttext_packed`, the folded `bias` and the cuts) and
+//! `buckets` little-endian `f64` values — 8 bytes per bucket instead of the
+//! JSON embeddings, and the same scores bit for bit.
 
 use std::collections::BTreeMap;
 
@@ -29,6 +35,8 @@ use crate::detectors::facts_common::pyjson::py_round;
 use crate::detectors::facts_common::thresholds::L1Thresholds;
 
 const KIND: &str = "fasttext";
+const PACKED_KIND: &str = "fasttext_packed";
+const PACKED_MAGIC: &[u8; 8] = b"ARKFT1\0\0";
 const FNV1A_32_OFFSET: u32 = 0x811c_9dc5;
 
 /// A `kind: fasttext` `model.json`.
@@ -49,6 +57,25 @@ struct ModelFile {
     decision_rule: String,
 }
 
+/// The JSON header of a packed fastText-type model.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PackedHeader {
+    kind: String,
+    format_version: u32,
+    name: String,
+    analyzer_func: String,
+    hash: String,
+    buckets: usize,
+    char_ngram_range: [usize; 2],
+    bias: f64,
+    thresholds: BTreeMap<String, f64>,
+    /// Cuts per text language, calibrated on that language's benign text.
+    #[serde(default)]
+    language_thresholds: BTreeMap<String, BTreeMap<String, f64>>,
+    decision_rule: String,
+}
+
 /// A loaded fastText-type model with the output layer folded into one value
 /// per bucket.
 pub struct FastTextModel {
@@ -57,6 +84,7 @@ pub struct FastTextModel {
     values: Vec<f64>,
     bias: f64,
     thresholds: L1Thresholds,
+    language_thresholds: Vec<(String, L1Thresholds)>,
 }
 
 /// Whether a `model.json` document is of the fastText-type form.
@@ -76,24 +104,14 @@ impl FastTextModel {
                 file.kind, file.format_version
             ));
         }
-        if file.analyzer_func != form.analyzer {
-            return Err(format!(
-                "{label} fastText model must use the {} analyzer",
-                form.analyzer
-            ));
-        }
-        if file.hash != FNV1A_32 || file.decision_rule != "score > threshold" {
-            return Err(format!(
-                "unsupported {label} fastText hash or decision_rule"
-            ));
-        }
-        let [min_n, max_n] = file.char_ngram_range;
         let (buckets, dim) = (file.buckets, file.dim);
-        if min_n == 0
-            || min_n > max_n
-            || buckets == 0
-            || buckets > u32::MAX as usize
-            || dim == 0
+        check_form(
+            form,
+            (&file.analyzer_func, &file.hash, &file.decision_rule),
+            file.char_ngram_range,
+            buckets,
+        )?;
+        if dim == 0
             || Some(file.embeddings.len()) != buckets.checked_mul(dim)
             || file.output.len() != 2 * dim
         {
@@ -116,9 +134,65 @@ impl FastTextModel {
                 &format!("{label} fastText model"),
             )?,
             name: file.name,
-            char_ngrams: (min_n, max_n),
+            char_ngrams: (file.char_ngram_range[0], file.char_ngram_range[1]),
             values,
             bias: file.bias[1] - file.bias[0],
+            language_thresholds: Vec::new(),
+        })
+    }
+
+    /// Parse and validate a packed fastText-type model of the given form
+    /// (see the module docs); it scores exactly as the `model.json` it was
+    /// packed from.
+    pub fn from_packed(bytes: &[u8], form: ModelForm) -> Result<Self, String> {
+        let label = form.label;
+        let invalid = || format!("invalid packed {label} fastText model");
+        let rest = bytes.strip_prefix(PACKED_MAGIC).ok_or_else(invalid)?;
+        let (length, rest) = rest.split_first_chunk::<4>().ok_or_else(invalid)?;
+        let length = u32::from_le_bytes(*length) as usize;
+        if rest.len() < length {
+            return Err(invalid());
+        }
+        let (header, values) = rest.split_at(length);
+        let header: PackedHeader = serde_json::from_slice(header)
+            .map_err(|error| format!("invalid packed {label} fastText model header: {error}"))?;
+        if header.kind != PACKED_KIND || header.format_version != 1 {
+            return Err(format!(
+                "unsupported {label} fastText model kind {} format_version {}",
+                header.kind, header.format_version
+            ));
+        }
+        check_form(
+            form,
+            (&header.analyzer_func, &header.hash, &header.decision_rule),
+            header.char_ngram_range,
+            header.buckets,
+        )?;
+        if Some(values.len()) != header.buckets.checked_mul(8) {
+            return Err(format!(
+                "packed {label} fastText model does not hold one value per bucket"
+            ));
+        }
+        let what = format!("{label} fastText model");
+        let language_thresholds = header
+            .language_thresholds
+            .iter()
+            .map(|(language, cuts)| {
+                L1Thresholds::from_model(cuts, form, &what).map(|cuts| (language.clone(), cuts))
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(Self {
+            thresholds: L1Thresholds::from_model(&header.thresholds, form, &what)?,
+            language_thresholds,
+            name: header.name,
+            char_ngrams: (header.char_ngram_range[0], header.char_ngram_range[1]),
+            values: values
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .map(|value| f64::from_le_bytes(*value))
+                .collect(),
+            bias: header.bias,
         })
     }
 
@@ -130,6 +204,12 @@ impl FastTextModel {
     /// The detect and clear cuts on the decision score.
     pub fn thresholds(&self) -> L1Thresholds {
         self.thresholds
+    }
+
+    /// The cuts calibrated per text language (packed models only); a
+    /// language without its own uses [`Self::thresholds`].
+    pub fn language_thresholds(&self) -> &[(String, L1Thresholds)] {
+        &self.language_thresholds
     }
 
     /// Number of embedding buckets.
@@ -210,6 +290,34 @@ impl FastTextModel {
         });
         counts
     }
+}
+
+/// Refuse a model whose analyzer, hash, decision rule, n-gram range or
+/// bucket count `form` cannot run.
+fn check_form(
+    form: ModelForm,
+    (analyzer, hash, decision_rule): (&str, &str, &str),
+    [min_n, max_n]: [usize; 2],
+    buckets: usize,
+) -> Result<(), String> {
+    let label = form.label;
+    if analyzer != form.analyzer {
+        return Err(format!(
+            "{label} fastText model must use the {} analyzer",
+            form.analyzer
+        ));
+    }
+    if hash != FNV1A_32 || decision_rule != "score > threshold" {
+        return Err(format!(
+            "unsupported {label} fastText hash or decision_rule"
+        ));
+    }
+    if min_n == 0 || min_n > max_n || buckets == 0 || buckets > u32::MAX as usize {
+        return Err(format!(
+            "{label} fastText model shape does not match buckets x dim"
+        ));
+    }
+    Ok(())
 }
 
 /// Visit the FNV-1a hash of every feature of `text` and its tokens, in order;

@@ -42,6 +42,7 @@ import argparse
 import functools
 import json
 import math
+import struct
 import sys
 from collections import Counter
 from pathlib import Path
@@ -77,6 +78,10 @@ BLOCK_THRESHOLD = "0_1pct_fpr"
 TOP_FEATURES = 5
 FASTTEXT_KIND = "fasttext"
 FASTTEXT_FORMAT_VERSION = 1
+# Packed fastText-type form (Rust ``FastTextModel::from_packed``): magic, little-endian u32 header length,
+# JSON header, one little-endian f64 folded value per bucket.
+PACKED_KIND = "fasttext_packed"
+PACKED_MAGIC = b"ARKFT1\0\0"
 
 
 def char_wb_ngrams(text: str, min_n: int, max_n: int) -> Iterable[str]:
@@ -455,6 +460,41 @@ def load_model(document: dict) -> "Model | FastTextModel":
     return FastTextModel(document) if document.get("kind") == FASTTEXT_KIND else Model(document)
 
 
+def pack_fasttext(document: dict) -> bytes:
+    """The packed form of a fastText-type ``model.json`` document: the folded per-bucket values and the
+    bias difference as ``FastTextModel`` computes them, so the packed model scores bit for bit the same. A
+    calibrated model also carries its per-language cuts (``calibration.language_thresholds``)."""
+    model = FastTextModel(document)
+    header = {
+        "kind": PACKED_KIND,
+        "format_version": 1,
+        "name": document["name"],
+        "analyzer_func": document["analyzer_func"],
+        "hash": document["hash"],
+        "buckets": model.buckets,
+        "char_ngram_range": list(model.ngrams),
+        "bias": model.bias,
+        "thresholds": document["thresholds"],
+        "decision_rule": document["decision_rule"],
+    }
+    languages = document.get("calibration", {}).get("language_thresholds")
+    if languages:
+        header["language_thresholds"] = languages
+    encoded = json.dumps(header, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return PACKED_MAGIC + struct.pack("<I", len(encoded)) + encoded + struct.pack(f"<{model.buckets}d", *model.values)
+
+
+def language_safe_thresholds(document: dict) -> dict:
+    """The cuts of a calibrated model that hold the FPR budget in every language with one cut: the
+    highest detect cut (``0_1pct_fpr``) and the lowest clear cut (``1pct_fpr``) among the pooled cut and
+    the per-language cuts of ``calibration.language_thresholds``."""
+    cuts = [document["thresholds"], *document.get("calibration", {}).get("language_thresholds", {}).values()]
+    return {
+        BLOCK_THRESHOLD: max(cut[BLOCK_THRESHOLD] for cut in cuts),
+        ASK_THRESHOLD: min(cut[ASK_THRESHOLD] for cut in cuts),
+    }
+
+
 def fit_fasttext(
     docs: list[np.ndarray],
     labels: np.ndarray,
@@ -647,6 +687,12 @@ def main(argv: list[str] | None = None) -> int:
     score = sub.add_parser("score", help="reference scores of rows with text and facts")
     score.add_argument("--model", type=Path, required=True)
     score.add_argument("--rows", type=Path, required=True)
+    pack = sub.add_parser("pack", help="pack a fastText-type model.json into the built-in model form")
+    pack.add_argument("--model", type=Path, required=True)
+    pack.add_argument("--out", type=Path, required=True)
+    pack.add_argument("--name", help="model name to record (default: the model.json's)")
+    pack.add_argument("--language-safe-cuts", action="store_true",
+                      help="one cut per model that holds the FPR budget in every calibrated language")
     parity = sub.add_parser("parity", help="rewrite the synthetic model and its parity goldens")
     parity.add_argument("--check", action="store_true", help="only check, exit 1 when stale")
     parity.add_argument("--retrain", action="store_true", help="retrain the synthetic model")
@@ -680,6 +726,13 @@ def main(argv: list[str] | None = None) -> int:
         for row in read_rows(args.rows):
             value, top = model.score(row["text"], model.tokens_of(row))
             print(json.dumps({"id": row.get("id"), "score": value, "top": top}, ensure_ascii=False))
+        return 0
+    if args.command == "pack":
+        document = json.loads(args.model.read_text(encoding="utf-8"))
+        document = {**document, "name": args.name or document["name"]}
+        if args.language_safe_cuts:
+            document["thresholds"] = language_safe_thresholds(document)
+        args.out.write_bytes(pack_fasttext(document))
         return 0
     if args.retrain:
         retrain_synthetic_models()

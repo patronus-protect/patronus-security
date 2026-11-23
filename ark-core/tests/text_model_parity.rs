@@ -3,7 +3,9 @@
 //! (`scripts/l1_threat/category_model.py`): per row of
 //! `testdata/model_parity.jsonl` the Rust score of each synthetic model (one
 //! with vocabularies, one hashed, one fastText-type) is bit-identical, the top features are
-//! the same and the answer at the model's cuts (`score > threshold`) is the same.
+//! the same and the answer at the model's cuts (`score > threshold`) is the same,
+//! also for the fastText-type model in the packed form Core ships its built-in
+//! models in.
 use std::path::Path;
 
 use patronus_ark_core::cascade::StageOutcome;
@@ -23,51 +25,68 @@ const MODELS: [(&str, &str); 3] = [
     ("synthetic-text-fasttext", "synthetic_fasttext_model.json"),
 ];
 
-#[test]
-fn rust_scores_match_the_python_reference() {
+fn parity_rows() -> Vec<Value> {
     let rows: Vec<Value> = testdata("model_parity.jsonl")
         .lines()
         .map(|line| serde_json::from_str(line).expect("parity row"))
         .collect();
     assert!(rows.len() >= 5);
+    rows
+}
+
+#[test]
+fn rust_scores_match_the_python_reference() {
+    let rows = parity_rows();
     for (name, file) in MODELS {
         let model =
             CategoryModel::from_json_slice(testdata(file).as_bytes()).expect("synthetic model");
-        assert_eq!(model.name(), name);
-        for row in &rows {
-            let id = &row["id"];
-            let text = row["text"].as_str().expect("text");
-            let facts = TextFacts::from_json(&row["facts"]).expect("facts");
-            let (score, top) = model.score(text, &facts);
-            let expected = &row["models"][name];
-            let want = expected["score"].as_f64().expect("score");
-            assert_eq!(
-                score.to_bits(),
-                want.to_bits(),
-                "{name} {id}: {score} != {want}"
-            );
-            let top: Vec<(&str, f64)> =
-                top.iter().map(|f| (f.feature.as_str(), f.weight)).collect();
-            let want: Vec<(&str, f64)> = expected["top"]
-                .as_array()
-                .expect("top")
-                .iter()
-                .map(|f| {
-                    let feature = f["feature"].as_str().expect("feature");
-                    (feature, f["weight"].as_f64().expect("weight"))
-                })
-                .collect();
-            assert_eq!(top, want, "{name} {id}: top features");
-            let outcome = match model.thresholds().outcome(score) {
-                StageOutcome::Detected => "detected",
-                StageOutcome::Clear => "clear",
-                StageOutcome::Escalate => "escalate",
-            };
-            assert_eq!(
-                outcome,
-                expected["outcome"].as_str().expect("outcome"),
-                "{name} {id}: outcome at the model's cuts"
-            );
-        }
+        assert_parity(name, &model, &rows);
+    }
+}
+
+#[test]
+fn the_packed_fasttext_model_scores_as_the_python_reference() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src/detectors/text/testdata/synthetic_fasttext_model.ftpack");
+    let model = CategoryModel::from_packed(&std::fs::read(path).expect("packed model"))
+        .expect("packed synthetic model");
+    assert_parity("synthetic-text-fasttext", &model, &parity_rows());
+}
+
+fn assert_parity(name: &str, model: &CategoryModel, rows: &[Value]) {
+    assert_eq!(model.name(), name);
+    for row in rows {
+        let id = &row["id"];
+        let text = row["text"].as_str().expect("text");
+        let facts = TextFacts::from_json(&row["facts"]).expect("facts");
+        let (score, top) = model.score(text, &facts);
+        let expected = &row["models"][name];
+        let want = expected["score"].as_f64().expect("score");
+        assert_eq!(
+            score.to_bits(),
+            want.to_bits(),
+            "{name} {id}: {score} != {want}"
+        );
+        let top: Vec<(&str, f64)> = top.iter().map(|f| (f.feature.as_str(), f.weight)).collect();
+        let want: Vec<(&str, f64)> = expected["top"]
+            .as_array()
+            .expect("top")
+            .iter()
+            .map(|f| {
+                let feature = f["feature"].as_str().expect("feature");
+                (feature, f["weight"].as_f64().expect("weight"))
+            })
+            .collect();
+        assert_eq!(top, want, "{name} {id}: top features");
+        let outcome = match model.thresholds().outcome(score) {
+            StageOutcome::Detected => "detected",
+            StageOutcome::Clear => "clear",
+            StageOutcome::Escalate => "escalate",
+        };
+        assert_eq!(
+            outcome,
+            expected["outcome"].as_str().expect("outcome"),
+            "{name} {id}: outcome at the model's cuts"
+        );
     }
 }

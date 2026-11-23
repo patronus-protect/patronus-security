@@ -1,6 +1,6 @@
 {
  "calibration": {
-  "benign_rows": 32003,
+  "benign_rows": 54060,
   "classes": {
    "agent_config_tampering": {
     "benign_scored": 0,
@@ -23,7 +23,7 @@
     "detect": "budget not reachable with the heuristic's scores"
    },
    "jailbreak": {
-    "benign_scored": 1,
+    "benign_scored": 2,
     "clear": "budget not reachable with the heuristic's scores",
     "detect": "budget not reachable with the heuristic's scores"
    },
@@ -63,9 +63,65 @@
   "target_fpr": 0.001
  },
  "scanner": {
-  "max_level": "l1",
   "cascade": {
-   "modules": {}
-  }
+   "modules": {
+    "agent_config_tampering": {
+     "l1_model": {
+      "builtin": "agent_config_tampering"
+     }
+    },
+    "exfiltration": {
+     "l1_model": {
+      "builtin": "exfiltration"
+     }
+    },
+    "harmful_content": {
+     "l1_model": {
+      "builtin": "harmful_content"
+     }
+    },
+    "injection": {
+     "l1_model": {
+      "builtin": "instruction_injection"
+     }
+    },
+    "jailbreak": {
+     "l1_model": {
+      "builtin": "jailbreak"
+     }
+    },
+    "memory_poisoning": {
+     "l1_model": {
+      "builtin": "memory_poisoning"
+     }
+    },
+    "prompt_extraction": {
+     "l1_model": {
+      "builtin": "prompt_extraction"
+     }
+    },
+    "resource_exhaustion": {
+     "l1_model": {
+      "builtin": "resource_exhaustion"
+     }
+    },
+    "tool_poisoning": {
+     "l1_model": {
+      "builtin": "tool_poisoning"
+     }
+    },
+    "toxic_language": {
+     "l1_model": {
+      "builtin": "toxic_language"
+     }
+    },
+    "unsafe_action": {
+     "l1_model": {
+      "builtin": "unsafe_action"
+     }
+    }
+   }
+  },
+  "max_level": "l1"
  }
 }

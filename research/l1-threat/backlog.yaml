@@ -413,6 +413,7 @@ tasks:
       100 KiB per model, ~256 KiB per model); Rust parity bit-exact; nothing wired into the scan path before
       S13
   - id: S13
+    status: done
     title: Ship the L1 models in Ark Core and hang them into the cascade — the models become package data of ark-core (Rust crate and Python wheel), loaded through Core's model mechanism without download; `cascade.modules.<class>.l1_model` can reference a built-in model by name (opt-in, default behaviour unchanged without a cascade), same config in Ark (Ark uses Core); research/l1-threat/scoreboard/cascade-config.json uses them and cascade.md is re-rendered (L1 heuristic + L1 model, Wolf Edge fp32 as L3 at its published settings in a separate column)
     type: engine
     deps: [S12]

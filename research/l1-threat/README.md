@@ -372,6 +372,16 @@ erzeugt, in DEV noch nicht eingefroren), ohne es 0 / 0. Gleiche Modellform (256 
 Parität unverändert, nichts verdrahtet. Offen: Owner-Befehl für Generator v8 in DEV; die Agenten-Zahlen sind
 synthetisch (zwei Quellen je Sprache); toxic_language und harmful_content brauchen eine zweite offene Quelle.
 
+**Stand S13.** Die elf S12-Modelle liegen als Paketdaten in `patronus-ark-core` (Rust-Crate und Python-Wheel, per
+`include_bytes!`, kein Download): gepackte Form `ark-core/models/l1/<klasse>.ftpack` (gefaltete Bucket-Werte als f64,
+262 KB je Modell statt 11 MB `model.json`, 2,8 MB für alle elf; bitgleich, `category_model.py pack`). Die Kaskade nennt sie
+mit `cascade.modules.<kategorie>.l1_model: {"builtin": "<klasse>"}` (opt-in; ohne Kaskade unverändert, ARK nimmt dieselbe
+Config). Ein Modell trägt DE/EN-Schnitte und wendet den Schnitt der erkannten Sprache an, sonst den strengsten; die
+Schnitte sind je erkannter Sprache kalibriert und halten 0,1 % FPR auch je Label-Sprache (`routed_detect_cuts`).
+`scoreboard/cascade-config.json` nennt alle elf, `cascade.md` neu gerendert; Zahlen je Klasse und Sprache auf der
+S12-Kalibrierhälfte in [`scoreboard/builtin-models.md`](scoreboard/builtin-models.md); jede Klasse ≤ 0,1 % FPR in DE
+und EN (agent_config_tampering DE 0,13 % → 0,09 %). Offen: Wolf-Edge-fp32-Spalte in `cascade.md` nicht gerendert (Wolf-Bundle auf dem Host nicht vorbereitet).
+
 **Stand TP02.** Erste Ablations-Entscheidung: `tool_poisoning` behält `B0` (Punkte-Regeln mit
 Klauselkontext, kein gelerntes Modell); Zahlen und Regel-Ergänzungen in
 [`categories/tool_poisoning.md` §14](categories/tool_poisoning.md#14-stand-tp02-2026-11-14-punkte-und-ablations-entscheidung).
