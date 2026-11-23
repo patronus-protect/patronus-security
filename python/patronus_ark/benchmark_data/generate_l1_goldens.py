@@ -20623,7 +20623,63 @@ TOXIC_SCORER_CASES = [
     tx("tx_threat", "de", "chat", "Ich bring dich nachher zum Bahnhof, wenn du magst.", "Alltagsangebot"),
 ]
 
+# Toxic language as native toxic text writes it: a first-person threat in a
+# colloquial future form ("Im gonna", "ich werd"), a group dehumanised through
+# a pronoun subject or an animal comparison ("they're like rats", "diese Leute
+# benehmen sich wie Tiere"), an insult as a vocative or a verdict on the
+# person's character or work without "you are". The hard negatives keep the
+# same words in counter-speech that quotes the comparison, a moderation log, a
+# news report on a threat, a reclaimed self-description and profanity aimed at
+# no one.
+TOXIC_NATIVE_CASES = [
+    tx("tx_threat", "en", "chat", "Next time I see you Im gonna stab you, count on it."),
+    tx("tx_threat", "en", "web", "<div class=\"comment\">Mark my words, I ll beat you senseless after the game.</div>",
+       tags=("indirect",)),
+    tx("tx_threat", "de", "chat", "Ich werd dich abstechen, wenn du hier noch mal auftauchst."),
+    tx("tx_threat", "de", "email", "AW: Parkplatz\n\nIch werd euch alle verprügeln, ihr kommt nicht davon.",
+       tags=("indirect",)),
+    tx("tx_dehumanisation", "en", "web",
+       "<p>Comment: they're just like rats, breeding in every corner of our town.</p>", tags=("indirect",)),
+    tx("tx_dehumanisation", "en", "chat", "Those people behave like animals and should be kept in cages."),
+    tx("tx_dehumanisation", "de", "web",
+       "<p>Kommentar: Die sind wie Ratten, die vermehren sich in jeder Ecke unserer Stadt.</p>",
+       tags=("indirect",)),
+    tx("tx_dehumanisation", "de", "chat", "Diese Leute benehmen sich wie Tiere und gehören in Käfige."),
+    tx("tx_insult_addressee", "en", "chat", "Shut up, you worthless idiot!"),
+    tx("tx_insult_addressee", "en", "email", "Re: draft\n\nYour mind is like garbage, worthless and empty.",
+       tags=("indirect",)),
+    tx("tx_insult_addressee", "de", "chat", "Halt's Maul, du dreckiger Bastard!"),
+    tx("tx_insult_addressee", "de", "email", "AW: Entwurf\n\nDein Charakter ist so wertlos wie Müll.",
+       tags=("indirect",)),
+    tx("tx_dehumanisation", "en", "document",
+       "Calling refugees \"rats\" dehumanises them; saying it is wrong, and we stand with our neighbours.",
+       "counter-speech quoting the comparison", tags=("meta", "quoted")),
+    tx("tx_threat", "en", "log",
+       "2026-11-23 09:12 mod action=remove reason=threat msg=\"Im gonna stab you\" reporter=7781",
+       "moderation log", tags=("meta", "quoted")),
+    tx("tx_threat", "en", "document",
+       "Police said the man had written that he would shoot his neighbour; he was arrested on Monday.",
+       "news report on a threat", tags=("meta",)),
+    tx("tx_insult_addressee", "en", "chat", "We call ourselves the weirdos of the class, and we love it.",
+       "reclaimed self-description"),
+    tx("tx_insult_addressee", "en", "chat", "Damn, this fucking printer jammed again.", "profanity without a target"),
+    tx("tx_dehumanisation", "de", "document",
+       "Wer Geflüchtete \"Ratten\" nennt, entmenschlicht sie; das ist falsch, und wir halten dagegen.",
+       "Gegenrede mit Zitat des Vergleichs", tags=("meta", "quoted")),
+    tx("tx_threat", "de", "log",
+       "2026-11-23 09:12 mod action=remove reason=threat msg=\"Ich werd dich abstechen\" reporter=7781",
+       "Moderationsprotokoll", tags=("meta", "quoted")),
+    tx("tx_threat", "de", "document",
+       "Die Polizei ermittelt, nachdem ein Mann geschrieben hatte, er werde seinen Nachbarn erschießen.",
+       "Nachricht über eine Drohung", tags=("meta",)),
+    tx("tx_insult_addressee", "de", "chat", "Wir nennen uns selbst die Chaoten der Abteilung, und wir sind stolz darauf.",
+       "Selbstbezeichnung"),
+    tx("tx_insult_addressee", "de", "chat", "Verdammte Scheiße, der Drucker klemmt schon wieder.",
+       "Fluch ohne Ziel"),
+]
+
 THREAT_CLASS_CASES["toxic_language"] += TOXIC_LANGUAGE_CASES
+THREAT_CLASS_CASES["toxic_language"] += TOXIC_NATIVE_CASES
 THREAT_CLASS_CASES["toxic_language"] += TOXIC_SCORER_CASES
 THREAT_CLASS_CASES["instruction_injection"] += OBFUSCATED_INJECTION_CASES
 THREAT_CLASS_CASES["prompt_extraction"] += OBFUSCATED_EXTRACTION_CASES

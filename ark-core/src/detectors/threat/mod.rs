@@ -3528,7 +3528,7 @@ mod tests {
             .iter()
             .filter(|r| r.category == SecurityCategory::ToxicLanguage)
             .collect();
-        assert_eq!(toxic.len(), 5);
+        assert_eq!(toxic.len(), 7);
         for rule in toxic {
             assert!(!rule.anchor_gate.is_unconditional(), "{}", rule.rule.id);
         }
@@ -3640,6 +3640,60 @@ mod tests {
             "Bring yourself a chair.",
             "Ich bring dich auf den neuesten Stand.",
             "Häng dich um zehn an den Call.",
+        ] {
+            assert!(toxic_rules(text).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn toxic_native_forms_threat_dehumanise_and_insult_without_a_copula() {
+        for (text, rule) in [
+            // first-person threat in a colloquial future form
+            (
+                "Next time I see you Im gonna stab you.",
+                "ark.threat.tx_threat",
+            ),
+            ("I ll beat you senseless.", "ark.threat.tx_threat"),
+            ("Ich werd dich abstechen.", "ark.threat.tx_threat"),
+            // a group dehumanised through a pronoun subject or a comparison
+            (
+                "They're just like rats, breeding everywhere.",
+                "ark.threat.tx_dehumanisation",
+            ),
+            (
+                "Those people behave like animals.",
+                "ark.threat.tx_dehumanisation",
+            ),
+            (
+                "Diese Leute benehmen sich wie Tiere.",
+                "ark.threat.tx_dehumanisation",
+            ),
+            // a vocative insult and a verdict on the person or their work
+            ("Shut up, you worthless idiot!", "ark.threat.tx_insult_vocative"),
+            ("Halt's Maul, du dreckiger Bastard!", "ark.threat.tx_insult_vocative"),
+            (
+                "Your mind is like garbage, worthless and empty.",
+                "ark.threat.tx_insult_verdict",
+            ),
+            (
+                "Dein Charakter ist so wertlos wie Müll.",
+                "ark.threat.tx_insult_verdict",
+            ),
+            (
+                "Du bist schlimmer als Tiere.",
+                "ark.threat.tx_insult_addressee",
+            ),
+        ] {
+            assert_eq!(toxic_rules(text), [rule], "{text}");
+        }
+        for text in [
+            // animals, no people; a question, not a vocative; profanity without a target
+            "These insects are pests in the garden.",
+            "Diese Tiere sind Insekten.",
+            "Do you think it's dumb?",
+            "Damn, this fucking printer jammed again.",
+            "Verdammte Scheiße, der Drucker klemmt schon wieder.",
+            "Your dog is a friendly animal.",
         ] {
             assert!(toxic_rules(text).is_empty(), "{text}");
         }
