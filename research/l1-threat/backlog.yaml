@@ -782,6 +782,7 @@ tasks:
       zero_width and unicode_tags and no obfuscation lower; dev TPR@0.1% of exfiltration and unsafe_action
       on obfuscation_slices up at 0 hard-benign FP; L1 100 KiB p95 within +5 %
   - id: T30
+    status: done
     title: "toxic_language on native toxic text: DynaHate 13 of 752 (dehumanisation 11/454, threats 2/298) and XSafety-DE insults 7 of 152 — first-person future threats against a person or group, dehumanising animal/vermin comparisons of a group, insults as comparison or character verdict without the copula pattern; mine the hashed lexicon from the train half of the now scored native sets (TX01 is still the hand seed) and re-run the TX02 choice with native positives"
     type: recall-fix
     deps: [TX02, T22]
