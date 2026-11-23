@@ -555,7 +555,7 @@ def test_calibrate_reads_each_language_cut_off_the_benign_rows_core_detects_in_t
         labelled = [score[r["id"]] for r in rows if r["benign"] and r["language"] == language]
         cell = report["per_language"][language]
         assert cell["negatives"] == len(benign) != len(labelled)
-        assert cell["thresholds"]["0_1pct_fpr"] == MODULE.MODEL.fpr_cut(benign, 0.1)
+        assert cell["thresholds"]["0_1pct_fpr"] >= MODULE.MODEL.fpr_cut(benign, 0.1)
         assert cell["fp"] == sum(s > cell["thresholds"]["0_1pct_fpr"] for s in benign)
         assert cell["fpr"] <= 0.1
     # The English cut covers the German rows Core routes to it.
@@ -566,8 +566,30 @@ def test_calibrate_reads_each_language_cut_off_the_benign_rows_core_detects_in_t
     for language in ("de", "en"):
         german = [r for r in rows if r["benign"] and r["language"] == language]
         fp = sum(score[r["id"]] > own[r["facts"]["language"]]["0_1pct_fpr"] for r in german)
-        assert report["routed"][language]["fp"] == fp
+        assert report["routed"][language]["fp"] == fp <= int(0.1 * len(german))
         assert report["routed"][language]["negatives"] == len(german)
+
+
+def test_routed_detect_cuts_rise_until_every_labelled_language_holds_the_budget():
+    def benign(rid, score, label, detected):
+        r = row(rid, "x", benign=True, language=label)
+        r["facts"]["language"] = detected
+        return r, score
+
+    pairs = ([benign(f"d{i}", i / 10, "de", "de") for i in range(10)]
+             + [benign(f"e{i}", i / 10, "en", "en") for i in range(10)]
+             # German text Core detects as English: it shares the English cut.
+             + [benign("m0", 5.0, "de", "en"), benign("m1", 6.0, "de", "en")])
+    cuts = MODULE.routed_detect_cuts(pairs, 0.1)
+    # Per detected language the English cut sits at 0.1 of its 12 benign rows (one above it) ...
+    assert cuts["en"] == 5.0
+    # ... the German cut alone (0.8) would leave German two false positives (0.9 and 6.0) where 12 rows allow
+    # one, so it rises to its lowest false positive.
+    assert cuts["de"] == 0.9
+    assert cuts[None] == 0.9
+    for language in ("de", "en"):
+        rows = [(r, sc) for r, sc in pairs if r["language"] == language]
+        assert sum(sc > cuts[r["facts"]["language"]] for r, sc in rows) <= int(0.1 * len(rows))
 
 
 def test_detections_split_by_the_given_language_and_take_a_cut_per_row():

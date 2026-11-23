@@ -54,8 +54,9 @@ alone (``language_thresholds`` in ``calibration``), the TPR and FPR at its own d
 source and its TPR per positive source (generator and template family, else the set), the TPR and FPR at its own
 clear cut, and next to it the rules-only number (a rule finding of the class, ``R``) on the same rows. A row's
 language here is the one Core detects in its text (the facts' ``language``), the key Core picks the cut by, not
-its label; ``routed`` gives the TPR and FPR per labelled language with each row at Core's cut (its detected
-language's, else the strictest).
+its label; a detect cut rises above its language's FPR cut where that keeps a labelled language within the budget
+(``routed_detect_cuts``), and ``routed`` gives the TPR and FPR per labelled language with each row at Core's cut
+(its detected language's, else the strictest).
 ``--oversample-de N`` repeats every German train positive ``N`` times. ``--baseline-rows`` (some of the
 ``--rows`` files) also trains a baseline, without oversampling, on the candidate's train rows from those files
 alone (the candidate's split, not one of their own) and calibrates it on the candidate's calibration rows, so a
@@ -483,10 +484,34 @@ def _detections(scores: list[tuple[dict, int, float]], cut: float | Callable[[di
     return out
 
 
-def cuts(benign: list[float], target_fpr: float, clear_fpr: float) -> dict[str, float]:
-    """The detect cut at ``target_fpr`` and the clear cut at ``clear_fpr`` (never above detect) of benign scores."""
-    detect = MODEL.fpr_cut(benign, target_fpr)
-    return {MODEL.ASK_THRESHOLD: min(MODEL.fpr_cut(benign, clear_fpr), detect), MODEL.BLOCK_THRESHOLD: detect}
+def routed_detect_cuts(benign: list[tuple[dict, float]], target_fpr: float) -> dict[str | None, float]:
+    """The detect cuts Core routes benign ``(row, score)`` pairs to: per detected language (``de``, ``en``) at
+    ``target_fpr`` of its benign rows, ``None`` for every other text (the strictest of its pooled cut and the
+    language cuts). Core picks the cut by the detected language, the FPR budget holds per labelled language too:
+    while a labelled language has more false positives than ``target_fpr`` of its rows allows, the cut its
+    lowest-scoring false positive went to rises to that score."""
+    detect: dict[str | None, float] = {None: MODEL.fpr_cut([score for _, score in benign], target_fpr)}
+    for language in LANGUAGES[1:]:
+        own = [score for row, score in benign if detected_language(row) == language]
+        if own:
+            detect[language] = MODEL.fpr_cut(own, target_fpr)
+
+    def route(row: dict) -> str | None:
+        return detected_language(row) if detected_language(row) in detect else None
+
+    for language in LANGUAGES[1:]:
+        labelled_rows = [(row, score) for row, score in benign if row.get("language") == language]
+        allowed = math.floor(target_fpr * len(labelled_rows))
+        while True:
+            strict = max(detect.values())
+            over = sorted(((score, route(row)) for row, score in labelled_rows
+                           if score > (strict if route(row) is None else detect[route(row)])), key=lambda hit: hit[0])
+            if len(over) <= allowed:
+                break
+            # A raised cut only removes false positives, also those of the other labelled language.
+            score, key = over[0]
+            detect[key] = score
+    return detect
 
 
 def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[dict], list[str]],
@@ -504,15 +529,18 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
     benign = [score for _, label, score in calibration if not label]
     if not benign:
         raise ValueError(f"{cls}: no benign rows to calibrate on")
-    thresholds = cuts(benign, target_fpr, clear_fpr)
-    detect, clear = thresholds[MODEL.BLOCK_THRESHOLD], thresholds[MODEL.ASK_THRESHOLD]
+    routed_detect = routed_detect_cuts([(row, score) for row, label, score in calibration if not label], target_fpr)
+    detect = routed_detect[None]
+    thresholds = {MODEL.ASK_THRESHOLD: min(MODEL.fpr_cut(benign, clear_fpr), detect), MODEL.BLOCK_THRESHOLD: detect}
+    clear = thresholds[MODEL.ASK_THRESHOLD]
     per_language: dict[str, Any] = {}
     for language in LANGUAGES[1:]:
         chosen = [entry for entry in calibration if detected_language(entry[0]) == language]
         own = [score for _, label, score in chosen if not label]
         if not own:
             continue
-        language_cuts = cuts(own, target_fpr, clear_fpr)
+        language_cuts = {MODEL.ASK_THRESHOLD: min(MODEL.fpr_cut(own, clear_fpr), routed_detect[language]),
+                         MODEL.BLOCK_THRESHOLD: routed_detect[language]}
         detections = _detections(chosen, language_cuts[MODEL.BLOCK_THRESHOLD], language_of=detected_language)
         per_language[language] = {"thresholds": language_cuts, **detections[language],
                                   "clear": _detections(chosen, language_cuts[MODEL.ASK_THRESHOLD],
