@@ -544,7 +544,15 @@ Runners) zeigt je Klasse und Sprache beide TPRs, Base -> Head mit KI. Der Holdou
 Gate-Bericht nur als Urteil mit den Namen fehlschlagender Prüfungen. Latenz bleibt beim Runner-Schritt
 `latency_ab`. Aktueller Stand von main: [`scoreboard/baseline.md`](scoreboard/baseline.md) mit der besten Heuristik- und der
 besten Referenzzeile je Zelle (TPR@1 % / 0,1 %, nur Baselines, die die Klasse bewerten); Baselines ohne
-vollständigen Dev-Cache stehen dort mit Namen und Grund.
+vollständigen Dev-Cache stehen dort mit Namen und Grund. Stand 2026-11-23 (T22, Korpus-Generation 23): der Cache
+`~/.cache/ark-l1-threat/baselines` hat die sieben Heuristik-Zeilen und Prompt Guard 2 22M für alle 31 Sätze von
+`DEV` (`train_dev`, `report`, `generated`, `translated`); 22M allein brauchte rund 4 CPU-Stunden. Prompt Guard 2
+86M und ProtectAI v2 fehlen: sie sind ein Vielfaches teurer als 22M und passen nicht in das 90-Minuten-Budget
+einer Runde. Nachfüllen außerhalb einer Runde (Owner, auf der VPS, je Modell mehrere Stunden):
+`~/ark-threat/baselines-venv/bin/python scripts/l1_threat/run_baselines.py run --corpus DEV/train_dev
+--corpus DEV/report --corpus DEV/generated --corpus DEV/translated --cache ~/.cache/ark-l1-threat/baselines
+--models ~/ark-threat/baselines/models --baseline prompt_guard_2_86m --baseline protectai_v2`; der Refresh
+rendert `baseline.md` danach ohne Code-Änderung neu (neue Cache-Einträge ändern den Eingabe-Fingerabdruck).
 
 **Scoreboard von main nach jedem Merge (E09).** Damit jede Klasse eine aktuelle Zahl hat statt einer Base je PR,
 rendert `scoreboard.py refresh` in einem Checkout von main `scoreboard/baseline.md` (L1-Kaskade, mit den
