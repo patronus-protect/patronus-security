@@ -693,6 +693,7 @@ tasks:
   # TRIAGE 2026-W48: generation-23 dev split — baseline column, rule transfer to the second generator family,
   # secret extraction, jailbreak personas and spoofed headers, decoded views for all classes, native toxic text.
   - id: T22
+    status: done
     title: "Dev baseline column for the generation-23 split: every baseline lacks the eleven new or changed dev sets (agent_scenarios, carrier_insertion, class_templates, dynahate, massive_de/en, obfuscation_slices, runner_translations_de, simple_safety_tests, xl_safetybench, xsafety_de), so baseline.md shows no baseline at all; fill the cache and re-render baseline.md and cascade.md (both still from 4dcaed70 on the old split)"
     type: eval-infra
     deps: [T01, E09]
