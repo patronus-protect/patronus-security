@@ -100,3 +100,8 @@ odd first byte, the half the lexicon was not mined from):
 No benign row carries a `toxic_language` flag, so TPR@0.1 % FPR equals the flag rate. Open in DynaHate: imperative
 and passive threats against a group ("just kill the …", "… should be euthanised", "execute all …"), slurs as the
 group term (no `slur` family yet), dehumanisation without a copula or comparison ("the average … gets …").
+
+Latency A/B (release `threat_cascade`, all eleven classes in one scan, 10 × 100 KiB `germanquad` windows, 3 runs
+each, interleaved): L1 median 155 → 158 ms, p95 265 → 263 ms per window — within the run-to-run spread
+(143–169 ms). The new checks run only on a regex match of a toxic rule; the anchor gates of the two new rules
+read existing and added `toxic.addressee` words.
