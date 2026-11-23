@@ -331,7 +331,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   dehumanising and violence words taken from openly licensed German and English hate-speech and
   insult data. Animal words said of animals ("these insects are pests"), a question ("do you think
   it's dumb?"), profanity without a target and the counter-speech, moderation and news contexts
-  that already stayed quiet do not report.
+  that already stayed quiet do not report. These new forms and the added words report at the lowest
+  accepted score, so a `toxic_language` score above it still comes only from the earlier forms and
+  words, and a threshold set above the acceptance score keeps its earlier results.
 - **Detection change:** (`toxic_language`) a threat reports only when its violence verb has the
   person as object ("I will kill you", "ich werde dich umbringen"), not when the verb has another
   object ("I will help you kill the process"); harassment reports only its full phrases ("bring

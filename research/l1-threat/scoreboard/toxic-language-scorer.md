@@ -105,3 +105,20 @@ Latency A/B (release `threat_cascade`, all eleven classes in one scan, 10 × 100
 each, interleaved): L1 median 155 → 158 ms, p95 265 → 263 ms per window — within the run-to-run spread
 (143–169 ms). The new checks run only on a regex match of a toxic rule; the anchor gates of the two new rules
 read existing and added `toxic.addressee` words.
+
+### Gate round 2: score tiers (2026-11-23)
+
+The first gate run failed on the holdout: `toxic_language` TPR@0.1 % FPR all 4.13 → 2.48 %, EN 2.78 → 1.85 %.
+The dev pools had no benign `toxic_language` score in either build, so the loss comes from holdout benign rows
+that the new forms or mined terms scored at the established tiers (0.65–0.9): enough of them push the matched
+cut above positives the base rules already found. Fix: a match is *established* only through the base forms
+(`core` capture of the subject or intent, the copula of the dehumanisation rule) and a check that holds on the
+hand seed alone (`origins` of the lexicon, `Terms::Seed`); every other match (vocative, verdict, the wider group
+and pronoun subjects, colloquial intents, mined terms) is capped at the points acceptance score 0.5. The worst
+case on any benign pool is a cut of 0.5, which every base match (≥ 0.55 on dev) still exceeds, so TPR at
+matched FPR cannot fall below base; with a cut of 0 the new matches count as before.
+
+Dev check (release `threat_cascade`, all dev and report rows, 96 092): score tiers of the established matches
+equal the base build row for row (0.55: 2, 0.65: 6, 0.8: 30, 0.9: 11, no row above base); the 98 rows that only
+the new forms or terms find score 0.5; flagged rows unchanged against the first T30 build (147); benign rows
+with a score 0 in both. Latency unchanged (one extra seed lookup per accepted toxic match).
