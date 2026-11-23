@@ -567,6 +567,20 @@
     "negative_de": "Ehrlich, du bist ein toller Kollege."
   },
   {
+    "rule_id": "ark.threat.tx_insult_vocative",
+    "en": "Shut up, you worthless idiot!",
+    "de": "Halt den Mund, du nutzloser Trottel!",
+    "negative_en": "Shut up, you know I love you!",
+    "negative_de": "Sag mal, du weißt doch, dass ich dich mag!"
+  },
+  {
+    "rule_id": "ark.threat.tx_insult_verdict",
+    "en": "Your report is garbage, just like you.",
+    "de": "Dein Bericht ist wertloser Müll.",
+    "negative_en": "Your report is ready for review.",
+    "negative_de": "Dein Bericht ist fertig zur Durchsicht."
+  },
+  {
     "rule_id": "ark.threat.tx_group_derogation",
     "en": "Refugees are all lazy idiots.",
     "de": "Flüchtlinge sind alle faule Idioten.",
