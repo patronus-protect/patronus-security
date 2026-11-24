@@ -531,11 +531,14 @@ const fn ntdb_package(
         .with_env_override(env_override)
 }
 
-/// The injection NTDB package, in Wolf Small's repository and pin.
+/// The injection NTDB package, in Wolf Small's repository at its own pin: the
+/// package of Wolf Small v2.2 uses a runtime contract Ark's NTDB executor does
+/// not run yet, so L2 stays on the v2.1 package for both L3 strategies (the
+/// dedicated Wolf and the unified Lion Warden).
 pub const NTDB_INJECTION: ModelSpec = ntdb_package(
     WOLF_SMALL.id,
     WOLF_SMALL.repository,
-    WOLF_SMALL.revision,
+    "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07",
     "injection/l2_ntdb/injection_current",
     "l2",
     "PATRONUS_NTDB_INJECTION_DIR",
@@ -643,15 +646,18 @@ mod tests {
                 .all(|other| other.cache_subdir != package.cache_subdir
                     && other.env_override != package.env_override));
         }
+        // The injection package keeps its own (v2.1) pin in Wolf Small's
+        // repository; moving Wolf Small never moves it.
         let wolf = crate::wolf::WolfModel::Small.spec();
         assert_eq!(
-            (
-                NTDB_INJECTION.id,
-                NTDB_INJECTION.repository,
-                NTDB_INJECTION.revision
-            ),
-            (wolf.id, wolf.repository, wolf.revision)
+            (NTDB_INJECTION.id, NTDB_INJECTION.repository),
+            (wolf.id, wolf.repository)
         );
+        assert_eq!(
+            NTDB_INJECTION.revision,
+            "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07"
+        );
+        assert!(wolf.legacy_revisions.contains(&NTDB_INJECTION.revision));
         assert_eq!(GLINER_SMALL.env_override, None);
         assert_eq!(GLINER_SMALL.source_prefix, "");
     }

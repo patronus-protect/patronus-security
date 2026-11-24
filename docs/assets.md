@@ -59,13 +59,13 @@ For mmBERT packages, Patronus Ark generates `tokenizer.mmbpe` locally after the 
 
 ## Wolf Defender Models
 
-Dedicated injection L3 runs one Wolf Defender model. Choose it with the `wolf.model` key (Ark Core, Ark and the Ark API alike); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 package above comes from the Wolf Defender Small pin.
+Dedicated injection L3 runs one Wolf Defender model. Choose it with the `wolf.model` key (Ark Core, Ark and the Ark API alike); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 package above comes from the Wolf Defender Small repository at its own pin (the v2.1 package; both the dedicated Wolf and the unified Lion Warden L3 use it).
 
 | Model | Repository | Revision |
 | --- | --- | --- |
-| `wolf-defender-base` | `patronus-studio/wolf-defender-prompt-injection` | `af0b16a1d40ca246595e48246ccf9f906a52a50e` |
-| `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `2484cc9a13550aa4f2c29b577ff3ef331dc6ba07` |
-| `wolf-defender-edge` | `patronus-studio/wolf-defender-prompt-injection-edge` | `a65713895aafa398e71f151f50d33449b477b4c9` |
+| `wolf-defender-base` | `patronus-studio/wolf-defender-prompt-injection` | `72b4c2481d3eb6fe1e4b65c19fe160e5f5969476` |
+| `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `4f7badfd89d5e4b0690f7376df81f962f6f8df14` |
+| `wolf-defender-edge` | `patronus-studio/wolf-defender-prompt-injection-edge` | `a2fbe150749c769a699e9a8c4654916cfb18e5c2` |
 
 Precision picks the ONNX export: `fp32`, `fp16`, `mixed`, `mixed_x86`, `int8_int4` or `int8_int4_x86`. `auto` uses `PATRONUS_L3_PRECISION` when it is set, otherwise `int8_int4_x86` on `x86_64` and `int8_int4` elsewhere. A cache prepared for another model or revision is replaced on the next preparation.
 

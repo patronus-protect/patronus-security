@@ -197,6 +197,10 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
 
 ### Changed
 
+- **Wolf Defender v2.2:** the `base`, `small` and `edge` prompt-injection models move to their
+  v2.2 release. Window, overlap and threshold stay as before. Caches of the previous release are
+  replaced the next time they are prepared. The injection L2 package stays on its previous
+  version for both L3 strategies.
 - **Wolf Defender in Ark Core uses the model's own settings:** window, overlap and threshold come
   from the model bundle's config, which managed downloads now fetch. Values you set in
   `wolf.threshold` or `wolf.execution` still win. The full Ark gateway keeps its own settings.

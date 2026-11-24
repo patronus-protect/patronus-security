@@ -507,6 +507,37 @@ mod tests {
     };
 
     #[test]
+    fn injection_l2_package_keeps_its_own_pin_under_both_l3_strategies() {
+        // The dedicated Wolf and the unified Lion Warden L3 read the same
+        // injection package, pinned apart from the Wolf Small model: moving
+        // Wolf Small (or its repository's newer L2 package) never moves L2.
+        let wolf_small = patronus_ark_core::wolf::WolfModel::Small.spec();
+        for strategy in [crate::L3Strategy::Dedicated, crate::L3Strategy::Multi] {
+            let mut execution = ScanExecution::new(SecurityLevel::L3);
+            execution.set_l3_strategy(strategy);
+            let configs =
+                ntdb_l2_model_configs_for_category(&execution, SecurityCategory::Injection);
+            let [config] = configs.as_slice() else {
+                panic!("{strategy:?}: one injection L2 package expected, got {configs:?}");
+            };
+            assert_eq!(config.package, specs::NTDB_INJECTION.spec, "{strategy:?}");
+            assert_eq!(
+                (config.package.repository, config.package.revision),
+                (
+                    wolf_small.repository,
+                    "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07"
+                ),
+                "{strategy:?}"
+            );
+            assert_ne!(config.package.revision, wolf_small.revision, "{strategy:?}");
+            assert_eq!(
+                config.package.cache_subdir,
+                "injection/l2_ntdb/injection_current"
+            );
+        }
+    }
+
+    #[test]
     fn tool_tags_uses_each_property_aggregators_threshold_pipeline() {
         let decision = NtdbDecision {
             model_id: "tool_tags".to_string(),

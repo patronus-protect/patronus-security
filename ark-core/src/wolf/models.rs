@@ -63,24 +63,27 @@ pub const WOLF_MODELS: [WolfModelSpec; 3] = [
         model: WolfModel::Base,
         id: "wolf-defender-base",
         repository: "patronus-studio/wolf-defender-prompt-injection",
-        revision: "af0b16a1d40ca246595e48246ccf9f906a52a50e",
-        legacy_revisions: &[],
+        revision: "72b4c2481d3eb6fe1e4b65c19fe160e5f5969476",
+        legacy_revisions: &["af0b16a1d40ca246595e48246ccf9f906a52a50e"],
         graphs: BASE_SMALL_GRAPHS,
     },
     WolfModelSpec {
         model: WolfModel::Small,
         id: "wolf-defender-small",
         repository: "patronus-studio/wolf-defender-prompt-injection-small",
-        revision: "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07",
-        legacy_revisions: &["142fadc5474163d4c483cb761d5a6b02e3aa1741"],
+        revision: "4f7badfd89d5e4b0690f7376df81f962f6f8df14",
+        legacy_revisions: &[
+            "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07",
+            "142fadc5474163d4c483cb761d5a6b02e3aa1741",
+        ],
         graphs: BASE_SMALL_GRAPHS,
     },
     WolfModelSpec {
         model: WolfModel::Edge,
         id: "wolf-defender-edge",
         repository: "patronus-studio/wolf-defender-prompt-injection-edge",
-        revision: "a65713895aafa398e71f151f50d33449b477b4c9",
-        legacy_revisions: &[],
+        revision: "a2fbe150749c769a699e9a8c4654916cfb18e5c2",
+        legacy_revisions: &["a65713895aafa398e71f151f50d33449b477b4c9"],
         graphs: [
             "onnx/onnx_fp32/model.onnx",
             "onnx/onnx_fp16/model_fp16.onnx",
@@ -218,10 +221,16 @@ mod tests {
         for model in WolfModel::ALL {
             assert_eq!(WolfModel::of_revision(model.spec().revision), Some(model));
         }
-        assert_eq!(
-            WolfModel::of_revision("142fadc5474163d4c483cb761d5a6b02e3aa1741"),
-            Some(WolfModel::Small)
-        );
+        // A cache of an earlier pin still names its model, so a bundle of
+        // one size is never served as another after an upgrade.
+        for model in WolfModel::ALL {
+            let spec = model.spec();
+            assert!(!spec.legacy_revisions.is_empty(), "{}", spec.id);
+            for &legacy in spec.legacy_revisions {
+                assert_ne!(legacy, spec.revision);
+                assert_eq!(WolfModel::of_revision(legacy), Some(model));
+            }
+        }
         assert_eq!(WolfModel::of_revision("local"), None);
     }
 
