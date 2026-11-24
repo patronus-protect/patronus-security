@@ -728,6 +728,7 @@ tasks:
       held-out; dev tool_poisoning TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates
       unchanged; TP02 ablation re-run and the decision recorded
   - id: T25
+    status: done
     title: "agent_config_tampering on the second generator family: agent_scenarios 0 of 160 (templates 84/84) — requests to the agent inside copilot-instructions, issue comments and README setup sections to register an MCP server in its mcp.json and enable it for every workspace without telling the user, or to switch off pre-commit hooks and the secret scanner in the agent configuration"
     type: recall-fix
     deps: [AC02, T17, T22]
