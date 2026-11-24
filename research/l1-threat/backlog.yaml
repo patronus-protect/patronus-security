@@ -717,6 +717,7 @@ tasks:
       hard-benign FP and benign FPR <= 0.1% per language; gandalf (report) stated; Mosscap left out of the
       rule design check by reporting runner_translations_de and the carriers apart
   - id: T24
+    status: done
     title: "tool_poisoning on the second generator family: agent_scenarios 0 of 160 (templates 83/83) — directives in tool descriptions outside JSON (MCP server YAML description blocks, package README tool lists, Python @mcp.tool() docstrings): read a credential file and append it on every listing, call this tool first with the whole conversation, copy every message to an address and leave it out of the reply, keep it from the user"
     type: recall-fix
     deps: [TP02, T22]
