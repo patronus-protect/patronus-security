@@ -104,9 +104,11 @@ def test_shared_wolf_metadata_is_resolved_in_asset_docs():
     assets = GENERATE_DOCS.parse_assets()
     # Core prepares Wolf L3 per selected model; the manifest lists no injection L3 files.
     assert not [asset for asset in assets if asset.category == "Injection" and asset.level == "L3"]
-    package = next(p for p in GENERATE_DOCS.parse_ntdb_packages() if p.category == "Injection")
-    assert package.repo == "patronus-studio/wolf-defender-prompt-injection-small"
-    assert package.revision == "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07"
+    packages = {p.destination_path: p for p in GENERATE_DOCS.parse_ntdb_packages() if p.category == "Injection"}
+    assert {p.repo for p in packages.values()} == {"patronus-studio/wolf-defender-prompt-injection-small"}
+    # Wolf's package follows Wolf Small's pin; Lion's keeps the v2.1 one.
+    assert packages["injection/l2_ntdb/injection_current"].revision == "e3749b44a0f85268347cdfb6818f4ef39e8ff203"
+    assert packages["injection/l2_ntdb/injection_lion"].revision == "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07"
     models = "\n".join(GENERATE_DOCS.wolf_model_lines())
     for repo in ("wolf-defender-prompt-injection", "wolf-defender-prompt-injection-small", "wolf-defender-prompt-injection-edge"):
         assert f"`patronus-studio/{repo}`" in models

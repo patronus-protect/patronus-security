@@ -239,7 +239,10 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
             .iter()
             .map(|asset| asset.spec.cache_subdir)
             .collect::<Vec<_>>(),
-        vec!["injection/l2_ntdb/injection_current"]
+        vec![
+            "injection/l2_ntdb/injection_current",
+            "injection/l2_ntdb/injection_lion"
+        ]
     );
     assert_eq!(
         ntdb_packages(SecurityCategory::SensitiveDocument)
@@ -376,12 +379,15 @@ mod asset_downloads {
     #[test]
     fn ntdb_l2_package_specs_cover_available_models() {
         let injection = ntdb_packages(SecurityCategory::Injection);
-        assert_eq!(injection.len(), 1);
-        assert_eq!(injection[0].spec.id, "wolf-defender-small");
-        assert_eq!(injection[0].spec.source_prefix, "l2");
         assert_eq!(
-            injection[0].spec.cache_subdir,
-            "injection/l2_ntdb/injection_current"
+            injection
+                .iter()
+                .map(|asset| (asset.spec.id, asset.spec.source_prefix, asset.spec.cache_subdir))
+                .collect::<Vec<_>>(),
+            [
+                ("wolf-defender-small", "l2", "injection/l2_ntdb/injection_current"),
+                ("wolf-defender-small", "l2", "injection/l2_ntdb/injection_lion"),
+            ]
         );
 
         let sensitive = ntdb_packages(SecurityCategory::SensitiveDocument);
@@ -461,6 +467,7 @@ fn ntdb_l2_packages_keep_their_local_export_overrides() {
             .collect::<Vec<_>>(),
         [
             "PATRONUS_NTDB_INJECTION_DIR",
+            "PATRONUS_NTDB_INJECTION_LION_DIR",
             "PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR",
             "PATRONUS_NTDB_TOOL_CLASS_DIR",
             "PATRONUS_NTDB_TOOL_ACTION_DIR",

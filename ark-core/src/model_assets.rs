@@ -5,7 +5,8 @@
 //! fetches the files the caller lists and prepares their generated files in one
 //! [`ModelSpec::prepare`], so a user such as Ark keeps only its model table and
 //! model-specific file lists. The pins of Ark's NTDB packages and of its GLiNER
-//! model are registered here ([`NTDB_INJECTION`], [`GLINER_SMALL`], ...), like
+//! model are registered here ([`NTDB_INJECTION`], [`NTDB_INJECTION_LION`],
+//! [`GLINER_SMALL`], ...), like
 //! Wolf's; Ark keeps their categories, file lists and executors.
 use crate::{warmup::DownloadPolicy, ScanError};
 use std::{
@@ -531,17 +532,27 @@ const fn ntdb_package(
         .with_env_override(env_override)
 }
 
-/// The injection NTDB package, in Wolf Small's repository at its own pin: the
-/// package of Wolf Small v2.2 uses a runtime contract Ark's NTDB executor does
-/// not run yet, so L2 stays on the v2.1 package for both L3 strategies (the
-/// dedicated Wolf and the unified Lion Warden).
+/// The injection NTDB package of the dedicated Wolf L3, from Wolf Small's
+/// repository at Wolf Small's pin.
 pub const NTDB_INJECTION: ModelSpec = ntdb_package(
     WOLF_SMALL.id,
     WOLF_SMALL.repository,
-    "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07",
+    WOLF_SMALL.revision,
     "injection/l2_ntdb/injection_current",
     "l2",
     "PATRONUS_NTDB_INJECTION_DIR",
+);
+
+/// The injection NTDB package of the unified Lion Warden L3: the v2.1 package
+/// of the same repository, which Lion's promotion was tuned on. It keeps this
+/// pin when Wolf Small moves, in its own cache directory.
+pub const NTDB_INJECTION_LION: ModelSpec = ntdb_package(
+    WOLF_SMALL.id,
+    WOLF_SMALL.repository,
+    "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07",
+    "injection/l2_ntdb/injection_lion",
+    "l2",
+    "PATRONUS_NTDB_INJECTION_LION_DIR",
 );
 
 pub const NTDB_SENSITIVE_DOCUMENT: ModelSpec = ntdb_package(
@@ -628,6 +639,7 @@ mod tests {
     fn registered_ntdb_packages_have_their_own_directories_and_overrides() {
         let packages = [
             NTDB_INJECTION,
+            NTDB_INJECTION_LION,
             NTDB_SENSITIVE_DOCUMENT,
             NTDB_TOOL_CLASS,
             NTDB_TOOL_ACTION,
@@ -646,18 +658,18 @@ mod tests {
                 .all(|other| other.cache_subdir != package.cache_subdir
                     && other.env_override != package.env_override));
         }
-        // The injection package keeps its own (v2.1) pin in Wolf Small's
-        // repository; moving Wolf Small never moves it.
+        // Wolf's injection package follows Wolf Small; Lion's keeps the v2.1
+        // package of the same repository.
         let wolf = crate::wolf::WolfModel::Small.spec();
+        for package in [NTDB_INJECTION, NTDB_INJECTION_LION] {
+            assert_eq!((package.id, package.repository), (wolf.id, wolf.repository));
+        }
+        assert_eq!(NTDB_INJECTION.revision, wolf.revision);
         assert_eq!(
-            (NTDB_INJECTION.id, NTDB_INJECTION.repository),
-            (wolf.id, wolf.repository)
-        );
-        assert_eq!(
-            NTDB_INJECTION.revision,
+            NTDB_INJECTION_LION.revision,
             "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07"
         );
-        assert!(wolf.legacy_revisions.contains(&NTDB_INJECTION.revision));
+        assert!(wolf.legacy_revisions.contains(&NTDB_INJECTION_LION.revision));
         assert_eq!(GLINER_SMALL.env_override, None);
         assert_eq!(GLINER_SMALL.source_prefix, "");
     }

@@ -395,7 +395,7 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
     symlink_package_env(
         "PATRONUS_LOCAL_NTDB_SENSITIVE_DOCUMENTS_DIR",
         &model_dir,
-        "sensitive_documents/l2_ntdb/sensitive_documents_current",
+        "sensitive_document/l2_ntdb/sensitive_document_current",
     );
 
     let categories = vec![
@@ -497,8 +497,11 @@ fn hf_injection_promotion_runs_on_the_pinned_assets_under_both_l3_strategies() {
             scanner.runtime_readiness().l3,
             SecurityLevelReadiness::Ready
         ));
-        // One injection package for both strategies, at its own pin.
-        let package = patronus_ark::assets::NTDB_L2_PACKAGE_MANIFEST[0].spec;
+        // Wolf reads the injection package at Wolf Small's pin, Lion its own v2.1 one.
+        let package = match strategy {
+            L3Strategy::Dedicated => patronus_ark_core::model_assets::NTDB_INJECTION,
+            L3Strategy::Multi => patronus_ark_core::model_assets::NTDB_INJECTION_LION,
+        };
         assert_eq!(
             std::fs::read_to_string(package.cache_dir(&dir).join(".patronus-revision")).unwrap(),
             package.revision
@@ -657,12 +660,39 @@ fn symlink_package_env(env_key: &str, model_dir: &Path, relative_dest: &str) {
         .unwrap_or_else(|_| panic!("missing {env_key} for local NTDB model_dir E2E"));
     assert!(
         target.join("manifest.json").exists(),
-        "{env_key} must point at an NTDB v2 package export"
+        "{env_key} must point at an NTDB package export"
     );
+    // The cache directory names the revision pinned at this path, as a
+    // download would, and links each file of the export one by one: package
+    // preparation moves shared files out of the cache directory, which moves
+    // only a link and never a file of the export (a linked directory lost its
+    // embedding matrix that way, 2026-11-24).
+    let package = patronus_ark::assets::NTDB_L2_PACKAGE_MANIFEST
+        .iter()
+        .find(|asset| asset.spec.cache_subdir == relative_dest)
+        .unwrap_or_else(|| panic!("no NTDB package is cached at {relative_dest}"))
+        .spec;
+    let dir = model_dir.join(relative_dest);
+    link_files(&target, &dir);
+    std::fs::write(
+        dir.join(patronus_ark_core::model_assets::REVISION_MARKER),
+        package.revision,
+    )
+    .unwrap();
+}
 
-    let link = model_dir.join(relative_dest);
-    std::fs::create_dir_all(link.parent().unwrap()).unwrap();
-    std::os::unix::fs::symlink(&target, &link).unwrap();
+#[cfg(unix)]
+fn link_files(source: &Path, dest: &Path) {
+    std::fs::create_dir_all(dest).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let (from, to) = (entry.path(), dest.join(entry.file_name()));
+        if from.is_dir() {
+            link_files(&from, &to);
+        } else if entry.file_name() != patronus_ark_core::model_assets::REVISION_MARKER {
+            std::os::unix::fs::symlink(&from, &to).unwrap();
+        }
+    }
 }
 
 #[cfg(unix)]

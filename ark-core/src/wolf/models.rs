@@ -71,8 +71,9 @@ pub const WOLF_MODELS: [WolfModelSpec; 3] = [
         model: WolfModel::Small,
         id: "wolf-defender-small",
         repository: "patronus-studio/wolf-defender-prompt-injection-small",
-        revision: "4f7badfd89d5e4b0690f7376df81f962f6f8df14",
+        revision: "e3749b44a0f85268347cdfb6818f4ef39e8ff203",
         legacy_revisions: &[
+            "4f7badfd89d5e4b0690f7376df81f962f6f8df14",
             "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07",
             "142fadc5474163d4c483cb761d5a6b02e3aa1741",
         ],

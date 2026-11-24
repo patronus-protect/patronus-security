@@ -225,6 +225,12 @@ pub const NTDB_INJECTION: PipelineModelAssetSpec = PipelineModelAssetSpec {
     files: &[NTDB_PACKAGE_MANIFEST],
 };
 
+pub const NTDB_INJECTION_LION: PipelineModelAssetSpec = PipelineModelAssetSpec {
+    category: SecurityCategory::Injection,
+    spec: model_assets::NTDB_INJECTION_LION,
+    files: &[NTDB_PACKAGE_MANIFEST],
+};
+
 pub const NTDB_SENSITIVE_DOCUMENT: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::SensitiveDocument,
     spec: model_assets::NTDB_SENSITIVE_DOCUMENT,
@@ -279,6 +285,7 @@ pub const NTDB_PACKAGE_MANIFEST: &str = "manifest.json";
 /// Every NTDB L2 package; packages live below `<category dir>/l2_ntdb` of the model cache.
 pub const NTDB_L2_PACKAGE_MANIFEST: &[PipelineModelAssetSpec] = &[
     NTDB_INJECTION,
+    NTDB_INJECTION_LION,
     NTDB_SENSITIVE_DOCUMENT,
     NTDB_TOOL_CLASS,
     NTDB_TOOL_ACTION,

@@ -47,7 +47,8 @@ For mmBERT packages, Patronus Ark generates `tokenizer.mmbpe` locally after the 
 
 | Category | Model | Repository | Revision | Source prefix | Cache path |
 | --- | --- | --- | --- | --- | --- |
-| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `2484cc9a13550aa4f2c29b577ff3ef331dc6ba07` | `l2` | `injection/l2_ntdb/injection_current` |
+| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `e3749b44a0f85268347cdfb6818f4ef39e8ff203` | `l2` | `injection/l2_ntdb/injection_current` |
+| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `2484cc9a13550aa4f2c29b577ff3ef331dc6ba07` | `l2` | `injection/l2_ntdb/injection_lion` |
 | SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `efa2b1724946fb2de5a22ce58ef99d7b246c2798` | `l2` | `sensitive_document/l2_ntdb/sensitive_document_current` |
 | ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `de43b66056fc6b41e5f5c170712770ae805a4850` | `l2` | `tool_class/l2_ntdb/tool_class_current` |
 | ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `b2f4a556e7c9b02606589c5c587e096503f274c5` | `l2` | `tool_action/l2_ntdb/tool_action_current` |
@@ -59,12 +60,12 @@ For mmBERT packages, Patronus Ark generates `tokenizer.mmbpe` locally after the 
 
 ## Wolf Defender Models
 
-Dedicated injection L3 runs one Wolf Defender model. Choose it with the `wolf.model` key (Ark Core, Ark and the Ark API alike); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 package above comes from the Wolf Defender Small repository at its own pin (the v2.1 package; both the dedicated Wolf and the unified Lion Warden L3 use it).
+Dedicated injection L3 runs one Wolf Defender model. Choose it with the `wolf.model` key (Ark Core, Ark and the Ark API alike); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 packages above come from the Wolf Defender Small repository: the dedicated Wolf L3 uses the package at Wolf Small's pin (`injection_current`), the unified Lion Warden L3 keeps the v2.1 package (`injection_lion`).
 
 | Model | Repository | Revision |
 | --- | --- | --- |
 | `wolf-defender-base` | `patronus-studio/wolf-defender-prompt-injection` | `72b4c2481d3eb6fe1e4b65c19fe160e5f5969476` |
-| `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `4f7badfd89d5e4b0690f7376df81f962f6f8df14` |
+| `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `e3749b44a0f85268347cdfb6818f4ef39e8ff203` |
 | `wolf-defender-edge` | `patronus-studio/wolf-defender-prompt-injection-edge` | `a2fbe150749c769a699e9a8c4654916cfb18e5c2` |
 
 Precision picks the ONNX export: `fp32`, `fp16`, `mixed`, `mixed_x86`, `int8_int4` or `int8_int4_x86`. `auto` uses `PATRONUS_L3_PRECISION` when it is set, otherwise `int8_int4_x86` on `x86_64` and `int8_int4` elsewhere. A cache prepared for another model or revision is replaced on the next preparation.

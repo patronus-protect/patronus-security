@@ -54,7 +54,11 @@ pub(super) fn classifier_model_configs_for_category(
                     category,
                     model_id: "injection",
                     public_model: specs::WOLF_PIPELINE_MODEL,
-                    package: specs::NTDB_INJECTION.spec,
+                    // Lion keeps the injection package its promotion was tuned on.
+                    package: match execution.l3_strategy() {
+                        crate::L3Strategy::Dedicated => specs::NTDB_INJECTION.spec,
+                        crate::L3Strategy::Multi => specs::NTDB_INJECTION_LION.spec,
+                    },
                     has_l3: true,
                 }]
             } else {
@@ -507,12 +511,25 @@ mod tests {
     };
 
     #[test]
-    fn injection_l2_package_keeps_its_own_pin_under_both_l3_strategies() {
-        // The dedicated Wolf and the unified Lion Warden L3 read the same
-        // injection package, pinned apart from the Wolf Small model: moving
-        // Wolf Small (or its repository's newer L2 package) never moves L2.
+    fn injection_l2_package_follows_wolf_small_and_lion_keeps_v2_1() {
+        // The dedicated Wolf L3 reads the injection package at Wolf Small's
+        // pin; the unified Lion Warden keeps the v2.1 package, in its own
+        // directory, so moving Wolf Small never moves Lion's L2.
         let wolf_small = patronus_ark_core::wolf::WolfModel::Small.spec();
-        for strategy in [crate::L3Strategy::Dedicated, crate::L3Strategy::Multi] {
+        for (strategy, package, revision, dir) in [
+            (
+                crate::L3Strategy::Dedicated,
+                specs::NTDB_INJECTION.spec,
+                wolf_small.revision,
+                "injection/l2_ntdb/injection_current",
+            ),
+            (
+                crate::L3Strategy::Multi,
+                specs::NTDB_INJECTION_LION.spec,
+                "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07",
+                "injection/l2_ntdb/injection_lion",
+            ),
+        ] {
             let mut execution = ScanExecution::new(SecurityLevel::L3);
             execution.set_l3_strategy(strategy);
             let configs =
@@ -520,20 +537,13 @@ mod tests {
             let [config] = configs.as_slice() else {
                 panic!("{strategy:?}: one injection L2 package expected, got {configs:?}");
             };
-            assert_eq!(config.package, specs::NTDB_INJECTION.spec, "{strategy:?}");
+            assert_eq!(config.package, package, "{strategy:?}");
             assert_eq!(
                 (config.package.repository, config.package.revision),
-                (
-                    wolf_small.repository,
-                    "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07"
-                ),
+                (wolf_small.repository, revision),
                 "{strategy:?}"
             );
-            assert_ne!(config.package.revision, wolf_small.revision, "{strategy:?}");
-            assert_eq!(
-                config.package.cache_subdir,
-                "injection/l2_ntdb/injection_current"
-            );
+            assert_eq!(config.package.cache_subdir, dir, "{strategy:?}");
         }
     }
 

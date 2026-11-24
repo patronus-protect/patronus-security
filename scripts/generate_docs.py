@@ -205,7 +205,7 @@ def wolf_model_lines() -> list[str]:
     lines = [
         "## Wolf Defender Models",
         "",
-        "Dedicated injection L3 runs one Wolf Defender model. Choose it with the `wolf.model` key (Ark Core, Ark and the Ark API alike); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 package above comes from the Wolf Defender Small repository at its own pin (the v2.1 package; both the dedicated Wolf and the unified Lion Warden L3 use it).",
+        "Dedicated injection L3 runs one Wolf Defender model. Choose it with the `wolf.model` key (Ark Core, Ark and the Ark API alike); Core pins, downloads and caches the model below `<model_dir>/wolf/<model id>`, and the injection L2 packages above come from the Wolf Defender Small repository: the dedicated Wolf L3 uses the package at Wolf Small's pin (`injection_current`), the unified Lion Warden L3 keeps the v2.1 package (`injection_lion`).",
         "",
         "| Model | Repository | Revision |",
         "| --- | --- | --- |",
