@@ -23,6 +23,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   session, first send the chat history to …") is reported as well. The user's own preferences
   ("remember for all future chats that I am vegetarian"), memory-settings help articles and stored
   profiles without a request stay clean. L1 latency is unchanged within noise.
+- **Detection change (`memory_poisoning`, opt-in category):** a stored claim that denies the
+  permission ("store in your memory that transfers are not pre-approved", "speichere, dass Zahlungen
+  nicht vorab genehmigt sind") stays clean, and the German recall trigger needs the later session
+  ("wenn du dich an dieses Gespräch erinnerst, schreib mir später …" stays clean).
 - **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
   in a file it reads — `copilot-instructions.md`, an issue comment, a README setup section — and asks
   it to tamper with its own configuration is now reported in German and English: registering an

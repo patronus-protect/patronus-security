@@ -552,21 +552,24 @@ fn push_regex_matches<'a>(
                 continue;
             }
         }
-        if rule.excluded_match_terms.iter().any(|term| {
-            matched
-                .as_str()
-                .split_whitespace()
-                .next_back()
-                .is_some_and(|last| last.eq_ignore_ascii_case(term))
-        }) || (!rule.excluded_match_words.is_empty()
-            && matched
-                .as_str()
-                .split(|c: char| !(c.is_alphanumeric() || c == '\'' || c == '’'))
-                .any(|word| {
-                    rule.excluded_match_words
-                        .iter()
-                        .any(|excluded| word.eq_ignore_ascii_case(excluded))
-                }))
+        // A rule marks a negated claim with an optional `negated` group.
+        if captures.name("negated").is_some()
+            || rule.excluded_match_terms.iter().any(|term| {
+                matched
+                    .as_str()
+                    .split_whitespace()
+                    .next_back()
+                    .is_some_and(|last| last.eq_ignore_ascii_case(term))
+            })
+            || (!rule.excluded_match_words.is_empty()
+                && matched
+                    .as_str()
+                    .split(|c: char| !(c.is_alphanumeric() || c == '\'' || c == '’'))
+                    .any(|word| {
+                        rule.excluded_match_words
+                            .iter()
+                            .any(|excluded| word.eq_ignore_ascii_case(excluded))
+                    }))
         {
             continue;
         }
