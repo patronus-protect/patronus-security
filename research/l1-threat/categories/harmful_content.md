@@ -61,9 +61,9 @@ Für `self_harm` gilt der Gegen-Kontext wie bei den anderen Klassen (z. B. Präv
 
 | Pattern | Kern | Basis | Validator | `requires_context` | `scored_only` | Heutige Regeln |
 |---|---|---|---|---|---|---|
-| `hc_howto_hazard` | `request_frame` + `harm.<unterklasse>` in derselben Klausel | 40 | Format | nein | nein | threat.harmful_intent |
+| `hc_howto_hazard` | `request_frame` + `harm.<unterklasse>` in derselben Klausel | 40 | Format | nein | nein | threat.harmful_intent, threat.hc_howto_hazard (HC03) |
 | `hc_quantified_recipe` | Hazard + Mengen-/Reinheits-/Bezugsangaben angefragt | 45 | Format | nein | nein | neu |
-| `hc_evasion` | Hazard oder Straftat + `evasion` | 40 | Format | nein | nein | neu |
+| `hc_evasion` | Hazard oder Straftat + `evasion` | 40 | Format | nein | nein | threat.hc_evasion (HC03) |
 | `hc_child_safety` | Minderjährigen-Bezug + sexueller Bezug | 70 | – | nein | nein | neu |
 | `hc_self_harm_intent` | Ich-Bezug + Absicht/Methode | 45 | – | nein | nein | neu |
 | `hc_hazard_mention` | Hazard-Begriff ohne Anfrage-Rahmung | 15 | – | ja | **ja** | neu |
@@ -213,3 +213,54 @@ Zahlen und Befehle: [`scoreboard/harmful-content-scorer.md`](../scoreboard/harmf
   `toxic_language` (TX02).
 - **Offen:** die Absichts-Patterns aus §4 (10 von 14 Golden-Positiven sind Regel-Lücken), eine zweite offene
   Positiv-Quelle je Sprache, Dev-Positive der Modell-Unterklassen und ein mehrklassiges Subklassen-Modell (§13).
+
+## 15. Stand HC03 (2026-11-24): Absichts-Regeln und Subklassen-Modell
+
+- **Regeln** (Punkte-Regeln, Basis 40, Validator Format, geteilter Klauselkontext: `meta`, Zitat, Prävention,
+  Verneinung dämpfen):
+  - `ark.threat.hc_howto_hazard` (`hc_howto_hazard`): Anfrage-Rahmung (how do I, best way to, teach me how to,
+    wie kann ich, wie man, zeig mir wie) + Straftat in derselben Klausel. Gewaltverben nur mit Personen-Objekt
+    (someone, my neighbor, jemanden, meinen Nachbarn), Eigentumsdelikte mit Objekt (break into + house/car,
+    Notensystem hacken, Schloss knacken, Drogen verkaufen); so bleiben Bildsprache („kill the noise“, „shoot for
+    the stars“, „Zwiebeln hacken“, „Walnuss knacken“) und Spielkontext sauber.
+  - `ark.threat.hc_evasion` (`hc_evasion`): Straftat oder Anfrage-Rahmung + Entdeckung umgehen (without getting
+    caught, get away with, ohne erwischt zu werden, unbemerkt, ungestraft); Nachrichten und Krimi ohne Rahmung
+    bleiben sauber.
+  - Noch offen aus §4: `hc_quantified_recipe`, `hc_child_safety`, `hc_self_harm_intent` (gehashte Lexika),
+    `hc_hazard_mention`.
+- **Subklassen-Modell:** mehrklassige LR über gehashte Wort-, Bigramm- und Zeichen-N-Gramme (Feature-Hashing der
+  fastText-Modelle von Core, 8192 Buckets, ganzzahlige Gewichte, Python/Rust bitgleich über
+  `testdata/harmful_subclass_parity.jsonl`), trainiert mit `harmful_subclass.py train` auf allen gelabelten
+  Subklassen (11; `defamation`, `elections` ohne Positive fehlen). Es benennt die Subklasse einer
+  `harmful_content`-Erkennung (`subclass`, `subclass_probability`) und läuft nur bei einem Treffer; es erkennt
+  nichts selbst. Kreuzvalidierte Genauigkeit 74,0 % (899), je Subklasse in
+  [`scoreboard/harmful-subclass-model.md`](../scoreboard/harmful-subclass-model.md).
+- **Dev, nur Regeln** (L1-Heuristik allein, `scoreboard.py predict` ohne Kaskade): TPR@0,1 % FPR DE 23,1 (316),
+  EN 28,5 (583), gesamt 26,6 (vorher 0,0); Benign-FPR DE 0 / 23 661, EN 0 / 30 988; Hard-Benign 0 / 2 412.
+- **Dev, Kaskade** (`cascade-config.json` auf `main`, eingebautes `FT`-Modell): TPR gesamt 62,8 (HC01: 55,1),
+  DE 78,8, EN 54,2; Benign-FPR je Sprache 0,05 %; Hard-Benign EN 1 / 1 571 (Modell, wildguardmix).
+- **Je Subklasse** TPR in % der Kaskaden-Entscheidung (Positive), daneben nur Regeln:
+
+| Subklasse | all | de | en |
+|---|---:|---:|---:|
+| `violent_crime` | 60,0 (220), Regeln 21,4 | 70,4 (81), Regeln 16,0 | 54,0 (139), Regeln 24,5 |
+| `cbrne` | 79,5 (44), Regeln 40,9 | 87,5 (16), Regeln 31,2 gap | 75,0 (28), Regeln 46,4 |
+| `cyber_harm` | 58,1 (31), Regeln 32,3 | 88,9 (9), Regeln 55,6 gap | 45,5 (22), Regeln 22,7 |
+| `nonviolent_crime` | 67,4 (475), Regeln 31,6 | 83,4 (181), Regeln 26,5 | 57,5 (294), Regeln 34,7 |
+| `sex_crime` | 43,5 (23), Regeln 13,0 | 71,4 (7), Regeln 0,0 gap | 31,2 (16), Regeln 18,8 gap |
+| `child_safety` | 51,9 (52), Regeln 15,4 | 72,7 (11), Regeln 18,2 gap | 46,3 (41), Regeln 14,6 |
+| `self_harm` | 40,0 (30), Regeln 3,3 | 75,0 (4), Regeln 0,0 gap | 34,6 (26), Regeln 3,8 |
+| `specialized_advice` | 50,0 (2), Regeln 0,0 gap | 0,0 (1), Regeln 0,0 gap, off | 100,0 (1), Regeln 0,0 gap |
+| `ip` | 33,3 (3), Regeln 0,0 gap, off | – (0) gap | 33,3 (3), Regeln 0,0 gap, off |
+| `defamation` | – (0) gap | – (0) gap | – (0) gap |
+| `elections` | – (0) gap | – (0) gap | – (0) gap |
+| `privacy` | 50,0 (8), Regeln 0,0 gap | 66,7 (3), Regeln 0,0 gap | 40,0 (5), Regeln 0,0 gap, off |
+| `other` | 45,5 (11), Regeln 18,2 gap | 33,3 (3), Regeln 0,0 gap | 50,0 (8), Regeln 25,0 gap |
+
+- **Benannte Lücken** (< 20 Positive je Sprache): DE `cbrne`, `cyber_harm`, `sex_crime`, `child_safety`,
+  `self_harm`; EN `sex_crime`; DE und EN alle fünf Modell-Unterklassen (`specialized_advice`, `ip`, `defamation`,
+  `elections`, `privacy`) und `other`.
+- **Gate:** `scoreboard.py compare` prüft jetzt die Benign-FPR des L1 am Detect-Schnitt je Klasse und Sprache
+  (`benign fpr <Klasse> <Sprache>`, Budget 0,1 %, Owner 2026-11-23); der Subklassen-Abschnitt von `cascade.md`
+  zeigt die Regel-TPR neben der Kaskade.
+- **Goldens:** 12 neue Positive und 12 Hard Negatives (DE + EN); 3 frühere Golden-Lücken treffen jetzt.
