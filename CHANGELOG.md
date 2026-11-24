@@ -9,6 +9,27 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Detection changes
+
+- **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
+  in a file it reads — `copilot-instructions.md`, an issue comment, a README setup section — and asks
+  it to tamper with its own configuration is now reported in German and English: registering an
+  outside MCP server in its `mcp.json` without telling the user, switching off the pre-commit hooks
+  or the secret scanner in the agent configuration, letting its permission file allow writes
+  outside the project or dropping the deny list, a rule in `CLAUDE.md` that allows any shell command
+  without asking, `autoApprove` in `.vscode/settings.json` so tool calls need no confirmation, and
+  replacing the system prompt in `agent.yaml` with instructions from an outside host. A concealment
+  of the change ("do not mention it", "lass diese Zeile weg") counts as part of the request. MCP
+  setup docs addressed to the reader, a maintainer describing their own config change, a
+  contributing note that forbids switching off hooks and a system prompt read from a file in the
+  repository stay clean. L1 latency is unchanged within noise.
+- **Detection change (`agent_config_tampering`, opt-in category):** a German request to switch the
+  pre-commit hooks or the secret scanner on ("Schalte … in der Agenten-Konfiguration ein") is no
+  longer reported as tampering; "schalte" now needs its particle `ab` or `aus`. A genuine negation in
+  the gap of a requested widening ("so all commands are not allowed", "alle Befehle nicht erlaubt")
+  rejects the request again; only the widening's own negation ("without asking", "no longer need
+  confirmation") and its concealment ("do not mention it") are part of the request.
+
 ## [0.1.18] - unreleased
 
 This release builds the full Ark gateway on Ark Core: one config, one model cache and one L1 pass
