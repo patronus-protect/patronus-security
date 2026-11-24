@@ -393,5 +393,13 @@ Hard Negatives: MCP-Einrichtung für den Menschen („in deiner mcp.json“), ei
 Maintainerin (erste Person, Vergangenheit), CONTRIBUTING-Hinweis zu Hooks (verneint), die sauberen Zwillinge,
 Systemprompt aus einer Repo-Datei.
 
+Latenz (Release, `threat_cascade` mit `scoreboard/cascade-config.json`, Feld `ms.l1` = alle elf Klassen samt
+eingebauter L1-Modelle, Basis bdeaeacc gegen T25, je 3 Runden × 48 Samples, abwechselnd): 6 × 100 KiB deutsche
+Prosa (Kategorie-Dokumente) p50 447,9 → 448,3 ms, p95 516,1 → 506,9 ms (Rauschen); Worst Case 6 × 100 KiB
+Agent-Config-Mix (alle `agent_scenarios`-Zeilen der drei Familien plus alle Goldens der Klasse, jede Zeile ein
+Treffer-Kandidat) p50 206,1 → 234,4 ms, p95 239,0 → 261,1 ms. Der Mehraufwand im Mix kommt aus den neuen
+Funden (160 Positive mehr, je Fund Klauselkontext), nicht aus dem Prefilter; auf Text ohne die Anker läuft
+die Regel nicht. Die Kategorie ist opt-in; das DLP-Budget betrifft sie nicht.
+
 Offen: die Nachkalibrierung des eingebauten L1-Modells je Sprache auf ≤ 0,1 % Benign-FPR (Owner-Entscheidung
 2026-11-23) und der zugehörige Sprach-Check in `scoreboard.py` sind in dieser Runde nicht enthalten.
