@@ -259,4 +259,24 @@ Goldens: je Form DE und EN (Payload, E-Mail, Code-TODO, Web), Hard Negatives: be
 Aufforderung), Liedtext mit Wiederholung, Zählungen unter der Schwelle, Verneinung, zitiertes Beispiel.
 
 Latenz (Release, `rust/dev/l1_latency_workloads.rs`, Kategorie `resource_exhaustion` allein, Basis 595154d6
-gegen Head, 3 Runden × je Fenster 40 Samples, Median der Runden-p95): siehe Tabelle unten.
+gegen Head, 5 Runden im Wechsel × je Fenster 40 Samples, Median der Runden-Perzentile; zwei identische
+Binärdateien streuen in diesem Aufbau um ±10 %):
+
+| 100-KiB-Fenster | Basis p50 / p95 (ms) | Head p50 / p95 (ms) |
+|---|---|---|
+| GermanQuAD (6) | 3,70 / 4,41 | 4,19 / 5,10 |
+| Dolly (4) | 3,37 / 3,92 | 4,16 / 5,13 |
+| Worst Case: alle `agent_scenarios`-Zeilen der Klasse + Goldens (4) | 12,6 / 15,7 | 25,2 / 29,7 |
+
+Die Kategorie allein ist auf Prosa um 0,5–1,2 ms je 100 KiB langsamer (p95 +16 % bzw. +31 %); im Mix kommt der
+Mehraufwand aus den neuen Funden (je Fund Klauselkontext). Gegen die ganze L1 (alle elf Klassen, rund 450 ms je
+100 KiB laut §18 in `agent_config_tampering.md`) sind das unter 0,3 %; die Kategorie ist opt-in, das DLP-Budget
+betrifft sie nicht. Ursache auf Prosa offen: die reinen Regex-Scans der Regeln (gemessen mit denselben Mustern
+außerhalb der Pipeline) unterscheiden sich um höchstens 0,06 ms; die beiden aufwendigsten Zweige laufen schon
+als eigene, anker-gegatete Regeln. Nächster Schritt: Profil der Pipeline (Kontext-/Klauselprüfung, Gates von
+`re_recursive_spawn` und `re_tool_flood`, die schon auf `main` ohne wirksames Anker-Gate laufen).
+
+Prüfungen dieser Runde: `cargo test -p patronus-ark-core` grün; von `patronus-ark` liefen Lib-Tests,
+`threat_l1`, `l1_bilingual_rules` und `shell_threat_handoff` (grün) — die volle Suite passte nicht auf die
+Platte des Runners (≈ 27 GB Testbinärdateien). Golden-Eval 1431/1431, `scripts/tests` grün (ohne
+`test_entrypoint_runtime`, braucht das ark-api-Binary).
