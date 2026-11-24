@@ -59,6 +59,15 @@ impl PackageManifest {
             .joint_v3
             .as_ref()
             .ok_or_else(|| ntdb_error("NTDB package v4 is missing joint_v3"))?;
+        // The one runtime contract Ark executes. Every NTDB release is exported
+        // with the same recipe and must keep it: the `document_decision` block
+        // (union_l2_l3 thresholds, checked below) and the per-chunk promoter
+        // operating points `utility_promote` / `best_promote`, each naming its
+        // gate: `direct_actionable` (`direct_actionable_gate`) or
+        // `factorized_actionable` (`disagreement_gate` × `pre_l3_benefit_gate`),
+        // all LightGBM on the one shared L2's features. A package that declares
+        // another contract or lacks these fields is a broken export, not a new
+        // runtime to port: fix the export (as for the v2.2 small package, 2026-11-24).
         if self.runtime_contract != "raw_text_to_joint_v3_chunk_promoter_union_v1" {
             return Err(ntdb_error(format!(
                 "unsupported NTDB package v4 runtime contract: {}",

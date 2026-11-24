@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Package-v4 joint mmBERT L2 runtime and promoter.
+//!
+//! Flow, unchanged across NTDB releases: text → L1 → 256-token chunks → one
+//! tokenizer → this L2 → promoter → L3. Three separate steps, not to be mixed up:
+//! - **Promoter** (`JointV3PromoterRuntime::score`, per chunk): decides whether
+//!   L3 runs. The document's promote score is the max over its chunks.
+//! - **Chunk aggregation** (`aggregate_probabilities`): combines the chunks'
+//!   L2 class probabilities into one document score.
+//! - **Union** (`document_decision` mode `union_l2_l3`, and the cascade
+//!   arbiter in `ark-core/src/cascade/arbiter.rs`): the final decision from
+//!   the L2 AND L3 results. It is neither promotion nor chunk aggregation.
 
 use std::{
     collections::{HashMap, HashSet},

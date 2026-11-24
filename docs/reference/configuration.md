@@ -628,7 +628,8 @@ contextual label group that the final source result rejects.
 | `PATRONUS_L3_TTL_SECS` | `300` | Idle seconds before an L3 session is evicted; `-1` keeps loaded sessions resident. The Ark API container sets `-1`. |
 | `PATRONUS_L3_TRACE_CHUNKS` | unset | `1` logs per-chunk L3 execution traces (diagnostic). |
 | `PATRONUS_L3_TIMING` | unset | When set, logs Unified-L3 tokenization, ONNX session-run, and output-decoding timings. |
-| `PATRONUS_NTDB_INJECTION_DIR` | — | Local NTDB override for `injection`. |
+| `PATRONUS_NTDB_INJECTION_DIR` | — | Local NTDB override for `injection` (dedicated Wolf L3). |
+| `PATRONUS_NTDB_INJECTION_LION_DIR` | — | Local NTDB override for `injection` under the unified Lion Warden L3 (`l3_strategy = "multi"`). |
 | `PATRONUS_NTDB_ROUTING_DIR` | — | Local NTDB override for `routing`. |
 | `PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR` | — | Local NTDB override for `sensitive_document`. |
 | `PATRONUS_NTDB_THREAT_DIR` | — | Local NTDB override for the threat model (`unsafe_action`). |
