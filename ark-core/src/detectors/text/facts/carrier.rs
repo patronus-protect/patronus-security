@@ -241,7 +241,9 @@ mod tests {
 
     #[test]
     fn owning_tool_is_the_last_header_before_the_offset() {
-        let owner = |text: &str, needle: &str| owning_tool_name(text, text.find(needle).unwrap());
+        fn owner<'a>(text: &'a str, needle: &str) -> Option<&'a str> {
+            owning_tool_name(text, text.find(needle).unwrap())
+        }
         let listing = "Tool add_numbers: adds.\nTool get_time: returns the time.";
         assert_eq!(owner(listing, "adds"), Some("add_numbers"));
         assert_eq!(owner(listing, "returns"), Some("get_time"));
