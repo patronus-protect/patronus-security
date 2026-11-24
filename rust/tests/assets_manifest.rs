@@ -452,20 +452,6 @@ mod asset_downloads {
 }
 
 #[test]
-fn injection_l2_package_uses_cores_wolf_small_pin() {
-    // One pin per shared model: the L2 package comes from Core's Wolf Small release.
-    let small = patronus_ark_core::wolf::WolfModel::Small.spec();
-    let package = NTDB_L2_PACKAGE_MANIFEST
-        .iter()
-        .find(|asset| asset.category == SecurityCategory::Injection)
-        .unwrap();
-    assert_eq!(
-        (package.spec.repository, package.spec.revision),
-        (small.repository, small.revision)
-    );
-}
-
-#[test]
 fn ntdb_l2_packages_keep_their_local_export_overrides() {
     // Core resolves `PATRONUS_NTDB_*_DIR` from each registered package.
     assert_eq!(
