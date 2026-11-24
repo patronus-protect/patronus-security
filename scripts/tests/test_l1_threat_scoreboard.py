@@ -829,6 +829,9 @@ def test_refresh_skips_commits_without_detector_scorer_or_gold_change(split, tmp
         commit_files(tree, {path: f"// {path}\n"}, path)
         assert path in MODULE.changed_paths(tree, first, "HEAD")
     assert MODULE.main(args) == 0 and len(built) == 2
+    # A new subclass label file changes the cascade report's subclass section.
+    labels = str(MODULE.HARMFUL_SUBCLASS.LABELS_PATH.relative_to(MODULE.ROOT))
+    assert any(labels.startswith(path) for path in MODULE.REFRESH_PATHS)
 
 
 def test_refresh_rerenders_after_a_dev_refreeze_or_new_cached_baselines_without_code_change(split, tmp_path,

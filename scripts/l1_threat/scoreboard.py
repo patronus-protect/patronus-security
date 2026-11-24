@@ -159,7 +159,8 @@ CASCADE_CONFIG = SCOREBOARD_DIR / "cascade-config.json"
 # What changes the numbers of main: the Core detectors and scorers, the scoreboard and corpus tooling,
 # the gold labels and the calibrated cascade config.
 REFRESH_PATHS = (*PREDICTOR_SOURCES, "scripts/l1_threat", "research/l1-threat/entity_map.yaml",
-                 str(SCOREBOARD_DIR / "gold-dev.json"), str(SCOREBOARD_DIR / "gold-leakage.json"), str(CASCADE_CONFIG))
+                 "research/l1-threat/labels", str(SCOREBOARD_DIR / "gold-dev.json"),
+                 str(SCOREBOARD_DIR / "gold-leakage.json"), str(CASCADE_CONFIG))
 # The line naming the commit a refreshed report was rendered from; the only line a refresh may leave stale.
 RENDERED_FROM = "Rendered by `scoreboard.py refresh` from commit"
 # The line naming the fingerprint of what a refreshed report read besides the code: the dev split (and the
