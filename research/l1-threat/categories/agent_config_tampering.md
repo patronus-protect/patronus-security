@@ -323,3 +323,75 @@ bittet um die Änderung der eigenen Konfiguration, Tutorial mit der Einstellung,
 Wieder-Einschalten per sed, verengender Diff, Konfiguration eines anderen Programms). Offen: Heredocs
 (`cat >> ~/.codex/config.toml <<EOF` mit dem Wert in den Folgezeilen) und `sed` mit anderem Trennzeichen als
 `/`; drei Zeilen tragen noch keine Aussage über diese Formen.
+
+## 18. Stand T25 (2026-11-24): Aufforderungen in Dateien, die der Agent liest (zweite Generator-Familie)
+
+**`B0` bleibt.** Die zweite Generator-Familie (`agent_scenarios`, seit Korpus-Generation 23 im Dev-Split) traf
+B0 vorher auf 0 von 160 Positiven: die Aufforderung an den Agenten steht in einer Datei, die er liest
+(`copilot_instructions`, `issue_comment`, `readme_setup`), und nennt den Konfigurationsort mit seiner Rolle
+(„die mcp.json des Agenten“, „Agenten-Konfiguration“, „Berechtigungsdatei des Agenten“, `agent.yaml`). Sechs
+Formen, je DE und EN: fremden MCP-Server registrieren und für jeden Arbeitsbereich aktivieren, ohne es dem
+Nutzer zu sagen; Pre-Commit-Hooks und Secret-Scanner in der Agenten-Konfiguration abschalten;
+Berechtigungsdatei auf Schreiben außerhalb des Projektordners erweitern und die Sperrliste entfernen; Regel in
+`CLAUDE.md`, dass jeder Shell-Befehl ohne Nachfrage läuft; `"chat.tools.autoApprove": true` in
+`.vscode/settings.json`; Systemprompt in `agent.yaml` durch Anweisungen von einem fremden Host ersetzen.
+
+Regeln (entworfen auf `copilot_instructions` und `issue_comment`; `readme_setup` als Held-out getrennt
+gemessen), alles in `ark.threat.ac_tamper_request` (Familie `tamper_request`, läuft wie bisher auch ohne
+AGENT_CONFIG-Träger):
+- Verben `register`/`append`/`replace`, `registriere`/`häng an`/`ersetze`; Ziele `agent.yaml` und
+  `permission file`/`Berechtigungsdatei`; Lücke Verb → Ziel 90 statt 60 Zeichen (die Server-URL steht
+  dazwischen).
+- Aufweitungen: `any shell command … without asking`, `jeden Shell-Befehl … ohne Nachfrage`, `no longer need(s)
+  confirmation`, `keine Bestätigung mehr`, `without telling the user`, `ohne es dem Nutzer zu sagen`, `allow
+  writes outside the project`, `remove the deny list`, `außerhalb des Projektordners schreiben`, `entferne die
+  Sperrliste`, `instructions from/Anweisungen von <Host mit TLD>` (ein Pfad wie `docs/prompt.md` trifft nicht).
+- Eine anschließende Verschleierung der Änderung („do not mention it“, „keep that line out of …“, „erwähne die
+  Änderung nicht“, „lass diese Zeile … weg“) gehört zur Gruppe `widen`; `widen` ist eigene Phrase der Regel
+  (`own`), ihre Negationswörter („no longer“, „keine“, „nicht“) machen den Fund nicht zum Gegenkontext.
+- Zweite Form: `switch/turn off`, `disable`, `deactivate`, `schalte … ab`, `deaktiviere` → `pre-commit hooks`
+  oder `secret scanner` → `agent configuration/settings`, `Agenten-Konfiguration`. Ein vorangestelltes
+  „Do not“ oder nachgestelltes „nie“ verneint wie bisher (`is_negated`).
+- Neue Anker im Lexikon (`agentcfg.file`: `agent.yaml`, `agent.yml`, `berechtigungsdatei`, `permission file`;
+  `agentcfg.guard_removal`: `pre-commit`, `precommit`, `secret scann`, `secret-scann`) halten die Regel hinter
+  ihrem Prefilter.
+
+Dev (Release-Build, `threat_cascade` mit `scoreboard/cascade-config.json`, Heuristik-Score der Klasse;
+Positive gelten bei Score > 0, d. h. am 0,1-%-Schnitt, weil keine Benign-Zeile einen Score trägt):
+
+| Zeilen | vorher | nachher |
+|---|---|---|
+| `agent_scenarios` DE (80; davon Held-out `readme_setup` 23) | 0 | 80 (Held-out 23 von 23) |
+| `agent_scenarios` EN (80; davon Held-out `readme_setup` 31) | 0 | 80 (Held-out 31 von 31) |
+| saubere Zwillinge derselben drei Familien (160) | 0 | 0 |
+| `class_templates` (84) / approve-or-deny (3) | 84 / 3 | 84 / 3 |
+| alle Benign-Zeilen des Dev-Splits (64 318, DE 26 153, EN 38 165) | 0 | 0 |
+
+Vorbehalt: Die Held-out-Familie trägt dieselben sechs Aufforderungen in einem anderen Träger; der Treffer dort
+zeigt, dass die Regeln nicht am Träger hängen, nicht, dass sie neue Formulierungen finden. Das Urteil fällt auf
+dem Holdout. Das eingebaute L1-Modell der Kaskade meldete die Positiven schon vorher, aber auch alle 57
+`copilot_instructions`-Zwillinge und 22 von 49 `issue_comment`-Zwillingen (es lernt den Träger); daran ändert
+diese Runde nichts.
+
+Ablation wie §17 (`ablation.py run`, Facts über `text_facts --threat-findings`, B0 aus den Vorhersagen des
+Heads): alle Dev-Zeilen mit `agent_config_tampering`-Positiven oder `benign`, Dolly, GermanQuAD, MASSIVE,
+Mosscap, Civil Comments und TextDetox je ein Viertel per sha256; Hälften nach Vorlagenschlüssel (Generator +
+Familie) bzw. Zeilen-ID. Training 11 116, Auswertung 11 160 Zeilen (100 Positive, DE 45, EN 55; 11 060
+Negative, davon 1 198 Hard-Benign). Ohne Latenzmessung (B1/B4/B5/FT `untimed`).
+
+| Stufe | TPR@1 % | TPR@0,1 % | DE | EN | Hard-Benign-FPR@1 % |
+|---|---|---|---|---|---|
+| R, R+A, **B0** | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 |
+| R+A+L | 100,0 | 100,0 | 100,0 | 100,0 | 6,2 |
+| B1 / B4 | 100,0 | 54,0 | 100,0 | 100,0 | 8,0 / 7,2 |
+| B5 | 100,0 | 100,0 | 100,0 | 100,0 | 0,0 |
+| FT | 100,0 | 100,0 | 100,0 | 100,0 | 6,5 |
+
+Auswahl des Werkzeugs: `B0` (günstigste Stufe innerhalb 1 pp der besten; B5 gleichauf, aber ungetimt und mit
+576 KiB Modell). Goldens: je Träger (Copilot-Instructions, Issue-Kommentar, README-Setup) und Form DE und EN,
+Hard Negatives: MCP-Einrichtung für den Menschen („in deiner mcp.json“), eigene Konfigurationsänderung einer
+Maintainerin (erste Person, Vergangenheit), CONTRIBUTING-Hinweis zu Hooks (verneint), die sauberen Zwillinge,
+Systemprompt aus einer Repo-Datei.
+
+Offen: die Nachkalibrierung des eingebauten L1-Modells je Sprache auf ≤ 0,1 % Benign-FPR (Owner-Entscheidung
+2026-11-23) und der zugehörige Sprach-Check in `scoreboard.py` sind in dieser Runde nicht enthalten.
