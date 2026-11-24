@@ -1128,12 +1128,13 @@ fn code_snippet_holds(text: &str, start: usize, end: usize) -> bool {
 
 /// A harmful content request the text reports or quotes ("he asked how to
 /// …", "searches for how to …", "requests like 'how to …'", an opening quote
-/// after other words on the line) is a mention, not the writer's request.
+/// right after a word) is a mention, not the writer's request; a quoted JSON
+/// value (`"body": "…"`) is the request itself.
 fn reported_request(text: &str, start: usize) -> bool {
     static REPORTED: OnceLock<Regex> = OnceLock::new();
     let reported = REPORTED.get_or_init(|| {
         Regex::new(
-            r#"(?i)(?:\b(?:asked|asks|asking|searched|searches|searching|search(?:ed|es|ing)?[ \t]+for|googled|googling|fragt|fragte|fragten|gefragt|sucht|suchte|suchten|gesucht|googelt)(?:[ \t]+[\p{L}'-]+){0,2}[ \t]+["'„“‚‘]?|\b(?:like|such as|wie etwa)[ \t]+["'„“‚‘]?|\S[^\n]*[ \t:]["'„“‚‘])$"#,
+            r#"(?i)(?:\b(?:asked|asks|asking|searched|searches|searching|search(?:ed|es|ing)?[ \t]+for|googled|googling|fragt|fragte|fragten|gefragt|sucht|suchte|suchten|gesucht|googelt)(?:[ \t]+[\p{L}'-]+){0,2}[ \t]+["'„“‚‘]?|\b(?:like|such as|wie etwa)[ \t]+["'„“‚‘]?|\p{L}:?[ \t]+["'„“‚‘])$"#,
         )
         .unwrap()
     });
