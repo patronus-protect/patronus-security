@@ -689,6 +689,18 @@ tasks:
   - {id: TX02, title: "toxic_language points + ablation decision (char n-gram LR expected to pay off; GAHD/GermEval 2018 test/HateCheck/RTP-LX)", type: scorer, deps: [TX01, S05], status: done}
   - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01, T08], status: done}
   - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05]}
+  - id: HC03
+    title: "harmful_content intent rules and the subclass n-gram model on the HC01 labels — HC01 shipped the
+      subclass labels (research/l1-threat/labels/harmful_subclass.jsonl) and evaluation tooling but no rules and
+      no model; rules-only TPR is still 0.0 DE/EN"
+    type: recall-fix
+    deps: [HC01, HC02]
+    accept: >-
+      intent-level rules (request framing + hazard class, meta-context damping) and the char+word n-gram
+      subclass model over all labelled subclasses ship in ark-core; rules-only harmful_content TPR@0.1% FPR on
+      dev rises above 0 for DE and EN and is reported per subclass next to the cascade number; benign FPR per
+      language <= 0.1% and the holdout hard-benign budget hold; subclasses with < 20 positives per language are
+      named as gaps; unit tests for every rule and for loading the model
 
   # TRIAGE 2026-W48: generation-23 dev split — baseline column, rule transfer to the second generator family,
   # secret extraction, jailbreak personas and spoofed headers, decoded views for all classes, native toxic text.
@@ -833,7 +845,7 @@ tasks:
     deps: [S01, S06]
 
   # ── H: Hardening and wrap-up ──────────────────────────────────────────
-  - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02]}
+  - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03]}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
   - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02]}
 
