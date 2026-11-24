@@ -80,9 +80,11 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
   against a person (poisoning, stabbing, kidnapping, assault of "someone" or "my neighbor") or
   property (stealing, breaking into a house or car, hacking an account, laundering money, forging a
   signature, selling drugs) in the same clause, and a request to get away with something ("without
-  getting caught", "how to get away with", "ohne erwischt zu werden", "unbemerkt", "ungestraft").
+  getting caught", "how to get away with", "ohne erwischt zu werden", "ungestraft").
   Figurative uses ("kill the noise", "shoot for the stars", "Zwiebeln hacken", "eine Walnuss
-  knacken"), prevention, news, fiction and security documentation stay clean. A harmful_content
+  knacken"), everyday uses ("den Grill anzünden"), prevention ("how can I protect my account so
+  that nobody can hack into it"), requests the text only reports or quotes ("he asked how to …",
+  "requests like 'how to …'"), news, fiction and security documentation stay clean. A harmful_content
   finding also names its hazard subclass (for example `violent_crime`, `nonviolent_crime`,
   `cyber_harm`, `self_harm`) from a small built-in word and character n-gram model, in the
   `subclass` and `subclass_probability` details. The subclass model only runs on a harmful_content
