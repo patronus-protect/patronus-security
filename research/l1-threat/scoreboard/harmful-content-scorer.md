@@ -38,7 +38,8 @@ without a cascade nothing changes.
 **Points.** `ark.threat.harmful_intent` (plan/organise a violent attack or a murder) was a legacy-scorer rule: it matched,
 but the legacy threat scorer never accepted it on its own, so it reported nothing. It is now a points rule (base 40,
 format validator, the shared clause context; `hc_howto_hazard` in `categories/harmful_content.md` §4): accepted on a
-direct request, not on a response plan or a news report. On the dev and report rows (96 092) it matches none, so every
+direct request, not on a response plan or a news report. Its column leaves the legacy scorer (`l1_scorer_0_1_7.json`, `dropped_rules`, as for the X04
+handoffs; the other coefficients are the trained ones). On the dev and report rows (96 092) it matches none, so every
 dev number above and in `cascade.md` is unchanged; it finds 2 of 12 golden positives (DE + EN). Latency: the regex ran
 before as well; only a match goes through the points path now, so a text without a match costs the same.
 
