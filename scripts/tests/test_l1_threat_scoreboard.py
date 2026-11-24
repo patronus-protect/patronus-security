@@ -903,3 +903,40 @@ def test_refresh_renders_cascade_md_from_the_calibrated_config_of_main(split, tm
     assert f"Cascade config `{MODULE.config_hash(config)[:12]}`" in text and f"`{head[:12]}`" in text
     assert "/private/models" not in text
     assert seen == [MODULE.L1_CASCADE, config] and built == [(head, False), (head, True)]
+
+
+HC = "harmful_content"
+
+
+def test_subclass_metrics_split_harmful_positives_by_label_and_mark_gaps_and_off():
+    items = [(row("dev_h", i, [HC]), {HC: stage("detected", "detected", "heuristic") if i < 15 else QUIET})
+             for i in range(25)]
+    items += [(row("dev_h", 30 + i, [HC], language="de"), {HC: stage("escalate", "detected", "l1_model")})
+              for i in range(3)]
+    items += [(row("dev_h", 40, [HC]), {HC: QUIET}), (row("dolly", 0, benign=True), {HC: QUIET})]
+    labels = {item["id"]: "nonviolent_crime" for item, _ in items[:25]}
+    labels.update({item["id"]: "privacy" for item, _ in items[25:28]})
+    pairs = [(item, cascade_pred(item, None, **stages), "dev") for item, stages in items]
+    cells = MODULE.subclass_metrics(pairs, labels)
+    crime = cells["nonviolent_crime"]["en"]
+    assert (crime["positives"], crime["tp"], crime["tpr"]) == (25, 15, 0.6)
+    assert not crime["gap"] and not crime["off"]
+    # Three German privacy rows: a gap, and a model-only subclass the model detects.
+    privacy = cells["privacy"]["de"]
+    assert privacy["gap"] and privacy["tpr"] == 1.0 and not privacy["off"]
+    assert cells["unlabelled"]["all"]["positives"] == 1 and set(cells) == {"nonviolent_crime", "privacy", "unlabelled"}
+    lines = MODULE.subclass_lines({"subclasses": cells}, counts_only=True)
+    assert "| `nonviolent_crime` | 15/25 | – | 15/25 |" in lines
+    assert lines[-1].startswith("| `unlabelled` |")
+    assert "gap" in next(line for line in lines if "`privacy`" in line)
+    assert "| `nonviolent_crime` | 60.0 (25) | – | 60.0 (25) |" in MODULE.subclass_lines({"subclasses": cells}, False)
+
+
+def test_subclass_metrics_mark_a_weak_model_only_subclass_off():
+    items = [(row("dev_h", i, [HC]), {HC: stage("escalate", "detected", "l1_model") if i < 9 else QUIET})
+             for i in range(20)]
+    pairs = [(item, cascade_pred(item, None, **stages), "dev") for item, stages in items]
+    cell = MODULE.subclass_metrics(pairs, {item["id"]: "elections" for item, _ in items})["elections"]["all"]
+    assert cell["tpr"] == 0.45 and cell["off"] and not cell["gap"]
+    # Report-only rows never count.
+    assert MODULE.subclass_metrics([(i, p, "report") for i, p, _ in pairs], {}) == {}
