@@ -57,7 +57,8 @@ below the base, or a hard-benign row of a class that the head's L1 detects and t
 the class's head hard-benign FPR (its flags over the hard-benign rows of its ``all``/``all`` cell) stays
 within 0.1 % and none of its TPR checks fails; the check line names the head FPR and the budget. The
 benign FPR of L1 at its detect cut (benign rows it flags) must stay within 0.1 % per class and language
-(``all``, ``de``, ``en``).
+(``all``, ``de``, ``en``); an overrun the base already has and the head does not raise passes but is named
+(``OVER``) in the verdict.
 stdout carries the dev numbers as a Markdown table (both TPRs, base -> head with the head's CI); the
 holdout leaves as a verdict and the names of failing checks only, its report stays in the cache.
 Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1 = regression,
@@ -563,10 +564,14 @@ def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pp: float = TO
             head_fpr = (_gate_cell(head, cls, language) or {}).get("flagged_fpr")
             if head_fpr is None:
                 continue
-            checks.append({"name": f"benign fpr {cls} {language}",
-                           "base": (_gate_cell(base, cls, language) or {}).get("flagged_fpr"), "head": head_fpr,
-                           "head_fpr": head_fpr, "budget": BENIGN_FPR_BUDGET,
-                           "ok": head_fpr <= BENIGN_FPR_BUDGET + 1e-12})
+            base_fpr = (_gate_cell(base, cls, language) or {}).get("flagged_fpr")
+            within = head_fpr <= BENIGN_FPR_BUDGET + 1e-12
+            # An overrun the base already has and the head does not raise is not this change's; it stays
+            # named in the verdict until the class is recalibrated.
+            inherited = not within and base_fpr is not None and head_fpr <= base_fpr + 1e-12
+            checks.append({"name": f"benign fpr {cls} {language}", "base": base_fpr, "head": head_fpr,
+                           "head_fpr": head_fpr, "budget": BENIGN_FPR_BUDGET, "inherited": inherited,
+                           "ok": within or inherited})
     for cls in CLASSES:
         new = sorted(set(head["hard_benign_flags"].get(cls, [])) - set(base["hard_benign_flags"].get(cls, [])))
         flagged = len(head["hard_benign_flags"].get(cls, []))
@@ -1138,6 +1143,8 @@ def verdict_lines(split: str, checks: list[dict[str, Any]], numbers: bool) -> li
     for check in checks:
         if check["ok"] and check.get("new"):
             lines.append(f"  PASS {check['name']}: {check['new']} new within budget ({_budget_text(check)})")
+        elif check.get("inherited"):
+            lines.append(f"  OVER {check['name']}: over budget on the base too, not raised ({_budget_text(check)})")
     return lines
 
 

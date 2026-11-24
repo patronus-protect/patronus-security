@@ -985,3 +985,10 @@ def test_compare_holds_the_benign_fpr_budget_per_class_and_language():
         "dev", list(over.values()), numbers=False)
     assert "  FAIL benign fpr harmful_content de: head benign FPR 0.2%, budget 0.1%" in MODULE.verdict_lines(
         "dev", list(over.values()), numbers=True)
+    # An overrun the base already has passes while the head does not raise it, and stays named.
+    inherited = {c["name"]: c for c in MODULE.compare(report(2), report(2))}
+    assert inherited["benign fpr harmful_content de"]["ok"] and inherited["benign fpr harmful_content de"]["inherited"]
+    assert "  OVER benign fpr harmful_content de: over budget on the base too, not raised (head benign FPR 0.2%, " \
+        "budget 0.1%)" in MODULE.verdict_lines("dev", list(inherited.values()), numbers=False)
+    raised = {c["name"]: c for c in MODULE.compare(report(2), report(3))}
+    assert not raised["benign fpr harmful_content de"]["ok"] and not raised["benign fpr harmful_content de"]["inherited"]
