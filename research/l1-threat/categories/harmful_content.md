@@ -132,3 +132,67 @@ Goldens: je Pattern und Sprache ≥ 5 Positive und ≥ 5 Hard Negatives, selbst 
 | Hard Negatives | XSTest-safe, OR-Bench-hard, Prävention, Nachrichten, Chemieunterricht, Pentest mit Auftrag |
 | Nur berichten | Nemotron Content Safety v2 / Aegis 2.0 (Trainings-Split, gegen Nemotron v3 dedupliziert, gedeckelt auf 1.500; Gold 8 % Fehler), AILuminate-Demo-Set (Gold 30 % Fehler); WildGuardMix-Schaden-Prompts außerhalb des Scopes (Privatsphäre, Urheberrecht, Desinformation) |
 | Lücke | Modell-Unterklassen (Fachberatung, Urheberrecht, Verleumdung, Wahlen, Privatsphäre) nur mit Kandidaten-Daten; bleiben aus, bis sie die Grenze aus §7 schaffen |
+
+## 13. Subklassen-Labels (Dev)
+
+Owner-Entscheidung 2026-11-23: Die Subklassen werden geliefert, nicht weggelassen. Jede `harmful_content`-Positive
+in DEV (`train_dev`, `generated`, `translated`; nie Holdout, nie `report`) trägt eine Subklasse aus §2 in
+[`labels/harmful_subclass.jsonl`](../labels/harmful_subclass.jsonl) (nur Zeilen-ID, Subklasse, Begründungskürzel;
+kein Zeilentext); `other` für eine Positive ohne passende Gefahrenklasse. Gelabelt per Agent in drei Teilen; ein
+zweiter, unabhängiger Durchgang labelt die feste 5-%-Stichprobe (sha256 der Zeilen-ID modulo 20 = 0) ohne die
+ersten Labels zu sehen. Werkzeug: `scripts/l1_threat/harmful_subclass.py` (export, merge, agree, coverage).
+
+Stand 2026-11-24 (HC01, Generation 23): 899 Positive (Nemotron v3 EN 483 / DE 316, SimpleSafetyTests EN 100);
+Stichprobe 37 Zeilen, 35 gleich, 2 abweichend (beide `other` ↔ `nonviolent_crime`).
+
+| Subklasse | all | de | en |
+|---|---:|---:|---:|
+| `violent_crime` | 220 | 81 | 139 |
+| `cbrne` | 44 | 16 | 28 |
+| `cyber_harm` | 31 | 9 | 22 |
+| `nonviolent_crime` | 475 | 181 | 294 |
+| `sex_crime` | 23 | 7 | 16 |
+| `child_safety` | 52 | 11 | 41 |
+| `self_harm` | 30 | 4 | 26 |
+| `specialized_advice` | 2 | 1 | 1 |
+| `ip` | 3 | 0 | 3 |
+| `defamation` | 0 | 0 | 0 |
+| `elections` | 0 | 0 | 0 |
+| `privacy` | 8 | 3 | 5 |
+| `other` | 11 | 3 | 8 |
+
+Benannte Lücken (< 20 Positive je Sprache): `cbrne`, `cyber_harm`, `sex_crime`, `child_safety`, `self_harm` auf
+DE; `sex_crime` auch auf EN; alle fünf Modell-Unterklassen auf DE und EN. Die Modell-Unterklassen haben in DEV
+damit keine messbare Grundlage; ihr Recall braucht eine Quelle mit Privatsphäre-, Urheberrechts-, Verleumdungs-,
+Wahl- und Fachberatungs-Anfragen (z. B. die WildGuardMix-Schaden-Prompts außerhalb des Scopes, heute `report`).
+
+Der Per-Subklasse-Check steht im Kaskaden-Bericht (`scoreboard.py report --cascade`, Abschnitt „harmful_content
+per subclass“): je Subklasse und Sprache TPR der Kaskaden-Entscheidung, `gap` unter 20 Positiven, `off` für eine
+Modell-Unterklasse unter 50 % TPR am konfigurierten Arbeitspunkt (höchstens 1 % FPR). Jede Subklasse steht in
+jeder Sprache in der Tabelle, auch ohne Positive (`– (0) gap`, ungemessen). Den Score des L1-Modells
+schreibt die Vorhersage nicht aus; der L1-Heuristik-Score ist für `harmful_content` fast überall 0, daher misst der
+Check die Entscheidung.
+
+Erster Lauf (HC01, `cascade-config.json` auf `main`, eingebautes `harmful_content`-Modell, Dev Generation 23;
+Klasse gesamt TPR 55,1 %, Benign-FPR 0,05 %): TPR in % (Positive).
+
+| Subklasse | all | de | en |
+|---|---:|---:|---:|
+| `violent_crime` | 55,5 (220) | 67,9 (81) | 48,2 (139) |
+| `cbrne` | 65,9 (44) | 87,5 (16) gap | 53,6 (28) |
+| `cyber_harm` | 41,9 (31) | 55,6 (9) gap | 36,4 (22) |
+| `nonviolent_crime` | 58,1 (475) | 78,5 (181) | 45,6 (294) |
+| `sex_crime` | 39,1 (23) | 71,4 (7) gap | 25,0 (16) gap |
+| `child_safety` | 46,2 (52) | 54,5 (11) gap | 43,9 (41) |
+| `self_harm` | 40,0 (30) | 75,0 (4) gap | 34,6 (26) |
+| `specialized_advice` | 50,0 (2) gap | 0,0 (1) gap, off | 100,0 (1) gap |
+| `ip` | 33,3 (3) gap, off | – (0) gap | 33,3 (3) gap, off |
+| `defamation` | – (0) gap | – (0) gap | – (0) gap |
+| `elections` | – (0) gap | – (0) gap | – (0) gap |
+| `privacy` | 50,0 (8) gap | 66,7 (3) gap | 40,0 (5) gap, off |
+| `other` | 36,4 (11) gap | 33,3 (3) gap | 37,5 (8) gap |
+
+Offen (BLOCKED in HC01): ein mehrklassiges Subklassen-N-Gramm-Modell braucht ein Modellformat mit mehr als zwei
+Klassen (das fastText-Format von Core kennt nur negativ/positiv) und für die fünf Modell-Unterklassen Dev-Positive
+(heute 0–8 je Subklasse); die Regeln aus §4 folgen in einer eigenen Runde. Am schwächsten sind EN `sex_crime`,
+`self_harm` und `cyber_harm`.

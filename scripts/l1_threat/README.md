@@ -215,6 +215,23 @@ python3 scripts/l1_threat/gold.py render --dev SUMMARY.json [--holdout SUMMARY.j
 
 Prüfblätter enthalten Datensatztext und werden nie eingecheckt. Tests: `scripts/tests/test_l1_threat_gold.py`.
 
+## harmful_content-Subklassen
+
+`harmful_subclass.py` verwaltet [`research/l1-threat/labels/harmful_subclass.jsonl`](../../research/l1-threat/labels/harmful_subclass.jsonl):
+je `harmful_content`-Positive in DEV eine Gefahren-Subklasse (sieben Regel-Subklassen, fünf reine
+Modell-Subklassen, `other`) mit Begründungskürzel, ohne Zeilentext.
+
+```bash
+python3 scripts/l1_threat/harmful_subclass.py export --dev "$ARK_L1_DEV_DATA" --out SCRATCH   # Zeilen zum Labeln
+python3 scripts/l1_threat/harmful_subclass.py merge --dev "$ARK_L1_DEV_DATA" SCRATCH/labels*.jsonl
+python3 scripts/l1_threat/harmful_subclass.py agree --check SCRATCH/check.jsonl            # zweiter Durchgang, 5 %
+python3 scripts/l1_threat/harmful_subclass.py coverage --dev "$ARK_L1_DEV_DATA"            # Lücken < 20 je Sprache
+```
+
+`merge` schreibt nur, wenn jede Dev-Positive genau ein Label hat; die Stichprobe ist fest (sha256 der Zeilen-ID
+modulo 20 = 0). Der Kaskaden-Bericht des Scoreboards liest die Datei für den Per-Subklasse-Check. Die Blätter mit
+Zeilentext bleiben außerhalb des Repos. Tests: `scripts/tests/test_l1_threat_harmful_subclass.py`.
+
 ## Generatoren und Übersetzungen
 
 `generators.py` leitet aus den eingefrorenen Korpora abgeleitete Sätze ab, jede Angriffszeile mit

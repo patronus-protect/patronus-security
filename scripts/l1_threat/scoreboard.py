@@ -38,8 +38,11 @@ origin (``all``, ``native``, ``translated``; runner translations and the German 
 ``report --cascade CONFIG`` renders the cascade report instead: per class and language at the
 configured operating point TPR, FPR on the benign rows and hard-benign FPR at the same decision (per
 benign source), the share of rows each stage decided and the share L1 escalated, latency per stage
-(p50/p95; L3 only on the rows it ran, with its share and mean cost per row), and the L1 score curve
-next to it; ``--counts-only`` leaves only row counts (the form of the owner's holdout run).
+(p50/p95; L3 only on the rows it ran, with its share and mean cost per row), the L1 score curve
+next to it, and the ``harmful_content`` positives per hazard subclass (``harmful_subclass.py`` label file):
+TPR of the decision, subclasses below 20 positives in a language marked ``gap``, model-only
+subclasses below 50 % TPR marked ``off``; ``--counts-only`` leaves
+only row counts (the form of the owner's holdout run).
 
 ``calibrate`` reads predictions of the gated benign rows (the dev benign pool incl. the hard
 benigns; rows of ``--exclude-ids``, e.g. a model's train negatives, are left out) and writes a
@@ -118,6 +121,8 @@ GENERATORS = BASELINES.generators
 CLASSES = tuple(CORPORA.taxonomy.CLASSES)
 DLP_SCOREBOARD = sys.modules.get("_ark_l1_dlp_scoreboard") or _load_file(
     "_ark_l1_dlp_scoreboard", ROOT / "scripts" / "l1_dlp" / "scoreboard.py")
+HARMFUL_SUBCLASS = sys.modules.get("_ark_l1_threat_harmful_subclass") or _load_file(
+    "_ark_l1_threat_harmful_subclass", HERE / "harmful_subclass.py")
 
 REPORT_SCHEMA = "ark-l1-threat-scoreboard-v3"
 CASCADE_SCHEMA = "ark-l1-threat-cascade-v1"
@@ -154,7 +159,8 @@ CASCADE_CONFIG = SCOREBOARD_DIR / "cascade-config.json"
 # What changes the numbers of main: the Core detectors and scorers, the scoreboard and corpus tooling,
 # the gold labels and the calibrated cascade config.
 REFRESH_PATHS = (*PREDICTOR_SOURCES, "scripts/l1_threat", "research/l1-threat/entity_map.yaml",
-                 str(SCOREBOARD_DIR / "gold-dev.json"), str(SCOREBOARD_DIR / "gold-leakage.json"), str(CASCADE_CONFIG))
+                 "research/l1-threat/labels", str(SCOREBOARD_DIR / "gold-dev.json"),
+                 str(SCOREBOARD_DIR / "gold-leakage.json"), str(CASCADE_CONFIG))
 # The line naming the commit a refreshed report was rendered from; the only line a refresh may leave stale.
 RENDERED_FROM = "Rendered by `scoreboard.py refresh` from commit"
 # The line naming the fingerprint of what a refreshed report read besides the code: the dev split (and the
@@ -775,14 +781,66 @@ def cascade_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
     return report
 
 
-def cascade_split(sets: list[SetFile], predictions: dict[str, Path], counts_only: bool = False) -> dict[str, Any]:
-    """The cascade report of a split: decisions, the L1 score curve and (unless counts only) latency."""
+def subclass_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
+                     labels: dict[str, str]) -> dict[str, dict[str, Any]]:
+    """Per ``harmful_content`` subclass (the label file's subclass of a gated positive; ``unlabelled`` without
+    one) and language: positives and the cascade's detections at the configured operating point. Once there
+    is a gated positive, every subclass has a cell in every language, also without positives (TPR ``None``).
+    A subclass with fewer than ``MIN_POSITIVES`` positives in a language is a ``gap`` there; a model-only
+    subclass whose TPR stays below 50 % is ``off`` (the operating point is at most 1 % FPR)."""
+    cls = HARMFUL_SUBCLASS.CLASS
+    cells: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0]))
+    for row, prediction, role in pairs:
+        if role == "report" or cls not in row["classes"]:
+            continue
+        detected = _stage(prediction, cls)["decision"] == "detected"
+        sub = labels.get(row["id"], "unlabelled")
+        for language in ("all", row.get("language") or "unknown"):
+            cells[sub][language][0] += 1
+            cells[sub][language][1] += detected
+    if cells:
+        for sub in HARMFUL_SUBCLASS.SUBCLASSES:
+            for language in LANGUAGES:
+                cells[sub].setdefault(language, [0, 0])
+    return {sub: {language: {"positives": n, "tp": tp, "tpr": tp / n if n else None,
+                             "gap": n < HARMFUL_SUBCLASS.MIN_POSITIVES,
+                             "off": sub in HARMFUL_SUBCLASS.MODEL_ONLY_SUBCLASSES and n > 0 and tp / n < 0.5}
+                  for language, (n, tp) in sorted(by_language.items())}
+            for sub, by_language in sorted(cells.items())}
+
+
+def subclass_lines(report: dict[str, Any], counts_only: bool) -> list[str]:
+    cells = report.get("subclasses") or {}
+    if not cells:
+        return ["No `harmful_content` positives in the gated sets."]
+    order = [*HARMFUL_SUBCLASS.SUBCLASSES, "unlabelled"]
+    lines = ["| subclass | " + " | ".join(LANGUAGES) + " |", "|---|" + "---:|" * len(LANGUAGES)]
+    for sub in sorted(cells, key=order.index):
+        row = []
+        for language in LANGUAGES:
+            cell = cells[sub].get(language)
+            if cell is None:
+                row.append("–")
+                continue
+            text = f"{cell['tp']}/{cell['positives']}" if counts_only else \
+                f"{_share(cell['tpr'])} ({cell['positives']})"
+            marks = [m for m in ("gap", "off") if cell[m] and sub != "unlabelled"]
+            row.append(text + (f" {', '.join(marks)}" if marks else ""))
+        lines.append(f"| `{sub}` | " + " | ".join(row) + " |")
+    return lines
+
+
+def cascade_split(sets: list[SetFile], predictions: dict[str, Path], counts_only: bool = False,
+                  labels: dict[str, str] | None = None) -> dict[str, Any]:
+    """The cascade report of a split: decisions, the L1 score curve, the ``harmful_content`` subclasses
+    (``labels``: the subclass label file by default) and (unless counts only) latency."""
     pairs = load_pairs(sets, predictions)
     roles: dict[str, list[str]] = defaultdict(list)
     for entry in sets:
         roles[entry.role].append(entry.set_id)
     return {"schema": CASCADE_SCHEMA, "sets": {k: sorted(v) for k, v in sorted(roles.items())}, "rows": len(pairs),
             "decision": cascade_metrics(pairs), "curve": score_pairs(pairs, bootstrap=False),
+            "subclasses": subclass_metrics(pairs, HARMFUL_SUBCLASS.load() if labels is None else labels),
             "latency": None if counts_only else stage_latency(pairs)}
 
 
@@ -928,6 +986,12 @@ def render_cascade(report: dict[str, Any], config: dict[str, Any], title: str, c
                   f"### L1 score curve ({name.lower()})", "",
                   "TPR at matched document FPR on the L1 score (the view the gate checks), hard-benign "
                   "FP at the same threshold; origin all.", "", *curve_lines(report, scope, counts_only), ""]
+    lines += ["## harmful_content per subclass (gated sets)", "",
+              ("Detections of the cascade / positives" if counts_only else
+               "TPR of the final decision (in brackets: positives)")
+              + " per hazard subclass of the subclass labels (`unlabelled`: rows without one). `gap`: fewer than "
+              f"{HARMFUL_SUBCLASS.MIN_POSITIVES} positives in the language; `off`: a model-only subclass below "
+              "50 % TPR at the configured operating point (at most 1 % FPR).", "", *subclass_lines(report, counts_only), ""]
     if not counts_only:
         lines += ["## Latency per stage", "",
                   "Milliseconds per row in the prediction run (one process per set): the whole scan, the native L1 "
