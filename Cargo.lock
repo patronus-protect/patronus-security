@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "ark-api"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "ark-distributed-protocol",
  "axum",
@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "ark-coordinator"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "ark-distributed-protocol",
  "axum",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "ark-distributed-protocol"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "patronus-ark-core",
  "serde",
@@ -2125,7 +2125,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "patronus-ark"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "blake3",
  "flate2",
@@ -2154,7 +2154,7 @@ dependencies = [
 
 [[package]]
 name = "patronus-ark-core"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "aho-corasick",
  "blake3",
@@ -2184,7 +2184,7 @@ dependencies = [
 
 [[package]]
 name = "patronus-ark-core-python"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "patronus-ark-core",
  "pyo3",
@@ -2194,7 +2194,7 @@ dependencies = [
 
 [[package]]
 name = "patronus-ark-python"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "patronus-ark",
  "patronus-ark-core",
