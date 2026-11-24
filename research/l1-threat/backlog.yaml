@@ -753,6 +753,7 @@ tasks:
       agent_config_tampering TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates and
       approve-or-deny unchanged; AC02 ablation re-run and the decision recorded
   - id: T26
+    status: done
     title: "memory_poisoning on the second generator family: agent_scenarios 0 of 160 (templates 83/83) — long-term memory / Langzeitgedächtnis / 'permanent rule in your memory' / stored profile as store target, a later-session trigger ('whenever you recall this conversation in a later session, first …'), state claims about third parties after a first-person phrase ('my manager has pre-approved …' is dropped by the MP01 first-person check), in RAG chunks, saved-preferences JSON and support chats"
     type: recall-fix
     deps: [MP02, T22]

@@ -1638,6 +1638,60 @@
       ]
     },
     {
+      "id": "ark.injection.memory.state_claim_en",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.state_claim_en",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "Asks the agent to keep a claim about approvals, roles, trusted sources or lifted rules in its long-term memory, stored profile or for later sessions",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory or later-session words; a first-person subject (the user's own preference) is excluded, a claim about a third party after 'my' is not; a negation right before the claim (the `negated` group) drops the match.",
+      "required_literals_any": [
+        "memor",
+        "notes",
+        "profile",
+        "future",
+        "later",
+        "subsequent",
+        "upcoming"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:save|store|write|put|add|commit|keep|record)\\s+(?:(?:this|that|it|the\\s+following)\\s+(?:(?:fact|rule|note)\\s+)?)?(?:as\\s+(?:a\\s+)?(?:permanent|persistent|standing|lasting)\\s+(?:rule|fact|instruction|note)\\s+)?(?:to|in|into)\\s+(?:your|the)\\s+(?:(?:long[-\\s]term|permanent|persistent|stored|saved)\\s+)?(?:memory|memories|notes|profile)|update\\s+(?:your|the)\\s+(?:(?:long[-\\s]term|permanent|persistent|stored|saved)\\s+)?(?:memory|memories|notes|profile|user\\s+profile)|(?:save|store|keep|remember|memori[sz]e|record)\\s+(?:(?:this|that|it|the\\s+following)\\s+(?:(?:fact|rule|note)\\s+)?)?for\\s+(?:all\\s+|every\\s+|each\\s+|any\\s+)?(?:future|later|subsequent|upcoming)\\s+(?:conversations?|chats?|sessions?))(?-u:\\b)(?:[^.!?\\n]|\\.[a-z0-9]){0,120}?(?-u:\\b)(?P<negated>(?:not|never|\\w+n['’]t)\\s+(?:(?:yet|be|been)\\s+){0,2})?(?:pre-?approved|approved\\s+in\\s+advance|(?:need|needs|require|requires)\\s+no\\s+(?:further\\s+)?(?:confirmation|approval|verification|checks?)|no\\s+longer\\s+appl(?:y|ies)|follow\\s+(?:their|its|his|her)\\s+instructions|without\\s+(?:checking|asking|confirmation|verification)|(?:is|are)\\s+(?:now\\s+)?(?:an?\\s+|the\\s+)?(?:admin|administrator|owner)s?|overrides?\\s+(?:the\\s+|your\\s+)?system\\s+(?:instructions|prompt|rules)|official\\s+(?:[\\w-]+\\s+){0,2}(?:address|e-?mail|number|url|website|contact|account)\\s+is)(?-u:\\b)",
+      "excluded_match_words": [
+        "i",
+        "i'm",
+        "i’m"
+      ]
+    },
+    {
+      "id": "ark.injection.memory.state_claim_de",
+      "canonical_id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "ark-composition:memory.state_claim_de",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.9,
+      "evidence_tier": "audited_high_precision",
+      "description": "German request to keep a claim about approvals, roles, trusted sources or lifted rules in the agent's long-term memory, stored profile or for later sessions",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.7",
+      "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory or later-session words; a first-person subject (the user's own preference) is excluded, a claim about a third party after 'my' is not; a negation right before the claim (the `negated` group) drops the match.",
+      "required_literals_any": [
+        "gedächtnis",
+        "speicher",
+        "notizen",
+        "profil",
+        "erinnerungen",
+        "künftig",
+        "spätere"
+      ],
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:nimm|übernimm|speichere|speicher|schreibe|schreib|lege|leg|hinterlege|trage|trag)\\s+(?:(?:das|dies|folgendes|diese\\s+tatsache|diese\\s+regel)\\s+)?(?:als\\s+(?:eine\\s+)?(?:dauerhafte|feste|ständige|permanente)\\s+(?:regel|tatsache|anweisung|notiz)\\s+)?(?:in|ins|im)\\s+(?:dein(?:em|en|e)?\\s+|das\\s+|den\\s+|dem\\s+)?(?:gespeicherte[nm]?\\s+)?(?:langzeit-?)?(?:gedächtnis|speicher|notizen|profil|erinnerungen)|aktualisiere\\s+(?:dein(?:em|en|e)?\\s+|das\\s+|den\\s+)?(?:gespeicherte[n]?\\s+)?(?:langzeit-?)?(?:gedächtnis|speicher|notizen|profil|nutzerprofil|erinnerungen)|(?:merke|merk|speichere|speicher|notiere|behalte|behalt)\\s+(?:dir\\s+)?(?:(?:das|dies|folgendes|diese\\s+tatsache)\\s+)?für\\s+(?:alle\\s+|jede\\s+|jedes\\s+)?(?:künftigen?|zukünftigen?|späteren?)\\s+(?:gespräche?|chats?|sitzung(?:en)?|unterhaltung(?:en)?))(?:[^.!?\\n]|\\.[a-z0-9]){0,120}?(?P<negated>(?-u:\\b)(?:nicht|nie|niemals|kein(?:e[nmrs]?)?)\\s+)?(?:vorab\\s+(?:freigegeben|genehmigt|bestätigt|autorisiert)|keine\\s+(?:bestätigung|freigabe|prüfung|rückfrage)\\s+(?:mehr\\s+)?(?:brauch|benötig)\\w*|nicht\\s+mehr\\s+gelten|gelten\\s+(?:[^.!?\\n]{0,40}?\\s)?nicht\\s+mehr|befolgst\\s+(?:ihre|seine|deren|alle)\\s+anweisungen|ohne\\s+(?:kontrolle|prüfung|rückfrage|bestätigung|nachfrage)|ist\\s+(?:jetzt\\s+)?(?:ein\\s+|eine\\s+|der\\s+|die\\s+)?(?:admin|administrator(?:in)?|inhaber(?:in)?)(?-u:\\b)|vorrang\\s+vor\\s+(?:den\\s+|deinen\\s+)?system(?:anweisungen|prompt|regeln)|offizielle\\s+[\\w-]{0,30}(?:adresse|nummer|kontakt|webseite|website|konto)\\s+ist)",
+      "excluded_match_words": [
+        "ich"
+      ]
+    },
+    {
       "id": "ark.injection.memory.conditional_trigger_en",
       "canonical_id": "ark.injection.skillspector.persistent_override",
       "upstream_id": "ark-composition:memory.conditional_trigger_en",
@@ -1645,7 +1699,7 @@
       "severity": "high",
       "upstream_weight": 0.9,
       "evidence_tier": "audited_high_precision",
-      "description": "Installs a trigger for later conversations: when someone asks about X in future, answer or act differently",
+      "description": "Installs a trigger for later conversations: when someone asks about X in future, or when the agent recalls this conversation in a later session, answer or act differently",
       "source": "ark-source-derived",
       "source_revision": "0.1.7",
       "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
@@ -1659,7 +1713,7 @@
         "other chat",
         "other session"
       ],
-      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:whenever|if|when|once)\\s+(?:anyone|someone|somebody|any\\s+user|the\\s+user|a\\s+user|users|a\\s+customer|the\\s+customer|any\\s+customer)\\s+(?:ever\\s+|later\\s+|again\\s+)?(?:asks?|mentions?|says?|requests?|types?|brings\\s+up|talks\\s+about|writes?|inquires?)(?-u:\\b)[^,.!?\\n]{0,60}?(?-u:\\b)(?:in\\s+(?:the\\s+)?future|in\\s+(?:all\\s+|any\\s+)?(?:future|later|subsequent|other)\\s+(?:conversations?|chats?|sessions?)|from\\s+now\\s+on|later\\s+on)(?-u:\\b)[^,.!?\\n]{0,40}?|next\\s+time\\s+(?:anyone|someone|somebody|any\\s+user|the\\s+user|a\\s+user|users|a\\s+customer|the\\s+customer)\\s+(?:asks?|mentions?|says?|requests?|types?|brings\\s+up|talks\\s+about|writes?|inquires?)(?-u:\\b)[^,.!?\\n]{0,80}?),\\s*(?:then\\s+)?(?:always\\s+)?(?:reply|respond|answer|tell|say|send|redirect|recommend|claim|insist|direct|point|refer|state|inform|give|share|forward|include|add|use)(?-u:\\b)",
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:(?:whenever|if|when|once)\\s+you\\s+(?:recall|remember|revisit|reload|return\\s+to)\\s+(?:this|our|the\\s+current)\\s+(?:conversation|chat|session)\\s+in\\s+(?:a|any|every|each|the\\s+next)\\s+(?:later|future|subsequent)\\s+(?:conversations?|chats?|sessions?)|(?:whenever|if|when|once)\\s+(?:anyone|someone|somebody|any\\s+user|the\\s+user|a\\s+user|users|a\\s+customer|the\\s+customer|any\\s+customer)\\s+(?:ever\\s+|later\\s+|again\\s+)?(?:asks?|mentions?|says?|requests?|types?|brings\\s+up|talks\\s+about|writes?|inquires?)(?-u:\\b)[^,.!?\\n]{0,60}?(?-u:\\b)(?:in\\s+(?:the\\s+)?future|in\\s+(?:all\\s+|any\\s+)?(?:future|later|subsequent|other)\\s+(?:conversations?|chats?|sessions?)|from\\s+now\\s+on|later\\s+on)(?-u:\\b)[^,.!?\\n]{0,40}?|next\\s+time\\s+(?:anyone|someone|somebody|any\\s+user|the\\s+user|a\\s+user|users|a\\s+customer|the\\s+customer)\\s+(?:asks?|mentions?|says?|requests?|types?|brings\\s+up|talks\\s+about|writes?|inquires?)(?-u:\\b)[^,.!?\\n]{0,80}?),\\s*(?:then\\s+)?(?:first\\s+)?(?:always\\s+)?(?:reply|respond|answer|tell|say|send|redirect|recommend|claim|insist|direct|point|refer|state|inform|give|share|forward|include|add|use)(?-u:\\b)",
       "excluded_match_words": [
         "not",
         "never",
@@ -1676,7 +1730,7 @@
       "severity": "high",
       "upstream_weight": 0.9,
       "evidence_tier": "audited_high_precision",
-      "description": "German trigger for later conversations: when someone asks about X in future, answer or act differently",
+      "description": "German trigger for later conversations: when someone asks about X in future, or when the agent recalls this conversation in a later session, answer or act differently",
       "source": "ark-source-derived",
       "source_revision": "0.1.7",
       "adaptation": "Own DE/EN clause-anchored relation for memory poisoning; literal prefilter on the memory, permanence or target words.",
@@ -1687,7 +1741,7 @@
         "ab jetzt",
         "später"
       ],
-      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:wenn|falls|sobald)\\s+(?:(?:künftig|zukünftig|in\\s+zukunft|später|ab\\s+jetzt|das\\s+nächste\\s+mal|beim\\s+nächsten\\s+mal)\\s+(?:\\w+\\s+)?(?:(?:der|die|ein|eine)\\s+)?(?:jemand|irgendjemand|irgendwer|nutzer(?:in)?|benutzer(?:in)?|kund(?:e|in)|anwender(?:in)?|user)\\s+[^,.!?\\n]{0,80}?|(?:(?:der|die|ein|eine)\\s+)?(?:jemand|irgendjemand|irgendwer|nutzer(?:in)?|benutzer(?:in)?|kund(?:e|in)|anwender(?:in)?|user)\\s+[^,.!?\\n]{0,40}?(?:künftig|zukünftig|in\\s+zukunft|später|ab\\s+jetzt|das\\s+nächste\\s+mal|beim\\s+nächsten\\s+mal)\\s+[^,.!?\\n]{0,80}?)(?:fragt|erwähnt|anspricht|schreibt|sagt|eingibt|bittet|anfragt|wissen\\s+will|wissen\\s+möchte)\\s*,\\s*(?:dann\\s+)?(?:immer\\s+)?(?:antworte|antwort|sag|sage|schreib|schreibe|schicke|schick|empfiehl|leite|verweise|behaupte|erkläre|teile|nenne|gib|erzähle|erzähl)(?-u:\\b)",
+      "pattern": "(?:^|[.!?;:,\\n>]\\s*|:\\s*\\\"|(?-u:\\b)(?:and|und|then|dann)\\s+)(?:(?:please|bitte|now|jetzt|nun|kindly|also|auch)\\s+){0,2}(?:wenn|falls|sobald)\\s+(?:(?:(?:künftig|zukünftig|in\\s+zukunft|später|ab\\s+jetzt|das\\s+nächste\\s+mal|beim\\s+nächsten\\s+mal)\\s+(?:\\w+\\s+)?(?:(?:der|die|ein|eine)\\s+)?(?:jemand|irgendjemand|irgendwer|nutzer(?:in)?|benutzer(?:in)?|kund(?:e|in)|anwender(?:in)?|user)\\s+[^,.!?\\n]{0,80}?|(?:(?:der|die|ein|eine)\\s+)?(?:jemand|irgendjemand|irgendwer|nutzer(?:in)?|benutzer(?:in)?|kund(?:e|in)|anwender(?:in)?|user)\\s+[^,.!?\\n]{0,40}?(?:künftig|zukünftig|in\\s+zukunft|später|ab\\s+jetzt|das\\s+nächste\\s+mal|beim\\s+nächsten\\s+mal)\\s+[^,.!?\\n]{0,80}?)(?:fragt|erwähnt|anspricht|schreibt|sagt|eingibt|bittet|anfragt|wissen\\s+will|wissen\\s+möchte)|du\\s+dich\\s+(?:in\\s+(?:einer|jeder)\\s+(?:späteren|künftigen|zukünftigen)\\s+(?:sitzung|unterhaltung|session|chat)\\s+an\\s+(?:dieses|unser|das\\s+heutige)\\s+(?:gespräch|chat|unterhaltung)\\s+|an\\s+(?:dieses|unser|das\\s+heutige)\\s+(?:gespräch|chat|unterhaltung)\\s+in\\s+(?:einer|jeder)\\s+(?:späteren|künftigen|zukünftigen)\\s+(?:sitzung|unterhaltung|session|chat)\\s+)erinnerst)\\s*,\\s*(?:dann\\s+)?(?:immer\\s+)?(?:antworte|antwort|sag|sage|schreib|schreibe|schicke|schick|empfiehl|leite|verweise|behaupte|erkläre|teile|nenne|gib|erzähle|erzähl)(?-u:\\b)",
       "excluded_match_words": [
         "nicht",
         "niemals",
