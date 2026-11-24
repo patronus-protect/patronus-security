@@ -103,7 +103,7 @@ Harm-Anteil. Prompts mit Gefahrenbegriffen werden zur Eval-Zeit geladen, nicht c
 
 | Heutige Regeln | Ziel |
 |---|---|
-| threat.harmful_intent | `hc_howto_hazard` |
+| threat.harmful_intent | `hc_howto_hazard` (Punkte-Regel seit HC02, Basis 40) |
 | übrige harmful_behavior: threat.agent_guard_removal, threat.persistence_payload, threat.root_destruction | nicht hier: `agent_config_tampering`, `unsafe_action`, K26 |
 
 L2/L3-Label `harmful_behavior` mappt hierher, `toxic_or_harmful` sekundär (X03).
@@ -196,3 +196,20 @@ Offen (BLOCKED in HC01): ein mehrklassiges Subklassen-N-Gramm-Modell braucht ein
 Klassen (das fastText-Format von Core kennt nur negativ/positiv) und für die fünf Modell-Unterklassen Dev-Positive
 (heute 0–8 je Subklasse); die Regeln aus §4 folgen in einer eigenen Runde. Am schwächsten sind EN `sex_crime`,
 `self_harm` und `cyber_harm`.
+
+## 14. Stand HC02 (2026-11-24): Punkte und Ablations-Entscheidung
+
+Zahlen und Befehle: [`scoreboard/harmful-content-scorer.md`](../scoreboard/harmful-content-scorer.md).
+
+- **Modell:** Das eingebaute `FT`-Modell (S13) bleibt das L1-Modell; `B4`, `B1`, `B5` werden nicht ausgeliefert.
+  Dev (S11-Aufbau, 450 Kalibrier-Positive gegen 27 311 Benign-Zeilen) TPR@0,1 % FPR: `FT` 34,7 (DE 49,3, EN 31,2),
+  `B4` 32,0, `B1` 32,0; out of distribution (`nemotron_content_safety_v2`) 40,8 gegen 25,3 / 20,2 %. `FT` ist auch am
+  günstigsten (3,2 ms, 256 KiB). Es läuft nur, wenn eine Kaskade es nennt; die Kategorie bleibt default aus.
+- **Punkte:** `threat.harmful_intent` wird Punkte-Regel (Basis 40, Validator Format, geteilter Klauselkontext) statt
+  Alt-Scorer-Regel, die allein nie angenommen wurde. Trifft keine der 96 092 Dev- und Report-Zeilen; 4 von 14
+  Golden-Positiven. R, R+A, R+A+L scoren auf Dev 0, solange die Patterns aus §4 fehlen.
+- **Goldens:** 14 Positive und 14 Hard Negatives (DE + EN). Das Modell meldet an seinen Schnitten keine der Hard
+  Negatives (Rust-Test) und keine der Positiven: es lernt die Anfrage-Form seiner zwei Quellen, wie bei
+  `toxic_language` (TX02).
+- **Offen:** die Absichts-Patterns aus §4 (10 von 14 Golden-Positiven sind Regel-Lücken), eine zweite offene
+  Positiv-Quelle je Sprache, Dev-Positive der Modell-Unterklassen und ein mehrklassiges Subklassen-Modell (§13).

@@ -505,6 +505,31 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn builtin_harmful_content_model_detects_no_golden_hard_negative() {
+        // Prevention, news, teaching, an authorised pentest, fiction and crisis
+        // counselling share the hazard words of a request for harm; at its
+        // shipped cuts the built-in model reports none of them.
+        let model = L1TextModel::load(
+            SecurityCategory::HarmfulContent,
+            &L1ModelConfig::builtin("harmful_content"),
+        )
+        .unwrap();
+        let goldens =
+            include_str!("../../../../python/patronus_ark/benchmark_data/threat_l1.jsonl");
+        let hard_negatives: Vec<String> = goldens
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .filter(|row| row["class"] == "harmful_content" && row["case_type"] == "hard_negative")
+            .map(|row| row["text"].as_str().unwrap().to_string())
+            .collect();
+        assert!(hard_negatives.len() >= 10);
+        for text in &hard_negatives {
+            let outcome = model.evaluate(text, &[], &[]);
+            assert_ne!(outcome.outcome, StageOutcome::Detected, "{text}");
+        }
+    }
+
+    #[test]
     fn language_cuts_apply_to_texts_of_their_language() {
         let packed = include_bytes!("testdata/synthetic_fasttext_model.ftpack");
         let length = u32::from_le_bytes(packed[8..12].try_into().unwrap()) as usize;

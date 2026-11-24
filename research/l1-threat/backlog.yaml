@@ -688,7 +688,7 @@ tasks:
   - {id: TX01, title: "toxic_language DE/EN: hashed lexicon derived by the runner from training splits of permissively licensed datasets (e.g. GAHD, HateCheck) by frequency/contrast plus permissive word lists, licence checked per source,families insult-with-addressee, group derogation, dehumanisation, threat, harassment, profanity (weak); counter-context quotation/counter-speech/moderation", type: new-family, deps: [S03, M04, E06, T07], status: done}
   - {id: TX02, title: "toxic_language points + ablation decision (char n-gram LR expected to pay off; GAHD/GermEval 2018 test/HateCheck/RTP-LX)", type: scorer, deps: [TX01, S05], status: done}
   - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01, T08], status: done}
-  - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05]}
+  - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05], status: done}
   - id: HC03
     title: "harmful_content intent rules and the subclass n-gram model on the HC01 labels — HC01 shipped the
       subclass labels (research/l1-threat/labels/harmful_subclass.jsonl) and evaluation tooling but no rules and

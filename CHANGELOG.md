@@ -238,7 +238,9 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
     groups, first-person threats of violence and harassment, with obfuscated spellings folded;
     counter-speech, moderation logs, news and untargeted profanity stay quiet.
   - `harmful_content`: reported as its own category, from the existing harmful-request rule and
-    the built-in L1 model.
+    the built-in L1 model. Requests to plan or organise a violent attack or a murder are now
+    reported: the rule scores with points like the other attack-class rules, so a response plan or
+    a news report about such an attack stays clean.
   - `memory_poisoning`: attempts to plant lasting rules or notes in an agent's memory.
   - `prompt_extraction`: requests for the system prompt or hidden instructions, also obfuscated
     or indirect, and attempts to get a guarded secret letter by letter or in a transformed form.
