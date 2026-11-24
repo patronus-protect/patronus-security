@@ -73,11 +73,12 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
 
 - **Blocking scans return a report:** `scan_all`, `scan_categories` and `scan_category` (and
   Rust's `scan_input`) return one report per input in the shape of Ark Core's `Scanner.scan`:
-  read the results from `report["native"]` (Python) or `report.native` (Rust). Queue events are
-  unchanged.
-- **One decision field per result:** with a cascade, a deciding result carries `module_decision`
-  instead of the separate `decided_by` and `l1_outcome` keys. An unset `decision` is left out
-  instead of written as `null`.
+  read the results from `report["native"]` (Python) or `report.native` (Rust). With a cascade,
+  the report's `decision` list holds one entry per category; the results in `native` carry no
+  decision of their own. Queue events are unchanged.
+- **One decision field per queued result:** with a cascade, a deciding result in queue events
+  carries `module_decision` instead of the separate `decided_by` and `l1_outcome` keys. An unset
+  `decision` is left out instead of written as `null`.
 
 **Rust and Python APIs**
 
