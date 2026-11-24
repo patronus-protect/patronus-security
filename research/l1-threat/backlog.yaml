@@ -688,7 +688,7 @@ tasks:
   - {id: TX01, title: "toxic_language DE/EN: hashed lexicon derived by the runner from training splits of permissively licensed datasets (e.g. GAHD, HateCheck) by frequency/contrast plus permissive word lists, licence checked per source,families insult-with-addressee, group derogation, dehumanisation, threat, harassment, profanity (weak); counter-context quotation/counter-speech/moderation", type: new-family, deps: [S03, M04, E06, T07], status: done}
   - {id: TX02, title: "toxic_language points + ablation decision (char n-gram LR expected to pay off; GAHD/GermEval 2018 test/HateCheck/RTP-LX)", type: scorer, deps: [TX01, S05], status: done}
   - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01, T08], status: done}
-  - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05]}
+  - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05], status: done}
   - id: HC03
     title: "harmful_content intent rules and the subclass n-gram model on the HC01 labels — HC01 shipped the
       subclass labels (research/l1-threat/labels/harmful_subclass.jsonl) and evaluation tooling but no rules and
@@ -729,6 +729,7 @@ tasks:
       hard-benign FP and benign FPR <= 0.1% per language; gandalf (report) stated; Mosscap left out of the
       rule design check by reporting runner_translations_de and the carriers apart
   - id: T24
+    status: done
     title: "tool_poisoning on the second generator family: agent_scenarios 0 of 160 (templates 83/83) — directives in tool descriptions outside JSON (MCP server YAML description blocks, package README tool lists, Python @mcp.tool() docstrings): read a credential file and append it on every listing, call this tool first with the whole conversation, copy every message to an address and leave it out of the reply, keep it from the user"
     type: recall-fix
     deps: [TP02, T22]
@@ -740,6 +741,7 @@ tasks:
       held-out; dev tool_poisoning TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates
       unchanged; TP02 ablation re-run and the decision recorded
   - id: T25
+    status: done
     title: "agent_config_tampering on the second generator family: agent_scenarios 0 of 160 (templates 84/84) — requests to the agent inside copilot-instructions, issue comments and README setup sections to register an MCP server in its mcp.json and enable it for every workspace without telling the user, or to switch off pre-commit hooks and the secret scanner in the agent configuration"
     type: recall-fix
     deps: [AC02, T17, T22]

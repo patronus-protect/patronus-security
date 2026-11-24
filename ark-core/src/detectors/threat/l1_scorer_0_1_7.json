@@ -14,7 +14,6 @@
     "ark.threat.dynamic_ssrf",
     "ark.threat.environment_exfiltration",
     "ark.threat.environment_post",
-    "ark.threat.harmful_intent",
     "ark.threat.kubernetes_privileged_json",
     "ark.threat.kubernetes_privileged_yaml",
     "ark.threat.persistence_payload",
@@ -44,7 +43,6 @@
     "rule:ark.threat.dynamic_ssrf",
     "rule:ark.threat.environment_exfiltration",
     "rule:ark.threat.environment_post",
-    "rule:ark.threat.harmful_intent",
     "rule:ark.threat.kubernetes_privileged_json",
     "rule:ark.threat.kubernetes_privileged_yaml",
     "rule:ark.threat.persistence_payload",
@@ -77,7 +75,6 @@
     0.6558977005567654,
     0.4892502975784925,
     1.0116012749227021,
-    0.4978870931262023,
     0.764539886043498,
     0.7038657745788647,
     0.804585327592898,
@@ -109,7 +106,7 @@
       "unified_validation.csv": "e94f9f78ad0df24677cfa7a5e0a601c4d7738879e3f4a1d89d340f4a7d41578b",
       "threat_l1_bilingual.json": "4363c6fc8cba7443edac4443371c10d0bc4717acef034dcb5e4eee1c7460a88a"
     },
-    "rules_sha256": "5f21a77eb063f8ecfe026c4b55546cdbd3dc4e9513bea4b49e88dba227e705d9",
+    "rules_sha256": "12349fcecc2aa6a414e6f3242f6e626dd3e30713a57e1d4b017a6d4e210e0b4a",
     "scanner_sha256": "74aae336c65862b3a4a3dacd425190c43cf6d7d47f6379597f69107f14b2df01",
     "excluded": {
       "fit": 5695,
@@ -140,9 +137,10 @@
     "dropped_rules": {
       "rules": [
         "ark.threat.root_destruction",
-        "ark.threat.host_root_mount"
+        "ark.threat.host_root_mount",
+        "ark.threat.harmful_intent"
       ],
-      "reason": "shell syntax decided by shell_command; their columns are dropped, the remaining coefficients and intercept are the trained ones"
+      "reason": "root_destruction and host_root_mount: shell syntax decided by shell_command; harmful_intent: a points rule of harmful_content. Their columns are dropped, the remaining coefficients and intercept are the trained ones"
     }
   },
   "golden_cases": [
@@ -175,7 +173,6 @@
         0.0,
         0.0,
         0.0,
-        0.0,
         0.6931471805599453,
         4.51085950651685,
         1.0
@@ -185,7 +182,6 @@
     },
     {
       "features": [
-        0.0,
         0.0,
         0.0,
         0.0,

@@ -16,6 +16,10 @@
       "settings.json",
       "config.toml",
       "mcp.json",
+      "agent.yaml",
+      "agent.yml",
+      "berechtigungsdatei",
+      "permission file",
       "\"command\""
     ],
     "sources": [
@@ -68,7 +72,11 @@
       "überspringe"
     ],
     "shared": [
-      "disableallhooks"
+      "disableallhooks",
+      "pre-commit",
+      "precommit",
+      "secret-scann",
+      "secret scann"
     ],
     "sources": [
       "ark-core/src/detectors/threat/rules.json",

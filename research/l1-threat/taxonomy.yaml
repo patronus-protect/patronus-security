@@ -822,7 +822,7 @@ classes:
         en:
         - '<tool description>: when <other tool> is called, <redirect recipient> to <foreign address>'
       carriers: [tool_description]
-      existing_rules: [ark.injection.cross_tool.override_action, ark.injection.cross_tool.override_then_call, ark.threat.tp_shadowing]
+      existing_rules: [ark.injection.cross_tool.override_action, ark.injection.cross_tool.override_then_call, ark.threat.tp_shadowing, ark.threat.tp_tool_override]
       baseline_coverage: {cisco_yara: partial, atr: partial, pipelock: none, prompt_guard_2: none}
       gap: Today's cross_tool rules need an explicit override verb and ignore the carrier; no check that the named
         tool is foreign.

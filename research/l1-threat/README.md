@@ -444,6 +444,13 @@ die Modelle 0–1,4 % (Regeln 0,6 % bei 0 FP), auf den Goldens 1 von 32. Neue Re
 mit Verb des Glaubens/Sagens vor einer Beleidigung. Offen: native Trainingspositive (Owner: `DEV` auf
 Generation 23 neu einfrieren, plus GermEval 2018 Train). Zahlen in [`scoreboard/toxic-language-scorer.md`](scoreboard/toxic-language-scorer.md).
 
+**Stand HC02.** `harmful_content` behält das eingebaute `FT`-Modell als L1-Modell (Dev TPR@0,1 % 34,7, DE 49,3,
+EN 31,2; out of distribution `nemotron_content_safety_v2` 40,8 %); `B4`/`B1` liegen auf allen Spalten darunter und
+über dem Latenz-Budget. Die Kategorie bleibt default aus. `ark.threat.harmful_intent` wird Punkte-Regel (Basis 40):
+vorher traf sie, aber der Alt-Scorer nahm sie allein nie an. Dev unverändert (0 Treffer auf 96 092 Zeilen). Offen:
+die Absichts-Patterns aus §4, eine zweite Positiv-Quelle je Sprache. Zahlen in
+[`scoreboard/harmful-content-scorer.md`](scoreboard/harmful-content-scorer.md).
+
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
 [`injection`](categories/injection.md), [`prompt_extraction`](categories/prompt_extraction.md),
 [`jailbreak`](categories/jailbreak.md), [`tool_poisoning`](categories/tool_poisoning.md),
