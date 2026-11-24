@@ -206,10 +206,10 @@ Zahlen und Befehle: [`scoreboard/harmful-content-scorer.md`](../scoreboard/harmf
   `B4` 32,0, `B1` 32,0; out of distribution (`nemotron_content_safety_v2`) 40,8 gegen 25,3 / 20,2 %. `FT` ist auch am
   günstigsten (3,2 ms, 256 KiB). Es läuft nur, wenn eine Kaskade es nennt; die Kategorie bleibt default aus.
 - **Punkte:** `threat.harmful_intent` wird Punkte-Regel (Basis 40, Validator Format, geteilter Klauselkontext) statt
-  Alt-Scorer-Regel, die allein nie angenommen wurde. Trifft keine der 96 092 Dev- und Report-Zeilen; 2 von 12
+  Alt-Scorer-Regel, die allein nie angenommen wurde. Trifft keine der 96 092 Dev- und Report-Zeilen; 4 von 14
   Golden-Positiven. R, R+A, R+A+L scoren auf Dev 0, solange die Patterns aus §4 fehlen.
-- **Goldens:** 12 Positive und 12 Hard Negatives (DE + EN). Das Modell meldet an seinen Schnitten keine der Hard
+- **Goldens:** 14 Positive und 14 Hard Negatives (DE + EN). Das Modell meldet an seinen Schnitten keine der Hard
   Negatives (Rust-Test) und keine der Positiven: es lernt die Anfrage-Form seiner zwei Quellen, wie bei
   `toxic_language` (TX02).
-- **Offen:** die Absichts-Patterns aus §4 (10 von 12 Golden-Positiven sind Regel-Lücken), eine zweite offene
+- **Offen:** die Absichts-Patterns aus §4 (10 von 14 Golden-Positiven sind Regel-Lücken), eine zweite offene
   Positiv-Quelle je Sprache, Dev-Positive der Modell-Unterklassen und ein mehrklassiges Subklassen-Modell (§13).
