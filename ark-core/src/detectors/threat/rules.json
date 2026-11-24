@@ -647,7 +647,7 @@
       "class_name": "tool_poisoning",
       "family": "sensitive_file_param",
       "upstream_groups": [],
-      "pattern": "(?P<access>(?-u:\\b)(?:read|open|load|include|attach|pass|send|copy|lies|lese|oeffne|lade|uebergib|kopiere|haenge)(?-u:\\b)|(?:öffne|übergib|hänge)(?-u:\\b))[^\\n\\x22]{0,80}?(?P<target>~/\\.ssh(?:/[\\w.-]{1,40})?|(?-u:\\b)(?:id_rsa|id_ed25519|id_ecdsa|id_dsa)(?-u:\\b)|\\.aws/credentials|\\.kube/config|(?-u:\\b)kubeconfig(?-u:\\b)|\\.netrc(?-u:\\b)|\\.gnupg(?-u:\\b)|\\.docker/config\\.json|(?-u:\\b)mcp\\.json(?-u:\\b)|/etc/shadow(?-u:\\b)|/credentials(?:\\.json)?(?-u:\\b))[^\\n\\x22]{0,120}?(?P<param>(?-u:\\b)(?:parameters?|params?|arguments?|field|feld|sidenote|notes?|notiz(?:en)?|context|kontext|metadata|metadaten)(?-u:\\b))",
+      "pattern": "(?P<access>(?-u:\\b)(?:read|open|load|include|attach|pass|send|copy|lies|lese|oeffne|lade|uebergib|kopiere|haenge)(?-u:\\b)|(?:öffne|übergib|hänge)(?-u:\\b))[^\\n\\x22]{0,80}?(?P<target>~/\\.ssh(?:/[\\w.-]{1,40})?|(?-u:\\b)(?:id_rsa|id_ed25519|id_ecdsa|id_dsa)(?-u:\\b)|\\.aws/credentials|\\.kube/config|(?-u:\\b)kubeconfig(?-u:\\b)|\\.netrc(?-u:\\b)|\\.gnupg(?-u:\\b)|\\.docker/config\\.json|(?-u:\\b)mcp\\.json(?-u:\\b)|/etc/shadow(?-u:\\b)|/credentials(?:\\.json)?(?-u:\\b))[^\\n\\x22]{0,120}?(?P<param>(?-u:\\b)(?:parameters?|params?|arguments?|field|feld|sidenote|notes?|notiz(?:en)?|context|kontext|metadata|metadaten|request|query|anfrage)(?-u:\\b))",
       "points": {
         "base_score": 45,
         "validator": "format",
@@ -659,7 +659,7 @@
       "class_name": "tool_poisoning",
       "family": "secrecy_directive",
       "upstream_groups": [],
-      "pattern": "(?P<directive>(?-u:\\b)(?:do\\s{1,4}not|don't|never|without|sag|sage|ohne|erwähne|erwaehne|verrate)(?-u:\\b))\\s{1,4}(?P<secrecy>(?:tell(?:ing)?|inform(?:ing)?|mention(?:ing)?|notify(?:ing)?|notifying|alert(?:ing)?|reveal(?:ing)?)\\s{1,4}(?:this\\s{1,4}(?:step\\s{1,4})?to\\s{1,4})?the\\s{1,4}user(?-u:\\b)|(?:dem|den)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}(?:davon\\s{1,4})?(?:nichts|zu\\s{1,4}(?:informieren|benachrichtigen|fragen))(?-u:\\b)|(?:(?:das|dies|es)\\s{1,4})?(?:dem|den)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}(?:gegen(?:ü|ue)ber\\s{1,4})?(?:nicht|nie|niemals)(?-u:\\b))",
+      "pattern": "(?P<directive>(?-u:\\b)(?:do\\s{1,4}not|don't|never|without|sag|sage|zeig|zeige|ohne|erwähne|erwaehne|verrate)(?-u:\\b))\\s{1,4}(?P<secrecy>(?:tell(?:ing)?|show(?:ing)?|inform(?:ing)?|mention(?:ing)?|notify(?:ing)?|notifying|alert(?:ing)?|reveal(?:ing)?)\\s{1,4}(?:this\\s{1,4}(?:step\\s{1,4})?to\\s{1,4})?the\\s{1,4}user(?-u:\\b)|(?:dem|den)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}(?:davon\\s{1,4})?(?:nichts|zu\\s{1,4}(?:informieren|benachrichtigen|fragen))(?-u:\\b)|(?:(?:das|dies|es)\\s{1,4})?(?:dem|den)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}(?:gegen(?:ü|ue)ber\\s{1,4})?(?:nicht|nie|niemals)(?-u:\\b))|(?P<conceal>(?-u:\\b)the\\s{1,4}user\\s{1,4}(?:must|should|may)\\s{1,4}not\\s{1,4}(?:be\\s{1,4}told|know|learn|see|find\\s{1,4}out)(?-u:\\b)|(?-u:\\b)leave\\s{1,4}(?:that|this)\\s{1,4}out\\s{1,4}of\\s{1,4}(?:the|your)\\s{1,4}(?:reply|answer|response)(?-u:\\b)|(?-u:\\b)describe\\s{1,4}this\\s{1,4}tool\\s{1,4}to\\s{1,4}the\\s{1,4}user\\s{1,4}only\\s{1,4}as(?-u:\\b)|(?-u:\\b)(?:der|die)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}darf\\s{1,4}(?:(?:davon|das|dies)\\s{1,4})?nichts?\\s{1,4}(?:erfahren|wissen|sehen|mitbekommen)(?-u:\\b)|(?-u:\\b)lass\\s{1,4}(?:das|dies)\\s{1,4}in\\s{1,4}der\\s{1,4}antwort\\s{1,4}weg(?-u:\\b)|(?-u:\\b)beschreibe?\\s{1,4}dieses\\s{1,4}(?:tool|werkzeug)\\s{1,4}(?:dem|den)\\s{1,4}(?:nutzer|benutzer|anwender)\\w{0,6}\\s{1,4}nur\\s{1,4}als(?-u:\\b))",
       "points": {
         "base_score": 40,
         "validator": "format",
@@ -676,6 +676,18 @@
         "base_score": 40,
         "validator": "format",
         "requires_context": true
+      }
+    },
+    {
+      "id": "ark.threat.tp_tool_override",
+      "class_name": "tool_poisoning",
+      "family": "shadowing",
+      "upstream_groups": [],
+      "pattern": "(?-u:\\b)(?P<override>ignore\\s{1,4}the\\s{1,4}descriptions?|ignoriere\\s{1,4}die\\s{1,4}beschreibungen?)\\s{1,4}(?P<tools>of\\s{1,4}(?:all\\s{1,4})?(?:the\\s{1,4})?other\\s{1,4}tools|(?:aller|der)\\s{1,4}(?:anderen|(?:ü|ue)brigen)\\s{1,4}(?:tools|werkzeuge))(?-u:\\b)|(?-u:\\b)(?P<route>(?:must|should)\\s{1,4}be\\s{1,4}routed|(?:m(?:ü|ue)ssen|sollen)\\s{1,4}stattdessen)\\s{1,4}(?P<through>through\\s{1,4}this\\s{1,4}tool\\s{1,4}instead|(?:ü|ue)ber\\s{1,4}dieses\\s{1,4}(?:tool|werkzeug)\\s{1,4}laufen)(?-u:\\b)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
       }
     },
     {
