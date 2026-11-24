@@ -2,6 +2,11 @@
 //! answer wins, then a weighted L2/L3 union, then an accepted L2 answer, and
 //! otherwise the pipeline's default (safe) class. Thresholds come from a
 //! [`ThresholdTable`] the host supplies.
+//!
+//! The union is the result of L2 and L3 together: `l2_weight · L2 score +
+//! l3_weight · L3 score` against the union threshold. It is not promotion,
+//! which decides earlier whether L3 runs at all (the NTDB promoter), and not
+//! the aggregation of an input's chunks.
 use std::collections::HashMap;
 
 use super::SecurityLevel;
