@@ -21,7 +21,9 @@ jobs:
       fail-fast: false
       matrix:
         # ubuntu-24.04, not ubuntu-latest: the pinned build Python 3.11.9 has no Ubuntu 26.04 build.
-        os: [ubuntu-24.04, macos-latest, windows-latest]
+        # Pull requests build Linux only; the Release workflow and manual runs build every
+        # platform it publishes (macOS ARM runners queued PRs for hours).
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
