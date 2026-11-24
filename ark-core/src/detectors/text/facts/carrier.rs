@@ -19,10 +19,33 @@ const CARRIERS: [&str; 7] = [
 ];
 
 /// A plain-text tool listing line, `Tool <snake_case_name>: …`, naming the
-/// tool (`name`) the rest of the line describes.
+/// tool (`listed`) the rest of the line describes.
 macro_rules! tool_listing_header {
     () => {
-        r"^[ \t]*(?:Tool|Function|Werkzeug|Funktion)[ \t]{1,4}`?(?P<name>[A-Za-z][A-Za-z0-9]{0,40}_[A-Za-z0-9_]{1,40})`?[ \t]*:"
+        r"^[ \t]*(?:Tool|Function|Werkzeug|Funktion)[ \t]{1,4}`?(?P<listed>[A-Za-z][A-Za-z0-9]{0,40}_[A-Za-z0-9_]{1,40})`?[ \t]*:"
+    };
+}
+
+/// A YAML tool list entry, `- name: <tool>` (`entry`) directly followed by
+/// `description:`.
+macro_rules! yaml_tool_entry {
+    () => {
+        r"^[ \t]*-[ \t]+name:[ \t]*(?P<entry>[A-Za-z][\w.-]{0,60})[ \t]*\r?\n[ \t]*description:"
+    };
+}
+
+/// A README tool list line opening with a call signature,
+/// `` `<tool>(args)`: `` (`signed`).
+macro_rules! readme_tool_line {
+    () => {
+        r"^[ \t]*(?:[-*][ \t]+)?`(?P<signed>[A-Za-z_][A-Za-z0-9_]{0,40})\([^`\n)]{0,60}\)`[ \t]*:"
+    };
+}
+
+/// An MCP tool decorator.
+macro_rules! tool_decorator {
+    () => {
+        r"^[ \t]*@(?:mcp|server|app)\.tool\("
     };
 }
 
@@ -35,9 +58,12 @@ macro_rules! tool_listing_header {
 const TOOL_DESCRIPTION_MARK: &str = concat!(
     r#""(?:description|inputSchema|input_schema|parameters)"\s*:|(?m:"#,
     tool_listing_header!(),
-    r"|^[ \t]*-[ \t]+name:[ \t]*[A-Za-z][\w.-]{0,60}[ \t]*\r?\n[ \t]*description:",
-    r"|^[ \t]*(?:[-*][ \t]+)?`[A-Za-z_][A-Za-z0-9_]{0,40}\([^`\n)]{0,60}\)`[ \t]*:",
-    r"|^[ \t]*@(?:mcp|server|app)\.tool\(",
+    "|",
+    yaml_tool_entry!(),
+    "|",
+    readme_tool_line!(),
+    "|",
+    tool_decorator!(),
     ")"
 );
 
@@ -90,17 +116,36 @@ pub(crate) fn is_agent_config(text: &str) -> bool {
     MARK.is_match(text)
 }
 
-/// The tool a plain-text listing line describes, when the line holding `at`
-/// starts with a listing header (`Tool <name>:`).
-pub(crate) fn listing_tool_name(text: &str, at: usize) -> Option<&str> {
-    static HEADER: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(tool_listing_header!()).expect("tool listing header"));
-    let start = text[..at].rfind('\n').map_or(0, |i| i + 1);
+/// The tool whose description holds `at`: the last tool header that starts
+/// at or before `at` and ends on its line at the latest — a listing line
+/// (`Tool <name>:`), a YAML tool entry, a README call signature or the
+/// function under an MCP tool decorator.
+pub(crate) fn owning_tool_name(text: &str, at: usize) -> Option<&str> {
+    static HEADER: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(concat!(
+            "(?m:",
+            tool_listing_header!(),
+            "|",
+            yaml_tool_entry!(),
+            "|",
+            readme_tool_line!(),
+            "|",
+            tool_decorator!(),
+            r"[^\n]{0,200}\n(?:[ \t]*@[^\n]{0,200}\n){0,4}[ \t]*(?:async[ \t]+)?def[ \t]+(?P<decorated>[A-Za-z_][A-Za-z0-9_]{0,60})\(",
+            ")"
+        ))
+        .expect("tool header")
+    });
     let end = text[at..].find('\n').map_or(text.len(), |i| at + i);
-    let line = &text[start..end];
-    HEADER
-        .captures(line)
-        .and_then(|captures| captures.name("name"))
+    let head = &text[..end];
+    let last = HEADER
+        .find_iter(head)
+        .take_while(|header| header.start() <= at)
+        .last()?;
+    let captures = HEADER.captures_at(head, last.start())?;
+    ["listed", "entry", "signed", "decorated"]
+        .iter()
+        .find_map(|group| captures.name(group))
         .map(|name| name.as_str())
 }
 
@@ -192,5 +237,26 @@ mod tests {
             assert!(!is_tool_metadata(text), "{text}");
             assert!(!carriers(text).contains(&"tool_description"), "{text}");
         }
+    }
+
+    #[test]
+    fn owning_tool_is_the_last_header_before_the_offset() {
+        let owner = |text: &str, needle: &str| owning_tool_name(text, text.find(needle).unwrap());
+        let listing = "Tool add_numbers: adds.\nTool get_time: returns the time.";
+        assert_eq!(owner(listing, "adds"), Some("add_numbers"));
+        assert_eq!(owner(listing, "returns"), Some("get_time"));
+        let readme = "- `datei_lesen(pfad)`: liest eine Datei.";
+        assert_eq!(owner(readme, "liest"), Some("datei_lesen"));
+        assert_eq!(owner(readme, "`"), Some("datei_lesen"));
+        let yaml = "tools:\n  - name: save_note\n    description: >\n      Saves a note.";
+        assert_eq!(owner(yaml, "Saves"), Some("save_note"));
+        let decorated =
+            "@mcp.tool()\nasync def lookup(query: str) -> str:\n    \"\"\"Search.\"\"\"";
+        assert_eq!(owner(decorated, "Search"), Some("lookup"));
+        assert_eq!(owner("Saves a note.\nTool save_note: x", "Saves"), None);
+        assert_eq!(
+            owner("def lookup(q):\n    \"\"\"Search.\"\"\"", "Search"),
+            None
+        );
     }
 }

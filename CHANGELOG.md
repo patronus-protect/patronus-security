@@ -176,6 +176,10 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
   to the user"), reading a credential file into the request or query, and directives to ignore
   the descriptions of the other tools (new rule `ark.threat.tp_tool_override`). Honest
   descriptions of what a tool reads, sends or logs stay clean.
+- **Detection change:** (`tool_poisoning`) `ark.threat.tp_shadowing` takes the tool that a YAML
+  tool entry, a README call signature or an MCP-decorated function names as the description's own
+  tool, as it already did for JSON `"name"` and `Tool <name>:` listings: a description that
+  routes its own tool's recipients is no longer reported as shadowing another tool.
 - When no categories are given, the library scanner runs `pii`, `dlp`, `injection`, `jailbreak`,
   `prompt_extraction`, `tool_poisoning` and `exfiltration`; the other six attack categories are
   opt-in. The example and deployment configurations use the same defaults.

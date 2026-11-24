@@ -181,7 +181,8 @@ Lücken: deutsche Formen fehlten ganz, Tool-Listen in Klartext galten nicht als 
 
 - Träger `tool_description` auch für Klartext-Tool-Listen: Zeile `Tool|Function|Werkzeug|Funktion
   <snake_case_name>:` (`carrier.rs`, `tool_listing_header!`); dort ist der gelistete Name das
-  eigene Tool (`listing_tool_name`), Shadowing braucht ein anderes.
+  eigene Tool (`owning_tool_name`, seit T24 auch YAML-Eintrag, README-Signatur und dekorierte
+  Funktion), Shadowing braucht ein anderes.
 - `tp_shadowing`: nach einem abgelehnten Tool-Namen (eigenes Tool, „das Tool“) sucht die Regel ab
   dessen Ende weiter, statt den ganzen Treffer zu überspringen; die Komponente `replace`
   (Empfänger ersetzen, `redirect`, `stattdessen an`) trägt ihren Kontext selbst, eine bloße
