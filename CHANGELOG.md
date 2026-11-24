@@ -9,6 +9,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-11-24
+
+This release builds the full Ark gateway on Ark Core: one config, one model cache and one L1 pass
+for both. It splits attack detection into eleven categories, adds an opt-in analysis cascade with
+built-in L1 text models, and adds many new German and English threat rules. Several configuration
+keys and Rust APIs change; see **Breaking** and **Migration**.
+
 ### Detection changes
 
 - **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
@@ -29,13 +36,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the gap of a requested widening ("so all commands are not allowed", "alle Befehle nicht erlaubt")
   rejects the request again; only the widening's own negation ("without asking", "no longer need
   confirmation") and its concealment ("do not mention it") are part of the request.
-
-## [0.1.18] - unreleased
-
-This release builds the full Ark gateway on Ark Core: one config, one model cache and one L1 pass
-for both. It splits attack detection into eleven categories, adds an opt-in analysis cascade with
-built-in L1 text models, and adds many new German and English threat rules. Several configuration
-keys and Rust APIs change; see **Breaking** and **Migration**.
 
 ### Breaking
 
