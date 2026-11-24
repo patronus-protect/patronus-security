@@ -55,7 +55,9 @@ sources), predicts every split with both on the L1 cascade and fails on a regres
 scope: TPR@1 % or TPR@0.1 % of a class (``all``, ``de``, ``en``; origin ``all``) more than 0.5 pp
 below the base, or a hard-benign row of a class that the head's L1 detects and the base's does not, unless
 the class's head hard-benign FPR (its flags over the hard-benign rows of its ``all``/``all`` cell) stays
-within 0.1 % and none of its TPR checks fails; the check line names the head FPR and the budget.
+within 0.1 % and none of its TPR checks fails; the check line names the head FPR and the budget. The
+benign FPR of L1 at its detect cut (benign rows it flags) must stay within 0.1 % per class and language
+(``all``, ``de``, ``en``).
 stdout carries the dev numbers as a Markdown table (both TPRs, base -> head with the head's CI); the
 holdout leaves as a verdict and the names of failing checks only, its report stays in the cache.
 Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1 = regression,
@@ -130,6 +132,8 @@ FPRS = (0.01, 0.001)
 # Report keys of the gated operating points; both gate with the same tolerance, 1 % first.
 GATE_FPRS = tuple(f"{fpr:g}" for fpr in FPRS)
 HARD_BENIGN_FPR_BUDGET = 0.001
+# Benign FPR of L1 at its detect cut, per class and language.
+BENIGN_FPR_BUDGET = 0.001
 GATE_LANGUAGES = ("all", "de", "en")
 LANGUAGES = ("all", "de", "en")
 ORIGINS = ("all", "native", "translated")
@@ -437,6 +441,7 @@ def score_pairs(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], classes
     pos: dict[tuple, list[float]] = defaultdict(list)
     neg: dict[tuple, list[float]] = defaultdict(list)
     hard: dict[tuple, list[float]] = defaultdict(list)
+    flagged_neg: dict[tuple, int] = defaultdict(int)
     by_set: dict[tuple, dict[str, tuple[list[float], list[float]]]] = defaultdict(dict)
     flags: dict[str, list[str]] = defaultdict(list)
     for row, pred, role in pairs:
@@ -453,6 +458,7 @@ def score_pairs(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], classes
                 for org in ("all", origin):
                     key = (scope, cls, language, org)
                     (pos if positive else neg)[key].append(score)
+                    flagged_neg[key] += flagged and not positive
                     if hard_row:
                         hard[key].append(score)
             sets = by_set[(scope, cls)].setdefault(row["dataset"], ([], []))
@@ -465,6 +471,10 @@ def score_pairs(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], classes
             continue
         cell = cell_metrics(pos[scope, cls, language, org], neg[scope, cls, language, org],
                             hard[scope, cls, language, org], bootstrap)
+        # Benign rows L1 flags at its detect cut: the per-language FPR budget of the gate.
+        flagged = flagged_neg[scope, cls, language, org]
+        cell["flagged_fp"] = flagged
+        cell["flagged_fpr"] = flagged / cell["negatives"] if cell["negatives"] else None
         report[scope].setdefault(cls, {}).setdefault(language, {})[org] = cell
     for (scope, cls), sets in sorted(by_set.items()):
         if cls not in report[scope] or len(sets) < 2:
@@ -546,6 +556,17 @@ def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pp: float = TO
                 checks.append({"name": f"tpr@{_fpr_label(fpr)}fpr {cls} {language}", "base": before, "head": after,
                                "delta_pp": None if delta is None else round(delta, 4),
                                "positives": head_cell["positives"] if after is not None else 0, "ok": ok})
+    # The benign FPR of L1 at its detect cut stays within the budget per class and language (owner decision
+    # 2026-11-23); `all` alone is not enough.
+    for cls in CLASSES:
+        for language in GATE_LANGUAGES:
+            head_fpr = (_gate_cell(head, cls, language) or {}).get("flagged_fpr")
+            if head_fpr is None:
+                continue
+            checks.append({"name": f"benign fpr {cls} {language}",
+                           "base": (_gate_cell(base, cls, language) or {}).get("flagged_fpr"), "head": head_fpr,
+                           "head_fpr": head_fpr, "budget": BENIGN_FPR_BUDGET,
+                           "ok": head_fpr <= BENIGN_FPR_BUDGET + 1e-12})
     for cls in CLASSES:
         new = sorted(set(head["hard_benign_flags"].get(cls, [])) - set(base["hard_benign_flags"].get(cls, [])))
         flagged = len(head["hard_benign_flags"].get(cls, []))
@@ -563,7 +584,8 @@ def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pp: float = TO
 
 def _budget_text(check: dict[str, Any]) -> str:
     fpr = "–" if check["head_fpr"] is None else f"{check['head_fpr'] * 100:.3g}%"
-    return f"head hard-benign FPR {fpr}, budget {check['budget'] * 100:g}%"
+    kind = "benign" if check["name"].startswith("benign fpr") else "hard-benign"
+    return f"head {kind} FPR {fpr}, budget {check['budget'] * 100:g}%"
 
 
 # ── rendering ────────────────────────────────────────────────────────────────
@@ -784,28 +806,31 @@ def cascade_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
 def subclass_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
                      labels: dict[str, str]) -> dict[str, dict[str, Any]]:
     """Per ``harmful_content`` subclass (the label file's subclass of a gated positive; ``unlabelled`` without
-    one) and language: positives and the cascade's detections at the configured operating point. Once there
+    one) and language: positives, the cascade's detections at the configured operating point and the
+    detections of the L1 heuristic (the rules) alone, next to it (``rules_tp``). Once there
     is a gated positive, every subclass has a cell in every language, also without positives (TPR ``None``).
     A subclass with fewer than ``MIN_POSITIVES`` positives in a language is a ``gap`` there; a model-only
     subclass whose TPR stays below 50 % is ``off`` (the operating point is at most 1 % FPR)."""
     cls = HARMFUL_SUBCLASS.CLASS
-    cells: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0]))
+    cells: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0, 0]))
     for row, prediction, role in pairs:
         if role == "report" or cls not in row["classes"]:
             continue
-        detected = _stage(prediction, cls)["decision"] == "detected"
+        answer = _stage(prediction, cls)
         sub = labels.get(row["id"], "unlabelled")
         for language in ("all", row.get("language") or "unknown"):
             cells[sub][language][0] += 1
-            cells[sub][language][1] += detected
+            cells[sub][language][1] += answer["decision"] == "detected"
+            cells[sub][language][2] += answer["l1"] == "detected"
     if cells:
         for sub in HARMFUL_SUBCLASS.SUBCLASSES:
             for language in LANGUAGES:
-                cells[sub].setdefault(language, [0, 0])
+                cells[sub].setdefault(language, [0, 0, 0])
     return {sub: {language: {"positives": n, "tp": tp, "tpr": tp / n if n else None,
+                             "rules_tp": rules, "rules_tpr": rules / n if n else None,
                              "gap": n < HARMFUL_SUBCLASS.MIN_POSITIVES,
                              "off": sub in HARMFUL_SUBCLASS.MODEL_ONLY_SUBCLASSES and n > 0 and tp / n < 0.5}
-                  for language, (n, tp) in sorted(by_language.items())}
+                  for language, (n, tp, rules) in sorted(by_language.items())}
             for sub, by_language in sorted(cells.items())}
 
 
@@ -822,8 +847,8 @@ def subclass_lines(report: dict[str, Any], counts_only: bool) -> list[str]:
             if cell is None:
                 row.append("–")
                 continue
-            text = f"{cell['tp']}/{cell['positives']}" if counts_only else \
-                f"{_share(cell['tpr'])} ({cell['positives']})"
+            text = f"{cell['tp']}/{cell['positives']}, rules {cell['rules_tp']}" if counts_only else \
+                f"{_share(cell['tpr'])} ({cell['positives']}), rules {_share(cell['rules_tpr'])}"
             marks = [m for m in ("gap", "off") if cell[m] and sub != "unlabelled"]
             row.append(text + (f" {', '.join(marks)}" if marks else ""))
         lines.append(f"| `{sub}` | " + " | ".join(row) + " |")
@@ -989,7 +1014,8 @@ def render_cascade(report: dict[str, Any], config: dict[str, Any], title: str, c
     lines += ["## harmful_content per subclass (gated sets)", "",
               ("Detections of the cascade / positives" if counts_only else
                "TPR of the final decision (in brackets: positives)")
-              + " per hazard subclass of the subclass labels (`unlabelled`: rows without one). `gap`: fewer than "
+              + " per hazard subclass of the subclass labels (`unlabelled`: rows without one), and after `rules` the"
+              " same for the L1 heuristic (the rules) alone. `gap`: fewer than "
               f"{HARMFUL_SUBCLASS.MIN_POSITIVES} positives in the language; `off`: a model-only subclass below "
               "50 % TPR at the configured operating point (at most 1 % FPR).", "", *subclass_lines(report, counts_only), ""]
     if not counts_only:
@@ -1104,6 +1130,8 @@ def verdict_lines(split: str, checks: list[dict[str, Any]], numbers: bool) -> li
         elif "new" in check:
             lines.append(f"  FAIL {check['name']}: {check['new']} new ({', '.join(check['rows'][:10])}); "
                          f"{_budget_text(check)}")
+        elif "budget" in check:
+            lines.append(f"  FAIL {check['name']}: {_budget_text(check)}")
         else:
             lines.append(f"  FAIL {check['name']}: {_pct(check['base'])} -> {_pct(check['head'])} "
                          f"({check['delta_pp']} pp, {check['positives']} positives)")

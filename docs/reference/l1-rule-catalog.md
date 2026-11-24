@@ -655,7 +655,7 @@ Each rule reports under the category of its attack class: a jailbreak rule under
 | `ark.injection.tool_call.injected` | `injection` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `injection` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (89)
+## Threat rules (91)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -688,6 +688,8 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.dynamic_ssrf` | `unsafe_action` | `metadata_ssrf` | SSRF3, TT |
 | `ark.threat.unauthorized_autonomy` | `unsafe_action` | `unattended` | EA2, EA3 |
 | `ark.threat.harmful_intent` | `harmful_content` | `howto_hazard` | P5 |
+| `ark.threat.hc_howto_hazard` | `harmful_content` | `howto_hazard` | P5 |
+| `ark.threat.hc_evasion` | `harmful_content` | `evasion` | P5 |
 | `ark.threat.secret_source_transfer` | `exfiltration` | `secret_to_sink` | E3, E5 |
 | `ark.threat.ua_credential_store_access` | `unsafe_action` | `credential_access` | PE3, AS1 |
 | `ark.threat.ua_metadata_fetch` | `unsafe_action` | `metadata_ssrf` | SSRF1 |

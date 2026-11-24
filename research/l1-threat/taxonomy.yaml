@@ -1855,7 +1855,7 @@ classes:
         - <Imperativ PLANEN> einen <Gewaltbegriff> gegen <Ziel>
         en: [<how do I build> <hazard term subclass> <step by step>]
       carriers: [chat, email, web, document, tool_output, rag_chunk]
-      existing_rules: [ark.threat.harmful_intent]
+      existing_rules: [ark.threat.harmful_intent, ark.threat.hc_howto_hazard]
       baseline_coverage: {nemo: partial, llamafirewall: none, prompt_guard_2: none, protectai_v2: none}
       gap: Today one EN/DE rule for violent planning only; other subclasses uncovered
     - id: quantified_recipe
@@ -1889,7 +1889,7 @@ classes:
         de: [<Straftatbegriff> <ohne erwischt zu werden>]
         en: [<crime term> so it is <untraceable>]
       carriers: [chat, web, document, tool_output]
-      existing_rules: []
+      existing_rules: [ark.threat.hc_evasion]
       baseline_coverage: {nemo: partial}
       gap: Evasion framing not covered in DE/EN today
     - id: child_safety

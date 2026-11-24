@@ -74,6 +74,19 @@ built-in L1 text models, and adds many new German and English threat rules. Seve
 keys and Rust APIs change; see **Breaking** and **Migration**.
 
 ### Detection changes
+- **Detection change (`harmful_content`, opt-in category):** requests for help with a crime are now
+  reported by rules in German and English, not only by the optional model: a request frame ("how
+  do I", "best way to", "teach me how to", "wie kann ich", "wie man", "zeig mir, wie") with a crime
+  against a person (poisoning, stabbing, kidnapping, assault of "someone" or "my neighbor") or
+  property (stealing, breaking into a house or car, hacking an account, laundering money, forging a
+  signature, selling drugs) in the same clause, and a request to get away with something ("without
+  getting caught", "how to get away with", "ohne erwischt zu werden", "unbemerkt", "ungestraft").
+  Figurative uses ("kill the noise", "shoot for the stars", "Zwiebeln hacken", "eine Walnuss
+  knacken"), prevention, news, fiction and security documentation stay clean. A harmful_content
+  finding also names its hazard subclass (for example `violent_crime`, `nonviolent_crime`,
+  `cyber_harm`, `self_harm`) from a small built-in word and character n-gram model, in the
+  `subclass` and `subclass_probability` details. The subclass model only runs on a harmful_content
+  hit; L1 latency is unchanged within noise.
 
 - **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
   in a file it reads — `copilot-instructions.md`, an issue comment, a README setup section — and asks
