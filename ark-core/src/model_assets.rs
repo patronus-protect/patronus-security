@@ -669,7 +669,9 @@ mod tests {
             NTDB_INJECTION_LION.revision,
             "2484cc9a13550aa4f2c29b577ff3ef331dc6ba07"
         );
-        assert!(wolf.legacy_revisions.contains(&NTDB_INJECTION_LION.revision));
+        assert!(wolf
+            .legacy_revisions
+            .contains(&NTDB_INJECTION_LION.revision));
         assert_eq!(GLINER_SMALL.env_override, None);
         assert_eq!(GLINER_SMALL.source_prefix, "");
     }

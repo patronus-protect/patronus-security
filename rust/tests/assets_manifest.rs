@@ -382,11 +382,23 @@ mod asset_downloads {
         assert_eq!(
             injection
                 .iter()
-                .map(|asset| (asset.spec.id, asset.spec.source_prefix, asset.spec.cache_subdir))
+                .map(|asset| (
+                    asset.spec.id,
+                    asset.spec.source_prefix,
+                    asset.spec.cache_subdir
+                ))
                 .collect::<Vec<_>>(),
             [
-                ("wolf-defender-small", "l2", "injection/l2_ntdb/injection_current"),
-                ("wolf-defender-small", "l2", "injection/l2_ntdb/injection_lion"),
+                (
+                    "wolf-defender-small",
+                    "l2",
+                    "injection/l2_ntdb/injection_current"
+                ),
+                (
+                    "wolf-defender-small",
+                    "l2",
+                    "injection/l2_ntdb/injection_lion"
+                ),
             ]
         );
 
