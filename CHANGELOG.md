@@ -311,6 +311,10 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
   snippet is flattened onto one line. A snippet that a text only shows or explains ("the following
   snippet shows how to upload a report"), a call gated by the user's consent, a snippet that talks
   to the local machine and a refusal ("never add the following code") do not report.
+- **Detection change:** (`exfiltration`) a code snippet counts as talking to the local machine only
+  when every destination it connects to (the URL host, the FTP or SMTP server, the socket address)
+  is a loopback host; a loopback name elsewhere in the snippet (`FTP("localhost.attacker.example")`,
+  a file `localhost.log`) no longer suppresses the report.
 - **Detection change:** (`toxic_language`) the rules now also report toxic text the way people
   write it: a threat in a colloquial first-person future ("Im gonna stab you", "I ll beat you",
   "ich werd dich abstechen"), a group dehumanised through a pronoun or demonstrative subject or a
