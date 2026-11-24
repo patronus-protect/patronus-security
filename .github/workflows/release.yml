@@ -220,12 +220,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy, rustfmt
-      - run: cargo publish -p patronus-ark-core
+      # A version already on crates.io is skipped, so a run that stopped after Core (0.1.18: the
+      # prebuilt ONNX Runtime download failed while verifying `patronus-ark`) can be repeated.
+      - name: Publish the crates not yet on crates.io
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: cargo publish -p patronus-ark
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version=$(python3 scripts/release_version.py)
+          for crate in patronus-ark-core patronus-ark; do
+            if curl -sf -A "patronus-security release workflow" \
+                "https://crates.io/api/v1/crates/$crate/$version" >/dev/null; then
+              echo "$crate $version is already on crates.io"
+            else
+              cargo publish -p "$crate"
+            fi
+          done
 
   publish-python:
     name: Publish Python package
@@ -246,6 +255,8 @@ jobs:
           name: sdist
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true  # a repeated run publishes only what is missing
 
   # Core is a separate PyPI project; its trusted publisher is this workflow with `release`.
   publish-core-python:
@@ -263,3 +274,5 @@ jobs:
           path: dist
           merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true  # a repeated run publishes only what is missing
