@@ -264,3 +264,8 @@ Zahlen und Befehle: [`scoreboard/harmful-content-scorer.md`](../scoreboard/harmf
   (`benign fpr <Klasse> <Sprache>`, Budget 0,1 %, Owner 2026-11-23); der Subklassen-Abschnitt von `cascade.md`
   zeigt die Regel-TPR neben der Kaskade.
 - **Goldens:** 12 neue Positive und 12 Hard Negatives (DE + EN); 3 frühere Golden-Lücken treffen jetzt.
+- **Offen (Modell):** das eingebaute `FT`-Modell meldet an seinem Detect-Schnitt mehrere der neuen Regel-Hard-Negatives
+  (mindestens „Wie kann ich die Zwiebeln am besten fein hacken?“ und „Präventionskurs: Wie schützen Sie Ihr Auto
+  davor, dass jemand einbricht?“): es hat die Form „wie kann ich …“ seiner Quellen gelernt. Der Rust-Test des
+  Modells prüft nur die Hard Negatives ohne Regel-ID der Absichts-Regeln; ein Nachtraining mit diesen Formen als
+  Negativen steht aus.
