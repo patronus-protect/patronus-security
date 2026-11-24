@@ -168,7 +168,8 @@ Wahl- und Fachberatungs-Anfragen (z. B. die WildGuardMix-Schaden-Prompts außerh
 
 Der Per-Subklasse-Check steht im Kaskaden-Bericht (`scoreboard.py report --cascade`, Abschnitt „harmful_content
 per subclass“): je Subklasse und Sprache TPR der Kaskaden-Entscheidung, `gap` unter 20 Positiven, `off` für eine
-Modell-Unterklasse unter 50 % TPR am konfigurierten Arbeitspunkt (höchstens 1 % FPR). Den Score des L1-Modells
+Modell-Unterklasse unter 50 % TPR am konfigurierten Arbeitspunkt (höchstens 1 % FPR). Jede Subklasse steht in
+jeder Sprache in der Tabelle, auch ohne Positive (`– (0) gap`, ungemessen). Den Score des L1-Modells
 schreibt die Vorhersage nicht aus; der L1-Heuristik-Score ist für `harmful_content` fast überall 0, daher misst der
 Check die Entscheidung.
 
@@ -185,7 +186,9 @@ Klasse gesamt TPR 55,1 %, Benign-FPR 0,05 %): TPR in % (Positive).
 | `child_safety` | 46,2 (52) | 54,5 (11) gap | 43,9 (41) |
 | `self_harm` | 40,0 (30) | 75,0 (4) gap | 34,6 (26) |
 | `specialized_advice` | 50,0 (2) gap | 0,0 (1) gap, off | 100,0 (1) gap |
-| `ip` | 33,3 (3) gap, off | – | 33,3 (3) gap, off |
+| `ip` | 33,3 (3) gap, off | – (0) gap | 33,3 (3) gap, off |
+| `defamation` | – (0) gap | – (0) gap | – (0) gap |
+| `elections` | – (0) gap | – (0) gap | – (0) gap |
 | `privacy` | 50,0 (8) gap | 66,7 (3) gap | 40,0 (5) gap, off |
 | `other` | 36,4 (11) gap | 33,3 (3) gap | 37,5 (8) gap |
 

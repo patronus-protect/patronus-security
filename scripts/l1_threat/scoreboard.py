@@ -784,9 +784,10 @@ def cascade_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
 def subclass_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
                      labels: dict[str, str]) -> dict[str, dict[str, Any]]:
     """Per ``harmful_content`` subclass (the label file's subclass of a gated positive; ``unlabelled`` without
-    one) and language: positives and the cascade's detections at the configured operating point. A subclass
-    with fewer than ``MIN_POSITIVES`` positives in a language is a ``gap`` there; a model-only subclass whose
-    TPR stays below 50 % is ``off`` (the operating point is at most 1 % FPR)."""
+    one) and language: positives and the cascade's detections at the configured operating point. Once there
+    is a gated positive, every subclass has a cell in every language, also without positives (TPR ``None``).
+    A subclass with fewer than ``MIN_POSITIVES`` positives in a language is a ``gap`` there; a model-only
+    subclass whose TPR stays below 50 % is ``off`` (the operating point is at most 1 % FPR)."""
     cls = HARMFUL_SUBCLASS.CLASS
     cells: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     for row, prediction, role in pairs:
@@ -797,8 +798,13 @@ def subclass_metrics(pairs: list[tuple[dict[str, Any], dict[str, Any], str]],
         for language in ("all", row.get("language") or "unknown"):
             cells[sub][language][0] += 1
             cells[sub][language][1] += detected
-    return {sub: {language: {"positives": n, "tp": tp, "tpr": tp / n, "gap": n < HARMFUL_SUBCLASS.MIN_POSITIVES,
-                             "off": sub in HARMFUL_SUBCLASS.MODEL_ONLY_SUBCLASSES and tp / n < 0.5}
+    if cells:
+        for sub in HARMFUL_SUBCLASS.SUBCLASSES:
+            for language in LANGUAGES:
+                cells[sub].setdefault(language, [0, 0])
+    return {sub: {language: {"positives": n, "tp": tp, "tpr": tp / n if n else None,
+                             "gap": n < HARMFUL_SUBCLASS.MIN_POSITIVES,
+                             "off": sub in HARMFUL_SUBCLASS.MODEL_ONLY_SUBCLASSES and n > 0 and tp / n < 0.5}
                   for language, (n, tp) in sorted(by_language.items())}
             for sub, by_language in sorted(cells.items())}
 

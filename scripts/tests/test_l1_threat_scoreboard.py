@@ -927,12 +927,24 @@ def test_subclass_metrics_split_harmful_positives_by_label_and_mark_gaps_and_off
     # Three German privacy rows: a gap, and a model-only subclass the model detects.
     privacy = cells["privacy"]["de"]
     assert privacy["gap"] and privacy["tpr"] == 1.0 and not privacy["off"]
-    assert cells["unlabelled"]["all"]["positives"] == 1 and set(cells) == {"nonviolent_crime", "privacy", "unlabelled"}
+    assert cells["unlabelled"]["all"]["positives"] == 1 and set(cells) == {*MODULE.HARMFUL_SUBCLASS.SUBCLASSES, "unlabelled"}
     lines = MODULE.subclass_lines({"subclasses": cells}, counts_only=True)
-    assert "| `nonviolent_crime` | 15/25 | – | 15/25 |" in lines
+    assert "| `nonviolent_crime` | 15/25 | 0/0 gap | 15/25 |" in lines
     assert lines[-1].startswith("| `unlabelled` |")
     assert "gap" in next(line for line in lines if "`privacy`" in line)
-    assert "| `nonviolent_crime` | 60.0 (25) | – | 60.0 (25) |" in MODULE.subclass_lines({"subclasses": cells}, False)
+    assert "| `nonviolent_crime` | 60.0 (25) | – (0) gap | 60.0 (25) |" in MODULE.subclass_lines({"subclasses": cells}, False)
+
+
+def test_subclass_metrics_name_zero_positive_subclasses_and_languages_as_gaps():
+    items = [(row("dev_h", i, [HC]), {HC: QUIET}) for i in range(25)]
+    pairs = [(item, cascade_pred(item, None, **stages), "dev") for item, stages in items]
+    cells = MODULE.subclass_metrics(pairs, {item["id"]: "nonviolent_crime" for item, _ in items})
+    assert set(MODULE.HARMFUL_SUBCLASS.SUBCLASSES) <= set(cells)
+    # A subclass without positives and a language without positives stay in the table as unmeasured gaps.
+    for cell in (cells["elections"]["all"], cells["nonviolent_crime"]["de"]):
+        assert (cell["positives"], cell["tp"], cell["tpr"], cell["gap"], cell["off"]) == (0, 0, None, True, False)
+    assert "| `elections` | – (0) gap | – (0) gap | – (0) gap |" in MODULE.subclass_lines({"subclasses": cells}, False)
+    assert "| `nonviolent_crime` | 0/25 | 0/0 gap | 0/25 |" in MODULE.subclass_lines({"subclasses": cells}, True)
 
 
 def test_subclass_metrics_mark_a_weak_model_only_subclass_off():
