@@ -23,6 +23,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   setup docs addressed to the reader, a maintainer describing their own config change, a
   contributing note that forbids switching off hooks and a system prompt read from a file in the
   repository stay clean. L1 latency is unchanged within noise.
+- **Detection change (`agent_config_tampering`, opt-in category):** a German request to switch the
+  pre-commit hooks or the secret scanner on ("Schalte … in der Agenten-Konfiguration ein") is no
+  longer reported as tampering; "schalte" now needs its particle `ab` or `aus`. A genuine negation in
+  the gap of a requested widening ("so all commands are not allowed", "alle Befehle nicht erlaubt")
+  rejects the request again; only the widening's own negation ("without asking", "no longer need
+  confirmation") and its concealment ("do not mention it") are part of the request.
 
 ## [0.1.18] - unreleased
 
