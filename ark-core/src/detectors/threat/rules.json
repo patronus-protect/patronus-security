@@ -291,11 +291,15 @@
       "id": "ark.threat.harmful_intent",
       "class_name": "harmful_content",
       "family": "howto_hazard",
-      "scorer_class": "harmful_behavior",
       "upstream_groups": [
         "P5"
       ],
-      "pattern": "\\b(?P<action>plan|organize|plane|organisiere)\\s{1,16}(?:an? |einen? )?(?P<target>violent attack|murder|Gewaltangriff|Mord)\\b"
+      "pattern": "\\b(?P<action>plan|organize|plane|organisiere)\\s{1,16}(?:an? |einen? )?(?P<target>violent attack|murder|Gewaltangriff|Mord)\\b",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
     },
     {
       "id": "ark.threat.secret_source_transfer",
