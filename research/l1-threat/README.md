@@ -457,7 +457,7 @@ Person oder Eigentum; `hc_evasion`: Straftat/Rahmung + Entdeckung umgehen): Dev 
 Hard-Benign-FPs auf dem Holdout) enger: kurze Lücke zwischen Rahmung und Gefahr, berichtete/zitierte Anfragen
 gedämpft. Dazu das eingebaute Subklassen-N-Gramm-Modell (benennt die Subklasse eines Treffers, 74,0 %
 kreuzvalidiert) und der Gate-Check Benign-FPR je Klasse und Sprache; eine Überschreitung, die schon die Basis hat
-und der Head nicht erhöht, besteht und steht als `OVER` im Urteil (4 solche Holdout-Zellen anderer Klassen auf
+und der Head nicht erhöht, besteht und steht als `OVER` im Urteil (4 solche Holdout-Zellen auf
 `main`, bis zu deren Nachkalibrierung, z. B. T25). Zahlen je Subklasse in [`categories/harmful_content.md` §15](categories/harmful_content.md).
 
 Je Kategorie ein Dokument in [`categories/`](categories/) (Muster: [`injection.md`](categories/injection.md)):
