@@ -1312,6 +1312,7 @@ classes:
       - ark.injection.exfil.sensitive_path_to_sink
       - ark.injection.exfil.sensitive_path_external_sink_audited
       - ark.threat.ex_secret_to_sink
+      - ark.threat.ex_code_snippet_sink
       baseline_coverage: {pipelock: partial, cisco_yara: partial, atr: partial, llamafirewall: none}
       gap: Rules do not use DLP hits as source; only fixed file paths and URL sinks.
     - id: tool_param_egress

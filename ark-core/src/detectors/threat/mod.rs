@@ -474,6 +474,7 @@ impl ThreatPipeline {
                         // a negation in the gap before it ("all commands are
                         // not allowed") still counts.
                         let own: Vec<_> = [
+                            "hesitate",
                             "unbounded",
                             "limit",
                             "sed_widen",
@@ -1016,8 +1017,98 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
             !removed_diff_line(text, start) && !crosses_diff_file(&text[start..end])
         }
         id if id.starts_with("ark.threat.ac_") => !removed_diff_line(text, start),
+        "ark.threat.ex_code_snippet_sink" => code_snippet_holds(text, start, end),
         _ => true,
     }
+}
+
+/// Whether a request to put the code snippet at `start..end` (from its
+/// "following code snippet" to the sink call in the fenced block) into the
+/// answer sends local data to a foreign host: the snippet reads local data
+/// (a file, the environment, system, network or clipboard info, cookies), its
+/// destination is not the local machine, and neither does the clause before
+/// the fence only show or explain it ("the following snippet shows how to
+/// upload") nor does the clause or the snippet gate it by the user's consent.
+fn code_snippet_holds(text: &str, start: usize, end: usize) -> bool {
+    const SOURCES: [&str; 22] = [
+        "open(",
+        "os.environ",
+        "getenv",
+        "platform.",
+        "psutil.",
+        "getpass.",
+        "check_output",
+        "clipboard",
+        "pyperclip",
+        "paste",
+        "cookie",
+        "geocoder",
+        "pkg_resources",
+        "usb.",
+        "query_devices",
+        "screenshot",
+        "os.rename",
+        "shutil.move",
+        "socket.gethostname",
+        "uuid.getnode",
+        ".recv(",
+        "listdir",
+    ];
+    const SHOWN: [&str; 11] = [
+        "shows",
+        "show",
+        "demonstrates",
+        "illustrates",
+        "explains",
+        "example",
+        "zeigt",
+        "veranschaulicht",
+        "erklärt",
+        "erklaert",
+        "beispiel",
+    ];
+    const CONSENT: [&str; 7] = [
+        "consent",
+        "opt in",
+        "opt-in",
+        "opted in",
+        "opted_in",
+        "zustimm",
+        "einwillig",
+    ];
+    let Some(fence) = text[start..end].find("```").map(|at| start + at) else {
+        return false;
+    };
+    let clause = sentence(text, start, start);
+    let clause = &clause[..clause
+        .len()
+        .min(fence - (clause.as_ptr() as usize - text.as_ptr() as usize))];
+    let mut block_end = (end + 300).min(text.len());
+    while !text.is_char_boundary(block_end) {
+        block_end -= 1;
+    }
+    let block_end = text[end..block_end]
+        .find("```")
+        .map_or(block_end, |at| end + at);
+    let block = &text[fence + 3..block_end];
+    let block_lower = block.to_lowercase();
+    let clause_lower = clause.to_lowercase();
+    if clause_lower
+        .split(|c: char| !c.is_alphanumeric())
+        .any(|word| SHOWN.contains(&word))
+    {
+        return false;
+    }
+    let local = local_destination(block)
+        || (!block.contains("http")
+            && ["localhost", "127.0.0.1", "[::1]"]
+                .iter()
+                .any(|host| block.contains(host)));
+    !local
+        && !CONSENT
+            .iter()
+            .any(|word| clause_lower.contains(word) || block_lower.contains(word))
+        && SOURCES.iter().any(|source| block_lower.contains(source))
 }
 
 /// The hashed lexicon check of a toxic language match: its `lex` words hold

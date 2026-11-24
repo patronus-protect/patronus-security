@@ -739,6 +739,7 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.ex_collect_and_post` | `exfiltration` | `send_directive` |  |
 | `ark.threat.ex_mail_body` | `exfiltration` | `send_directive` |  |
 | `ark.threat.ex_secret_to_sink` | `exfiltration` | `secret_to_sink` |  |
+| `ark.threat.ex_code_snippet_sink` | `exfiltration` | `secret_to_sink` |  |
 | `ark.threat.ex_tool_param_egress` | `exfiltration` | `tool_param_egress` |  |
 | `ark.threat.ex_dns_channel` | `exfiltration` | `dns_channel` |  |
 | `ark.threat.ex_link_smuggling` | `exfiltration` | `link_smuggling` |  |
