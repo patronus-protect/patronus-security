@@ -467,11 +467,13 @@ impl ThreatPipeline {
                         );
                         // The rule's own unbounded phrase ("never stop") is no negation.
                         // A transfer limit ("no more than") is no negation either,
-                        // and a written config value (`[sandbox] enabled = false`)
-                        // no sandbox context.
+                        // a written config value (`[sandbox] enabled = false`)
+                        // no sandbox context, and a requested widening ("no
+                        // longer needs confirmation") no negation either.
                         let own = [
                             "unbounded",
                             "limit",
+                            "widen",
                             "sed_widen",
                             "append_widen",
                             "diff_widen",
