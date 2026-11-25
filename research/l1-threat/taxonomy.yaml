@@ -381,7 +381,7 @@ classes:
       - ark.injection.jailbreak.game_framing
       - ark.injection.governance.hypothetical_unrestricted_mode
       baseline_coverage: {atr: full, prompt_guard: full, vigil: partial, nemo: partial, protectai_v2: partial, prompt_guard_2: full}
-      gap: Novel persona names and German role-play phrasing without known names are weakly covered.
+      gap: "Novel persona names and German role-play phrasing without known names are weakly covered. T28 adds jailbreak.persona_unlock_en/_de (alias of skillspector.anti_refusal): a clause-initial persona assignment with one unbounded cue ('you are X, an AI with no content policy'); third-person fiction frames stay open."
     - id: privileged_mode
       pattern: jailbreak_privileged_mode
       title: Activation of a developer/debug/god mode or unrestricted response mode
@@ -433,7 +433,7 @@ classes:
       - ark.injection.override.ethical_parameters
       - ark.injection.skillspector.policy_nullification
       baseline_coverage: {atr: full, prompt_guard: partial, vigil: partial, prompt_guard_2: partial}
-      gap: Fake 'authorized red team' framings and German policy claims are rarely detected.
+      gap: "Fake 'authorized red team' framings and German policy claims are rarely detected. T28 adds jailbreak.header_spoof_en/_de (alias of skillspector.policy_nullification): bracketed or bold headers claiming a prompt override, access level or ethics approval, a classified marking next to a memo key, or a memo addressed to the AI system; plain official memos without such a key stay open."
     - id: refusal_suppression
       pattern: jailbreak_refusal_suppression
       title: Directive to never refuse, warn or add disclaimers
