@@ -193,11 +193,7 @@ impl InferResponse {
         {
             return Err(inference_error("invalid remote Wolf logits"));
         }
-        Ok(output
-            .data
-            .chunks_exact(2)
-            .map(|row| [row[0], row[1]])
-            .collect())
+        Ok(output.data.as_chunks::<2>().0.to_vec())
     }
 }
 
