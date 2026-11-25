@@ -14,8 +14,8 @@ The extra sets are a frozen directory like a generated one (``manifest.json`` + 
 mix --out DIR`` writes ``DIR/mix``). The split is row-wise and stratified by source (the set id): per source the
 rows are ordered by stratum (language, classes) and a seeded SHA-256 of the row id, and dealt in the pattern
 ``PATTERN`` (3 train : 1 calibration : 1 measurement) from a seeded offset, so every source with at least
-``len(PATTERN)`` rows has rows in all three parts (a smaller one is named in ``short_sources``), every stratum is spread in proportion and no row is in two
-parts. The assignment is a pure function of the seed and the rows; ``parts.json`` freezes it with the set
+``len(PATTERN)`` rows has rows in all three parts (a smaller one is named in ``short_sources``), every stratum is
+spread in proportion and no row is in two parts. The assignment is a pure function of the seed and the rows; ``parts.json`` freezes it with the set
 hashes it was dealt from.
 """
 
@@ -157,7 +157,8 @@ def corpus_texts(root: Path, set_id: str) -> list[dict[str, Any]]:
 
 def extra_sets(root: Path, seed: str = SEED) -> dict[str, list[dict[str, Any]]]:
     """Set id -> rows of the extra sets of the mix (trigger negatives, PII texts, DLP texts)."""
-    return {TRIGGER_SET: trigger_negatives(seed), **{set_id: corpus_texts(root, set_id) for set_id in sorted(CORPUS_SETS)}}
+    corpora = {set_id: corpus_texts(root, set_id) for set_id in sorted(CORPUS_SETS)}
+    return {TRIGGER_SET: trigger_negatives(seed), **corpora}
 
 
 def _stratum(row: dict[str, Any]) -> tuple[str, str]:

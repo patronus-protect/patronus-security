@@ -67,8 +67,8 @@ Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1
 ``mix`` and ``fair`` are the fair measurement (``mix.py``): ``mix`` freezes one broad mix (the gated dev sets, PII
 and DLP texts and the own DE/EN trigger-word hard negatives) and its row-wise split, stratified by source, into
 train, calibration and measurement; ``fair`` scores rules only (the L1 score curve), the L1 model and the cascade
-(``decision_score``: their answer with the L1 model's logit), Prompt Guard 2 22M and the best heuristic baseline (picked on the calibration part) on the same
-rows. For a class, the negatives are the benign rows and the positives of every other class. Every cut comes from
+(``decision_score``: their answer with the L1 model's logit), Prompt Guard 2 22M and the best heuristic baseline
+(picked on the calibration part) on the same rows. For a class, the negatives are the benign rows and the positives of every other class. Every cut comes from
 the calibration part's negatives only, per class and language, at 0.1 % (decisive) and 1 % FPR; TPR, FPR and
 hard-negative FPR come from the measurement part and, at the same cut, from the report sets, which stay outside
 the mix; each cell names the sources behind its measured positives.
