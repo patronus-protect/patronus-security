@@ -789,6 +789,7 @@ tasks:
       client line, a security write-up quoting a DAN prompt); dev jailbreak TPR@0.1% up in de and en at 0
       hard-benign FP (WildJailbreak adversarial_benign and WildGuardMix included); jackhhao (report) stated
   - id: T29
+    status: done
     title: "Decoded views for every class: obfuscation invariance is lowest for zero-width (4 of 22; stripping the zero-width characters between letters makes 18 of 45 missed rows detectable) and Unicode tags (8 of 30; decoding the tags to ASCII makes 22 of 41 detectable), and exfiltration (0/59) and unsafe_action (0/116) never read the decoded views — T05 wired them for injection and prompt_extraction only"
     type: recall-fix
     deps: [T05, T22]
