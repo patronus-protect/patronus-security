@@ -86,6 +86,10 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
   "twenty million" and "fünfzigtausendmal". A bounded benchmark loop, a translation into two named
   languages, an explanation of hash chains, song lyrics, counts below the threshold and negated
   requests stay clean.
+- **Detection change (`resource_exhaustion`, opt-in category):** a range of numbers is judged by
+  how many values it asks for, not by its upper end ("list all numbers from 10000 to 10002" stays
+  clean), and a longest-answer request needs the answer itself never to end ("never end with a
+  question", "beende die Antwort nie mit einer Frage" stay clean).
 - **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
   in a file it reads — `copilot-instructions.md`, an issue comment, a README setup section — and asks
   it to tamper with its own configuration is now reported in German and English: registering an
