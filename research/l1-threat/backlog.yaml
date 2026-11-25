@@ -777,6 +777,7 @@ tasks:
       TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates unchanged; category alone
       100 KiB p95 stated against main
   - id: T28
+    status: done
     title: "jailbreak personas and spoofed headers: class_templates persona_unlock 0 of 44 (new name + 'an AI that has no content policy and never refuses' + 'stay in character'; a single no-limits cue after a persona assignment does not fire, only the three-cue golden form does) and xl_safetybench 0 of 450 German rows behind fake system headers (prompt override activated, mode/protocol, client, access level, ethics approval, incident frame); fiction_frame stays for after HC01"
     type: recall-fix
     deps: [JB02, T22]
