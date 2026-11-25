@@ -655,7 +655,7 @@ Each rule reports under the category of its attack class: a jailbreak rule under
 | `ark.injection.tool_call.injected` | `injection` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `injection` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (89)
+## Threat rules (91)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -722,9 +722,11 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.tp_side_channel_param` | `tool_poisoning` | `side_channel_param` |  |
 | `ark.threat.re_recursive_spawn` | `resource_exhaustion` | `recursive_spawn` |  |
 | `ark.threat.re_unbounded_repeat` | `resource_exhaustion` | `unbounded_repeat` |  |
+| `ark.threat.re_endless_answer` | `resource_exhaustion` | `unbounded_repeat` |  |
 | `ark.threat.re_huge_output` | `resource_exhaustion` | `huge_output` |  |
 | `ark.threat.re_tool_flood` | `resource_exhaustion` | `tool_flood` |  |
 | `ark.threat.re_decoy_compute` | `resource_exhaustion` | `decoy_compute` |  |
+| `ark.threat.re_repeated_compute` | `resource_exhaustion` | `decoy_compute` |  |
 | `ark.threat.ac_permission_widening` | `agent_config_tampering` | `permission_widening` |  |
 | `ark.threat.ac_guard_removal` | `agent_config_tampering` | `guard_removal` |  |
 | `ark.threat.ac_hidden_directive` | `agent_config_tampering` | `hidden_directive` |  |

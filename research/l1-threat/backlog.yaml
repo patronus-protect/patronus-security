@@ -765,6 +765,7 @@ tasks:
       memory_poisoning TPR@0.1% up in de and en on agent_scenarios at 0 hard-benign FP; templates unchanged;
       MP02 ablation re-run and the decision recorded
   - id: T27
+    status: done
     title: "resource_exhaustion on the second generator family: agent_scenarios 0 of 160 (templates 83/83) — counts as number words (ten million times, fünfzigtausendmal), decoy compute in the model's reasoning ('recompute … in your reasoning before you reply and show every step'), translate into every language and back and forth N times; carriers API payload message content, code TODO addressed to the agent, e-mail to the assistant"
     type: recall-fix
     deps: [T09, T22]

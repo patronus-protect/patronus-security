@@ -35,7 +35,9 @@
       "generate",
       "say",
       "produce",
-      "type"
+      "type",
+      "list",
+      "count"
     ],
     "de": [
       "wiederhol",
@@ -47,7 +49,10 @@
       "sag",
       "tipp",
       "ausgeb",
-      "ausgibst"
+      "ausgibst",
+      "liste",
+      "zähl",
+      "zaehl"
     ],
     "shared": [],
     "sources": [
@@ -72,7 +77,8 @@
       "so viele",
       "seite",
       "link",
-      "url"
+      "url",
+      "immer wieder"
     ],
     "shared": [],
     "sources": [
@@ -89,6 +95,58 @@
     "de": [
       "bevor",
       "vor"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
+  },
+  {
+    "id": "exhaust.endless_answer",
+    "description": "Längstmögliche Antwort, die nie endet",
+    "en": [
+      "longest"
+    ],
+    "de": [
+      "längstmöglich",
+      "laengstmoeglich"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
+  },
+  {
+    "id": "exhaust.recompute",
+    "description": "Rechnung oder Übersetzung, die N-mal wiederholt werden soll",
+    "en": [
+      "compute",
+      "recompute",
+      "calculate",
+      "translate"
+    ],
+    "de": [
+      "berechne",
+      "übersetz",
+      "uebersetz"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/threat/rules.json",
+      "research/l1-threat/categories/resource_exhaustion.md"
+    ]
+  },
+  {
+    "id": "exhaust.count_out",
+    "description": "Jede Zahl bis zu einer Obergrenze ausschreiben",
+    "en": [
+      "integer",
+      "number"
+    ],
+    "de": [
+      "zahl"
     ],
     "shared": [],
     "sources": [

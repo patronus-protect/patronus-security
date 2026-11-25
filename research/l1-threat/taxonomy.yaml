@@ -1735,7 +1735,7 @@ classes:
         de: [<Imperativ WIEDERHOLEN> <Wort/Satz> <endlos>]
         en: ['<imperative REPEAT> <word> <forever, never stop>']
       carriers: [chat, tool_output, web, document, email, rag_chunk]
-      existing_rules: [ark.threat.re_unbounded_repeat]
+      existing_rules: [ark.threat.re_unbounded_repeat, ark.threat.re_endless_answer]
       baseline_coverage: {atr: partial}
       gap: No ARK rule for repetition attacks
     - id: huge_output
@@ -1786,7 +1786,7 @@ classes:
         de: [<vor der Antwort> zuerst <alle Primzahlen bis Zahl> berechnen]
         en: [<before answering> first <factorise large number>]
       carriers: [tool_output, web, document, email, rag_chunk]
-      existing_rules: [ark.threat.re_decoy_compute]
+      existing_rules: [ark.threat.re_decoy_compute, ark.threat.re_repeated_compute]
       baseline_coverage: {}
       gap: Counts only with indirect carrier; nothing covers it today
     - id: loop_hint

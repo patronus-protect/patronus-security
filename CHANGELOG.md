@@ -75,6 +75,21 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
 
 ### Detection changes
 
+- **Detection change (`resource_exhaustion`, opt-in category):** requests that burn the model's or
+  agent's compute are now reported in more forms, in German and English, also inside an API
+  payload's message content, a code `TODO` addressed to the agent or an e-mail to the assistant:
+  recomputing something millions of times in the model's reasoning before it replies, the longest
+  possible answer that the model must never end, calling a tool again and again until a million
+  results, writing out every integer up to a huge count, a sub-agent per word whose sub-agents each
+  start another one, and translating back and forth thousands of times. The count threshold
+  (`resource_exhaustion_count_threshold`) now also reads number words such as "fifty thousand",
+  "twenty million" and "fünfzigtausendmal". A bounded benchmark loop, a translation into two named
+  languages, an explanation of hash chains, song lyrics, counts below the threshold and negated
+  requests stay clean.
+- **Detection change (`resource_exhaustion`, opt-in category):** a range of numbers is judged by
+  how many values it asks for, not by its upper end ("list all numbers from 10000 to 10002" stays
+  clean), and a longest-answer request needs the answer itself never to end ("never end with a
+  question", "beende die Antwort nie mit einer Frage" stay clean).
 - **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
   in a file it reads — `copilot-instructions.md`, an issue comment, a README setup section — and asks
   it to tamper with its own configuration is now reported in German and English: registering an
