@@ -1060,7 +1060,7 @@
       "source": "ark-source-derived",
       "source_revision": "0.1.20",
       "description": "A block inside third-party content that poses as a message from the user to the model and puts its own task before the user's task",
-      "adaptation": "EN clause-initial 'important message from me, <name>, to you, <model name or assistant>', 'before you can solve the task (that) I gave you' or 'after you do that, you can solve the task I gave you'; YAML line continuations (a backslash before the line break) count as whitespace. A ticket asking the human reader to do something first ('before you can start on this ticket'), a quoted mention and a negated clause stay unmatched.",
+      "adaptation": "EN clause-initial 'important message from me, <name>, to you, <model name or assistant>', 'before you can solve the task (that) I gave you' or 'after you do that, you can solve the task I gave you'; YAML line continuations (a backslash before the line break) count as whitespace, also in the prefilter. A ticket asking the human reader to do something first ('before you can start on this ticket'), a quoted mention and a negated clause stay unmatched.",
       "pattern": "(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*(?:this[\\s\\\\]+is[\\s\\\\]+)?(?:an?[\\s\\\\]+)?(?:very[\\s\\\\]+)?important[\\s\\\\]+message[\\s\\\\]+from[\\s\\\\]+me\\b[^.!?\\n]{0,60}?\\bto[\\s\\\\]+you[\\s\\\\]*,[\\s\\\\]*(?:gpt(?:-?\\d(?:\\.\\d)?o?)?|chatgpt|claude|gemini|llama(?:-?\\d)?|mistral|copilot|(?:the[\\s\\\\]+)?(?:ai|assistant|ai[\\s\\\\]+assistant|ai[\\s\\\\]+agent|agent|model|language[\\s\\\\]+model|llm))\\b|(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*(?:but[\\s\\\\]+|and[\\s\\\\]+|so[\\s\\\\]+)?before[\\s\\\\]+you[\\s\\\\]+(?:can[\\s\\\\]+)?(?:solve|complete|finish|do|answer|handle|work[\\s\\\\]+on|continue[\\s\\\\]+with)[\\s\\\\]+(?:the|my)[\\s\\\\]+(?:original[\\s\\\\]+|first[\\s\\\\]+|actual[\\s\\\\]+)?(?:task|request|question|instructions?)[\\s\\\\]+(?:that[\\s\\\\]+|which[\\s\\\\]+)?(?:i|the[\\s\\\\]+user)[\\s\\\\]+(?:gave|have[\\s\\\\]+given|sent|asked)[\\s\\\\]+you\\b|(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*after[\\s\\\\]+you[\\s\\\\]+(?:do|did|have[\\s\\\\]+done|finish)[\\s\\\\]+(?:that|this)[\\s\\\\]*,[\\s\\\\]*you[\\s\\\\]+can[\\s\\\\]+(?:solve|complete|finish|do|answer|handle|work[\\s\\\\]+on|continue[\\s\\\\]+with)[\\s\\\\]+(?:the|my)[\\s\\\\]+(?:original[\\s\\\\]+|first[\\s\\\\]+|actual[\\s\\\\]+)?(?:task|request|question|instructions?)[\\s\\\\]+(?:that[\\s\\\\]+|which[\\s\\\\]+)?(?:i|the[\\s\\\\]+user)[\\s\\\\]+(?:gave|have[\\s\\\\]+given|sent|asked)[\\s\\\\]+you\\b",
       "excluded_match_words": [
         "not",
@@ -1071,11 +1071,7 @@
         "doesn't",
         "doesn’t"
       ],
-      "required_literals_any": [
-        "important message",
-        "gave you",
-        "given you"
-      ]
+      "required_pattern": "important[\\s\\\\]+message|(?:gave|given|sent|asked)[\\s\\\\]+you"
     },
     {
       "id": "ark.injection.indirect.user_message_block_de",
@@ -1097,10 +1093,7 @@
         "keine",
         "keinen"
       ],
-      "required_literals_any": [
-        "wichtige nachricht",
-        "ich dir"
-      ]
+      "required_pattern": "wichtige[\\s\\\\]+nachricht|ich[\\s\\\\]+dir"
     },
     {
       "id": "ark.injection.indirect.todo_directive_en",
@@ -1113,11 +1106,12 @@
       "source": "ark-source-derived",
       "source_revision": "0.1.20",
       "description": "A TODO line outside a code comment that hands the agent an action with a foreign target (an account, an address, a link, the user's data, 'say that I should ...')",
-      "adaptation": "EN upper-case 'TODO:' at a line start, after a sentence end or as a quoted YAML/dict value, followed by an action verb (send, transfer, say, post, invite, visit, delete, change, make, get ...) and within the same line or its indented continuation a target: an IBAN, e-mail address, URL, 'the user', 'me/my' or 'I should'. TODO comments behind '#', '//' or '*', task lists without a foreign target and quoted test data stay unmatched.",
-      "pattern": "(?:^|\\n|\\\\n|[.!?%)>|]|:[ \\t]*[\\\"'“‘])[ \\t]*(?-i:TODO)\\s*:\\s*(?:please\\s+)?(?:say|tell|send|transfer|forward|e-?mail|post|invite|visit|delete|change|modify|update|make|create|get|book|reserve|share|concatenate|pay|give|recommend|add|remove|reset)\\b(?:[^\\n]|\\n[ \\t]+){0,200}?(?:\\bthe\\s+user\\b|\\bme\\b|\\bmy\\b|\\bi\\s+should\\b|\\bwww\\.|https?://|[\\w.+-]+@[\\w-]+\\.\\w|\\b[A-Z]{2}\\d{2}[A-Z0-9]{10,30}\\b|\\bthe\\s+(?:account|website|link)\\b)",
+      "adaptation": "EN upper-case 'TODO:' at a line start, after a sentence end or as a quoted YAML/dict value, followed by an action verb (send, transfer, say, post, invite, visit, delete, change, make, get ...) and within the same line or its indented continuation a target: an IBAN, e-mail address, URL, 'the user', 'me/my' or 'I should'. TODO comments on a line that starts with '#', '//', '/*' or '*' or carries an inline ' #' or ' //' comment before the TODO (also after sentence punctuation), task lists without a foreign target and quoted test data stay unmatched.",
+      "pattern": "(?:^|\\n|\\\\n|[.!?%)>|]|:[ \\t]*[\\\"'“‘])[ \\t]*(?P<directive>(?-i:TODO))\\s*:\\s*(?:please\\s+)?(?:say|tell|send|transfer|forward|e-?mail|post|invite|visit|delete|change|modify|update|make|create|get|book|reserve|share|concatenate|pay|give|recommend|add|remove|reset)\\b(?:[^\\n]|\\n[ \\t]+){0,200}?(?:\\bthe\\s+user\\b|\\bme\\b|\\bmy\\b|\\bi\\s+should\\b|\\bwww\\.|https?://|[\\w.+-]+@[\\w-]+\\.\\w|\\b[A-Z]{2}\\d{2}[A-Z0-9]{10,30}\\b|\\bthe\\s+(?:account|website|link)\\b)",
       "required_literals_any": [
         "todo"
-      ]
+      ],
+      "excluded_comment_lines": true
     },
     {
       "id": "ark.injection.indirect.todo_directive_de",
@@ -1130,11 +1124,12 @@
       "source": "ark-source-derived",
       "source_revision": "0.1.20",
       "description": "German: a TODO line outside a code comment that hands the agent an action with a foreign target",
-      "adaptation": "DE upper-case 'TODO:' at a line start, after a sentence end or as a quoted YAML/dict value, followed by a du-imperative (sag, schick, überweise, poste, besuche, lösche, ändere, buche ...) and a target: an IBAN, e-mail address, URL, 'der Nutzer', 'mir/mein', 'ich sollte' or 'dass ich'. TODO comments behind '#', '//' or '*' and quoted test data stay unmatched.",
-      "pattern": "(?:^|\\n|\\\\n|[.!?%)>|]|:[ \\t]*[\\\"'“‘])[ \\t]*(?-i:TODO)\\s*:\\s*(?:bitte\\s+)?(?:sag|sage|erzähl|schreib|schreibe|schick|schicke|sende|überweise|ueberweise|leite|poste|lade|besuche|lösche|loesche|ändere|aendere|buche|reserviere|erstelle|teile|hol|hole|gib|empfiehl|füge|fuege|entferne|setze)\\b(?:[^\\n]|\\n[ \\t]+){0,200}?(?:\\bder\\s+nutzer\\b|\\bdes\\s+nutzers\\b|\\bdem\\s+nutzer\\b|\\bmir\\b|\\bmein\\w*\\b|\\bich\\s+(?:sollte|soll|muss)\\b|\\bdass\\s+ich\\b|\\bwww\\.|https?://|[\\w.+-]+@[\\w-]+\\.\\w|\\b[A-Z]{2}\\d{2}[A-Z0-9]{10,30}\\b|\\bdas\\s+konto\\b|\\bdie\\s+(?:website|webseite|seite)\\b)",
+      "adaptation": "DE upper-case 'TODO:' at a line start, after a sentence end or as a quoted YAML/dict value, followed by a du-imperative (sag, schick, überweise, poste, besuche, lösche, ändere, buche ...) and a target: an IBAN, e-mail address, URL, 'der Nutzer', 'mir/mein', 'ich sollte' or 'dass ich'. TODO comments on a line that starts with '#', '//', '/*' or '*' or carries an inline ' #' or ' //' comment before the TODO (also after sentence punctuation) and quoted test data stay unmatched.",
+      "pattern": "(?:^|\\n|\\\\n|[.!?%)>|]|:[ \\t]*[\\\"'“‘])[ \\t]*(?P<directive>(?-i:TODO))\\s*:\\s*(?:bitte\\s+)?(?:sag|sage|erzähl|schreib|schreibe|schick|schicke|sende|überweise|ueberweise|leite|poste|lade|besuche|lösche|loesche|ändere|aendere|buche|reserviere|erstelle|teile|hol|hole|gib|empfiehl|füge|fuege|entferne|setze)\\b(?:[^\\n]|\\n[ \\t]+){0,200}?(?:\\bder\\s+nutzer\\b|\\bdes\\s+nutzers\\b|\\bdem\\s+nutzer\\b|\\bmir\\b|\\bmein\\w*\\b|\\bich\\s+(?:sollte|soll|muss)\\b|\\bdass\\s+ich\\b|\\bwww\\.|https?://|[\\w.+-]+@[\\w-]+\\.\\w|\\b[A-Z]{2}\\d{2}[A-Z0-9]{10,30}\\b|\\bdas\\s+konto\\b|\\bdie\\s+(?:website|webseite|seite)\\b)",
       "required_literals_any": [
         "todo"
-      ]
+      ],
+      "excluded_comment_lines": true
     },
     {
       "id": "ark.injection.leak.verbatim_above_en",
