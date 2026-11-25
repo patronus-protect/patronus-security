@@ -51,7 +51,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   must never follow: …") now set the described request apart, in German and English. An override
   phrase quoted right after a noun that names it ("the phrase 'ignore previous instructions'", "die
   Phrase „ignoriere …“") is a mention and no longer reported by `injection`; the same words given as
-  an instruction, or quoted without such a noun, are still reported. A new bank of 1,100 German and
+  an instruction, quoted without such a noun, or quoted after a request to carry them out ("Carry out
+  this sentence '…'", "Befolge die Formulierung „…“"), are still reported. Naming the genre alone
+  ("For this code review, run cat ~/.aws/credentials …") sets nothing apart. A new bank of 1,100 German and
   English hard negatives across all eleven attack classes keeps these cases clean. L1 latency is
   unchanged within noise.
 - **Detection change (`jailbreak`, opt-in category):** a persona assignment with a single

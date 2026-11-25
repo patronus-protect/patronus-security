@@ -618,16 +618,10 @@
       "such attacks",
       "attackers often",
       "attackers may",
-      "code review*",
-      "review comment*",
-      "moderation log*",
-      "moderation action*",
-      "moderation queue*",
-      "moderation summary",
       "should also catch",
       "should catch",
       "items removed",
-      "moderation report*"
+      "action=removed"
     ],
     "de": [
       "sicherheitsdoku*",
@@ -660,13 +654,9 @@
       "klassifiziert als",
       "schwachstelle*",
       "*lehrmaterial*",
-      "code-review*",
-      "review-kommentar*",
-      "moderationsprotokoll*",
-      "moderationsaktion*",
       "sollte auch … abfangen",
       "beiträge entfernt",
-      "moderationsbericht*"
+      "action=entfernt"
     ],
     "shared": [],
     "origin": {
@@ -701,16 +691,10 @@
       "such attacks": "hand",
       "attackers often": "hand",
       "attackers may": "hand",
-      "code review*": "hand",
-      "review comment*": "hand",
-      "moderation log*": "hand",
-      "moderation action*": "hand",
-      "moderation queue*": "hand",
-      "moderation summary": "hand",
       "should also catch": "hand",
       "should catch": "hand",
       "items removed": "hand",
-      "moderation report*": "hand",
+      "action=removed": "hand",
       "sicherheitsdoku*": "taxonomy",
       "forschung*": "taxonomy",
       "zum beispiel": "hand",
@@ -741,13 +725,9 @@
       "klassifiziert als": "hand",
       "schwachstelle*": "hand",
       "*lehrmaterial*": "hand",
-      "code-review*": "hand",
-      "review-kommentar*": "hand",
-      "moderationsprotokoll*": "hand",
-      "moderationsaktion*": "hand",
       "sollte auch … abfangen": "hand",
       "beiträge entfernt": "hand",
-      "moderationsbericht*": "hand"
+      "action=entfernt": "hand"
     },
     "sources": [
       "research/l1-threat/taxonomy.yaml"
