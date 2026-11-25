@@ -59,6 +59,24 @@ pub(crate) fn asset_manifest_at(
     model: WolfModel,
     precision: WolfPrecision,
 ) -> Result<WolfManifest, ScanError> {
+    manifest_at(bundle_dir, model, precision, false)
+}
+
+#[cfg(feature = "wolf-triton")]
+pub(crate) fn remote_asset_manifest_at(
+    bundle_dir: &Path,
+    model: WolfModel,
+    precision: WolfPrecision,
+) -> Result<WolfManifest, ScanError> {
+    manifest_at(bundle_dir, model, precision, true)
+}
+
+fn manifest_at(
+    bundle_dir: &Path,
+    model: WolfModel,
+    precision: WolfPrecision,
+    remote: bool,
+) -> Result<WolfManifest, ScanError> {
     let manifest_path = bundle_dir.join("wolf.manifest.json");
     let supplied_manifest = match fs::File::open(&manifest_path) {
         Ok(file) => {
@@ -72,7 +90,13 @@ pub(crate) fn asset_manifest_at(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
         Err(error) => return Err(asset(error)),
     };
-    existing_assets(bundle_dir, model, precision, supplied_manifest.as_ref())
+    existing_assets_inner(
+        bundle_dir,
+        model,
+        precision,
+        supplied_manifest.as_ref(),
+        remote,
+    )
 }
 
 /// The published graph path first, then file names of older local exports.
@@ -126,11 +150,22 @@ pub fn graph_candidates(
 }
 
 /// Pick the first requested precision whose export exists locally.
+#[cfg(test)]
 pub(super) fn existing_assets(
     base: &Path,
     model: WolfModel,
     requested: WolfPrecision,
     supplied: Option<&WolfManifest>,
+) -> Result<WolfManifest, ScanError> {
+    existing_assets_inner(base, model, requested, supplied, false)
+}
+
+fn existing_assets_inner(
+    base: &Path,
+    model: WolfModel,
+    requested: WolfPrecision,
+    supplied: Option<&WolfManifest>,
+    remote: bool,
 ) -> Result<WolfManifest, ScanError> {
     let mut selected = None;
     for precision in precision_order(requested)? {
@@ -141,7 +176,7 @@ pub(super) fn existing_assets(
         }
         if let Some(path) = model_paths(model, precision)
             .into_iter()
-            .find(|path| base.join(path).is_file())
+            .find(|path| remote || base.join(path).is_file())
         {
             selected = Some((path, precision));
             break;

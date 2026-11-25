@@ -3133,7 +3133,7 @@ Non-authoritative progress over the windows processed so far.
 
 ```rust
 pub struct WolfRunner {
-    session: Arc<WolfSession>,
+    backend: WolfBackend,
     tokenizer: Arc<MmbertPairTokenizer>,
     manifest: WolfManifest,
     threshold: f64,

@@ -1,0 +1,17 @@
+name: "wolf_defender_small_e3749b44a0f85268347cdfb6818f4ef39e8ff203_fp16_256"
+platform: "tensorrt_plan"
+max_batch_size: 16
+version_policy { specific { versions: [1] } }
+dynamic_batching {
+  preferred_batch_size: [16]
+  max_queue_delay_microseconds: 5000
+  default_queue_policy {
+    max_queue_size: 256
+    timeout_action: REJECT
+    default_timeout_microseconds: 250000
+  }
+}
+instance_group [{ count: 1 kind: KIND_GPU gpus: [0] }]
+
+# Tensor names, dtypes and shapes come from the TensorRT plan: INT64
+# input_ids/attention_mask [batch,256], FP32 logits [batch,2].

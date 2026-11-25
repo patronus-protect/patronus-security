@@ -23,18 +23,16 @@ COPY ark-coordinator ./ark-coordinator
 
 RUN cargo build --locked --release -p ark-api --bins
 
-# ---- asset warmup -----------------------------------------------------------
-# Bakes model assets into the image so the runtime container never needs
-# network access or `pipeline.download: missing` to serve requests.
-FROM builder AS assets
+# ---- assets -----------------------------------------------------------------
+# Reuse the immutable, public production bundle instead of redownloading every
+# L1/L2 model during each build. Remote L3 keeps only its local tokenizers.
+FROM ghcr.io/patronus-protect/ark-api@sha256:65cf4a8b7a48842431d6ef0a6a8d11696fddad5c0683b6d73754ba6318ddf4b7 AS published-assets
 
-ARG L3_PRECISION
-ENV PATRONUS_L3_PRECISION=${L3_PRECISION} \
-    PATRONUS_L3_TTL_SECS=-1
-
-COPY ark-api/config.build.yaml /etc/ark-api/config.yaml
-RUN mkdir -p /data/models /data/cache \
-    && /src/target/release/ark-api --config /etc/ark-api/config.yaml --warmup-only
+FROM published-assets AS assets
+USER root
+RUN rm -rf /data/models/wolf/wolf-defender-small/onnx \
+           /data/models/dynamic_pii/gliner_small_v2_5/onnx \
+           /data/models/dynamic_pii/gliner_small_v2_5/model_int4_embeddings_int8.onnx*
 
 # ---- runtime -----------------------------------------------------------------
 FROM debian:trixie-slim AS runtime

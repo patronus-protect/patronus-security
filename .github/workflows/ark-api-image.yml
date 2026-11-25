@@ -69,8 +69,10 @@ jobs:
           .venv/bin/pip install pytest pyyaml
           bash -n ark-api/deploy/bootstrap.sh
           bash -n ark-api/deploy/l3-triton/prepare.sh
-          shellcheck ark-api/deploy/bootstrap.sh ark-api/deploy/l3-triton/prepare.sh
-          .venv/bin/python -m py_compile ark-api/deploy/l3-triton/export_output.py ark-api/deploy/l3-triton/verify.py
+          bash -n ark-api/deploy/l3-triton/prepare_wolf.sh
+          bash -n ark-api/deploy/l3-triton/prepare_gliner.sh
+          shellcheck ark-api/deploy/bootstrap.sh ark-api/deploy/l3-triton/prepare.sh ark-api/deploy/l3-triton/prepare_wolf.sh ark-api/deploy/l3-triton/prepare_gliner.sh
+          .venv/bin/python -m py_compile ark-api/deploy/l3-triton/export_output.py ark-api/deploy/l3-triton/export_wolf_output.py ark-api/deploy/l3-triton/verify.py ark-api/deploy/l3-triton/verify_wolf.py
           cargo fmt --check
           cargo test --locked -p ark-api
           cargo build --locked -p ark-api --bin ark-api-entrypoint
@@ -80,10 +82,11 @@ jobs:
           ARK_IMAGE: ghcr.io/patronus-protect/ark-api:validation
           REDIS_IMAGE: redis:7.4-alpine
           CUBE_IP: 10.20.0.11
+          PATRONUS_WOLF_TRITON_URL: http://l3.internal.invalid:8090
+          PATRONUS_GLINER_TRITON_URL: http://l3.internal.invalid:8090
         run: |
           docker compose -f ark-api/deploy/compose.yaml config --quiet
           docker compose -f ark-api/deploy/compose.yaml --profile local-redis config --quiet
-
   publish:
     if: github.event_name != 'pull_request'
     needs: validate
