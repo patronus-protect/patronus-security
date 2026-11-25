@@ -452,10 +452,12 @@ die Absichts-Patterns aus §4, eine zweite Positiv-Quelle je Sprache. Zahlen in
 [`scoreboard/harmful-content-scorer.md`](scoreboard/harmful-content-scorer.md).
 
 **Stand HC03.** Zwei Absichts-Regeln für `harmful_content` (`hc_howto_hazard`: Anfrage-Rahmung + Straftat gegen
-Person oder Eigentum; `hc_evasion`: Straftat/Rahmung + Entdeckung umgehen): Dev nur Regeln TPR@0,1 % DE 19,3, EN
-26,4 (vorher 0,0) bei 0 Benign- und 0 Hard-Benign-FP; Kaskade 61,6 % (HC01 55,1). Nach Gate-Runde 1 (7 neue
+Person oder Eigentum; `hc_evasion`: Straftat/Rahmung + Entdeckung umgehen): Dev nur Regeln TPR@0,1 % DE 17,7, EN
+25,2 (vorher 0,0) bei 0 Benign- und 0 Hard-Benign-FP; Kaskade 61,1 % (HC01 55,1). Nach Gate-Runde 1 (7 neue
 Hard-Benign-FPs auf dem Holdout) enger: kurze Lücke zwischen Rahmung und Gefahr, berichtete/zitierte Anfragen
-gedämpft. Dazu das eingebaute Subklassen-N-Gramm-Modell (benennt die Subklasse eines Treffers, 74,0 %
+gedämpft; nach Gate-Runde 2 (weiter 7) dämpft ein harmloser Rahmen im Satz oder im nächsten (Videospiel, Sport,
+Fotografie, eigene Geschichte, legal, eigener verlorener Zugang, Prozess, Schädling), und „without getting
+caught“ braucht eine Straftat im Satz. Dazu das eingebaute Subklassen-N-Gramm-Modell (benennt die Subklasse eines Treffers, 74,0 %
 kreuzvalidiert) und der Gate-Check Benign-FPR je Klasse und Sprache; eine Überschreitung, die schon die Basis hat
 und der Head nicht erhöht, besteht und steht als `OVER` im Urteil (4 solche Holdout-Zellen auf
 `main`, bis zu deren Nachkalibrierung, z. B. T25). Zahlen je Subklasse in [`categories/harmful_content.md` §15](categories/harmful_content.md).

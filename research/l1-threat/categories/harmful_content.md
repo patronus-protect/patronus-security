@@ -18,13 +18,19 @@ L1 deckt die Klassen mit klarer sprachlicher Form ab (an AILuminate angelehnt):
 
 | Unterklasse | Inhalt |
 |---|---|
-| `violent_crime` | Gewalt gegen Menschen planen, Waffen beschaffen/bauen |
-| `cbrne` | chemische, biologische, radiologische, nukleare Stoffe, Sprengstoffe |
-| `cyber_harm` | Schadsoftware erstellen, Systeme fremder Leute angreifen |
-| `nonviolent_crime` | Betrug, Diebstahl, Drogenherstellung, Geldwäsche |
-| `sex_crime` | sexuelle Gewalt, nicht einvernehmliche Inhalte |
-| `child_safety` | eigene Unterklasse, ohne Gegen-Kontext außer Schutz/Meldung |
-| `self_harm` | eigene Unterklasse; Verdikt nach Punkten wie bei den anderen Klassen (festgelegt 2026-11-09) |
+| `violent_crime` | 59,1 (220), Regeln 18,6 | 69,1 (81), Regeln 13,6 | 53,2 (139), Regeln 21,6 |
+| `cbrne` | 79,5 (44), Regeln 34,1 | 87,5 (16), Regeln 12,5 gap | 75,0 (28), Regeln 46,4 |
+| `cyber_harm` | 48,4 (31), Regeln 22,6 | 66,7 (9), Regeln 33,3 gap | 40,9 (22), Regeln 18,2 |
+| `nonviolent_crime` | 65,1 (475), Regeln 26,9 | 80,7 (181), Regeln 21,0 | 55,4 (294), Regeln 30,6 |
+| `sex_crime` | 43,5 (23), Regeln 13,0 | 71,4 (7), Regeln 0,0 gap | 31,2 (16), Regeln 18,8 gap |
+| `child_safety` | 51,9 (52), Regeln 15,4 | 72,7 (11), Regeln 18,2 gap | 46,3 (41), Regeln 14,6 |
+| `self_harm` | 40,0 (30), Regeln 0,0 | 75,0 (4), Regeln 0,0 gap | 34,6 (26), Regeln 0,0 |
+| `specialized_advice` | 50,0 (2), Regeln 0,0 gap | 0,0 (1), Regeln 0,0 gap, off | 100,0 (1), Regeln 0,0 gap |
+| `ip` | 33,3 (3), Regeln 0,0 gap, off | – (0), Regeln – gap | 33,3 (3), Regeln 0,0 gap, off |
+| `defamation` | – (0), Regeln – gap | – (0), Regeln – gap | – (0), Regeln – gap |
+| `elections` | – (0), Regeln – gap | – (0), Regeln – gap | – (0), Regeln – gap |
+| `privacy` | 50,0 (8), Regeln 0,0 gap | 66,7 (3), Regeln 0,0 gap | 40,0 (5), Regeln 0,0 gap, off |
+| `other` | 45,5 (11), Regeln 9,1 gap | 33,3 (3), Regeln 0,0 gap | 50,0 (8), Regeln 12,5 gap |
 
 Dazu kommen fünf **reine Modell-Unterklassen** ohne Patterns (festgelegt 2026-11-09), weil sie keine klare
 Wortform haben: `specialized_advice` (Medizin, Recht, Finanzen), `ip` (Urheberrecht), `defamation`,
@@ -233,6 +239,17 @@ Zahlen und Befehle: [`scoreboard/harmful-content-scorer.md`](../scoreboard/harmf
     asked how to …“, „requests like 'how to …'“, öffnendes Anführungszeichen direkt nach einem Wort) ist eine
     Erwähnung (`reported_request`; ein JSON-Wert `"body": "…"` bleibt die Anfrage); „anzünden“, „Bomben“,
     „Passwort knacken“ brauchen ein Schadensobjekt. Kosten auf Dev: Regel-TPR 26,6 → 23,9.
+  - **Nachschärfung nach Gate-Runde 2** (weiter 7 neue Hard-Benign-FPs auf dem Holdout): Über-Verweigerungs-Sätze
+    (XSTest-/OR-Bench-Form) stellen dieselbe Anfrage in harmlosem Rahmen. `benign_request_context` dämpft einen
+    Treffer, wenn sein Satz oder der nächste ein Videospiel (Call of Duty, GTA, Skyrim, „in a video game“,
+    Schach), Sport/Kampfsport (jiu-jitsu, Selbstverteidigung, „im Fußball“), Fotografie (portrait, camera,
+    lens), eine eigene Geschichte („in my novel“, „in meinem Krimi“), einen legalen Rahmen (legally, legal),
+    eigenen verlorenen Zugang (my own, eigenes, forgot the password, ausgesperrt), einen Prozess (child
+    process, Linux), Schädlinge/Unkraut oder ein Schutzziel nennt; `evasion_names_a_crime` verlangt bei
+    „without getting caught“/„ohne erwischt zu werden“ eine Straftat im Satz („eat a snack in class without
+    getting caught“ bleibt sauber), „get away with“ trägt seine Tat selbst. Beide laufen nur nach einem
+    Treffer, Regexe einmal kompiliert. Kosten auf Dev: Regel-TPR gesamt 23,9 → 22,6 (DE 19,3 → 17,7, EN 26,4 → 25,2), Kaskade 61,6 → 61,1;
+    Benign und Hard-Benign weiter 0.
   - Noch offen aus §4: `hc_quantified_recipe`, `hc_child_safety`, `hc_self_harm_intent` (gehashte Lexika),
     `hc_hazard_mention`.
 - **Subklassen-Modell:** mehrklassige LR über gehashte Wort-, Bigramm- und Zeichen-N-Gramme (Feature-Hashing der
@@ -242,10 +259,11 @@ Zahlen und Befehle: [`scoreboard/harmful-content-scorer.md`](../scoreboard/harmf
   `harmful_content`-Erkennung (`subclass`, `subclass_probability`) und läuft nur bei einem Treffer; es erkennt
   nichts selbst. Kreuzvalidierte Genauigkeit 74,0 % (899), je Subklasse in
   [`scoreboard/harmful-subclass-model.md`](../scoreboard/harmful-subclass-model.md).
-- **Dev, nur Regeln** (L1-Heuristik allein, `scoreboard.py predict` ohne Kaskade): TPR@0,1 % FPR DE 19,3 (316),
-  EN 26,4 (583), gesamt 23,9 (vorher 0,0); Benign-FPR DE 0 / 23 661, EN 0 / 30 988; Hard-Benign 0 / 2 412.
-- **Dev, Kaskade** (`cascade-config.json` auf `main`, eingebautes `FT`-Modell): TPR gesamt 61,6 (HC01: 55,1),
-  DE 76,9, EN 53,3; Benign-FPR je Sprache 0,05 %; Hard-Benign EN 1 / 1 571 (Modell, wildguardmix).
+- **Dev, nur Regeln** (L1-Heuristik allein, `scoreboard.py predict` ohne Kaskade, nach Gate-Runde 2): TPR@0,1 % FPR
+  DE 17,7 (316), EN 25,2 (583), gesamt 22,6 (vorher 0,0); Benign-FPR DE 0 / 23 661, EN 0 / 30 988; Hard-Benign
+  0 / 2 412.
+- **Dev, Kaskade** (`cascade-config.json` auf `main`, eingebautes `FT`-Modell): TPR gesamt 61,1 (HC01: 55,1),
+  DE 76,3, EN 52,8; Benign-FPR je Sprache 0,05 %; Hard-Benign EN 1 / 1 571 (Modell, wildguardmix).
 - **Je Subklasse** TPR in % der Kaskaden-Entscheidung (Positive), daneben nur Regeln:
 
 | Subklasse | all | de | en |
