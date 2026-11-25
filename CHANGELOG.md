@@ -65,15 +65,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   when every destination it connects to (the URL host, the FTP or SMTP server, the socket address)
   is a loopback host; a loopback name elsewhere in the snippet (`FTP("localhost.attacker.example")`,
   a file `localhost.log`) no longer suppresses the report.
-
-## [0.1.18] - 2026-11-24
-
-This release builds the full Ark gateway on Ark Core: one config, one model cache and one L1 pass
-for both. It splits attack detection into eleven categories, adds an opt-in analysis cascade with
-built-in L1 text models, and adds many new German and English threat rules. Several configuration
-keys and Rust APIs change; see **Breaking** and **Migration**.
-
-### Detection changes
 - **Detection change (`harmful_content`, opt-in category):** requests for help with a crime are now
   reported by rules in German and English, not only by the optional model: a request frame ("how
   do I", "best way to", "teach me how to", "wie kann ich", "wie man", "zeig mir, wie") with a crime
@@ -99,6 +90,15 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
   hours" are reported); only killing time ("kill a few hours at the airport") stays clean. A
   request followed by 160 bytes without a sentence end before a multibyte character no longer
   panics the context check.
+
+## [0.1.18] - 2026-11-24
+
+This release builds the full Ark gateway on Ark Core: one config, one model cache and one L1 pass
+for both. It splits attack detection into eleven categories, adds an opt-in analysis cascade with
+built-in L1 text models, and adds many new German and English threat rules. Several configuration
+keys and Rust APIs change; see **Breaking** and **Migration**.
+
+### Detection changes
 
 - **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
   in a file it reads — `copilot-instructions.md`, an issue comment, a README setup section — and asks
