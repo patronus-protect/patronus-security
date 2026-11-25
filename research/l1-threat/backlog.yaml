@@ -867,6 +867,7 @@ tasks:
       instruction_injection TPR@0.1% on the AgentDojo rows up at 0 hard-benign FP and 0 FP on the clean
       AgentDojo outputs; BIPIA and templates unchanged
   - id: T33
+    status: done
     title: "unsafe_action German scope: all scored German positives outside the templates are approve-or-deny tool-call rows (35 native, 54 in carriers, 33 obfuscated; 3 of 122 found) whose risk sits in the proposed call (destructive SQL on production tables, removing volumes, publish-all click, remote exec) and often only in the contrast with the user's request; decide which rows are L1 text (keep), shell_command (K26, like the RedCode Bash part) or request-vs-action (report only), then rules for the text-decidable forms and a native German prose source"
     type: eval-infra
     deps: [T21, T22]
