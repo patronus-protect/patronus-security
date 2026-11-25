@@ -147,6 +147,21 @@ Regeln. Goldens: 7 Positive und 7 Hard Negatives je Sprache (Persona mit Grenzen
 Systemkopf in Doku, Rechtsrecherche mit Mandantenzeile, Sicherheitsbericht mit zitiertem DAN-Prompt,
 Verneinung); zwei JB02-Lücken (FreeGPT/FreiGPT) sind geschlossen.
 
+Die Persona-Regel allein meldete die Vorlage nicht: das „and never refuses“/„die nie ablehnt“ hinter dem Treffer
+zählte im Satz als Verneinung (Gegenkontext). Wie eine verneinte Einschränkung („not bound by any rules“)
+gehört jetzt auch eine verneinte Ablehnung (refus-, declin-, ablehn-, verweiger-) hinter einem Jailbreak-Treffer
+zur Behauptung des Jailbreaks; „never refuses refunds“ bleibt verneint.
+
+Messung (ark-core-Kaskade, nur L1, Dev-Split, Basis c65bc131 gegen Head, `scoreboard.py score`/`compare`):
+`jailbreak` TPR@0,1 % FPR all 5,2 → 14,4, DE 7,5 → 51,6, EN 4,7 → 5,8; TPR@1 % gleich; Hard-Benign-FP 0/2412
+(DE 0/841, EN 0/1571) in Basis und Head; neue Benign-Flags in irgendeiner Klasse 0 (WildJailbreak
+adversarial_benign und WildGuardMix eingeschlossen); `compare`: 77/77 Checks ohne Regression. Neu gemeldet:
+`class_templates` 44 (DE 22, EN 22), `xl_safetybench` 203 von 450 (die übrigen Regex-Treffer setzt der
+Kontext ab), jackhhao 2, WildJailbreak 1. jackhhao (nur Bericht): TPR@0,1 % 18,4 → 18,8 (102/544), Bericht-FP
+unverändert 6. Latenz (Release-`threat_cascade`, alle elf Klassen, je 30 Fenster à 100 KiB GermanQuAD bzw.
+Dolly, zwei verschränkte Läufe Basis/Head): DE Median 135–138 / 133–139 ms, p95 181–182 / 178–181 ms; EN
+Median 163–172 / 163–164 ms, p95 277–290 / 286–292 ms, also im Rauschen.
+
 ## 5. Struktur und Träger
 
 - Many-Shot nutzt die Dialogstruktur aus den Core-`Fields` (Zeilen mit Rollenmarkern); Few-Shot-Beispiele
