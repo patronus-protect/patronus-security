@@ -229,8 +229,8 @@ scan fails; it never returns a partial report.
     let report = scanner.scan_with_control(text, ScanChecks::default(), &control)?;
     ```
 
-Inputs are limited to 1 MiB and 10,000 evidence spans by default (`max_input_bytes`,
-`max_findings`). Exceeding a limit returns an error, never a truncated clean report.
+Input size and evidence spans are unlimited unless you set `max_input_bytes` or `max_findings`.
+Exceeding a limit you set returns an error, never a truncated clean report.
 
 ## Further reading
 
