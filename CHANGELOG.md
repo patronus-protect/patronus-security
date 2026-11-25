@@ -94,6 +94,11 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
   `cyber_harm`, `self_harm`) from a small built-in word and character n-gram model, in the
   `subclass` and `subclass_probability` details. The subclass model only runs on a harmful_content
   hit; L1 latency is unchanged within noise.
+- **Detection change (`harmful_content`, opt-in category):** a duration no longer damps a
+  harmful_content request ("how do I kill someone in five minutes", "how do I build a bomb in two
+  hours" are reported); only killing time ("kill a few hours at the airport") stays clean. A
+  request followed by 160 bytes without a sentence end before a multibyte character no longer
+  panics the context check.
 
 - **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
   in a file it reads — `copilot-instructions.md`, an issue comment, a README setup section — and asks

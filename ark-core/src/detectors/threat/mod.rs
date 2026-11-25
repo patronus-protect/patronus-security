@@ -1174,7 +1174,7 @@ fn benign_request_context(text: &str, start: usize, end: usize) -> bool {
             r#"protect(?:ion|ing)? (?:my|our|your|against|from)|prevent\w*|schütz\w*|"#,
             r#"verhinder\w*|"#,
             r#"(?:in|im|beim) (?:baseball|basketball|football|soccer|hockey|fußball|handball|volleyball|rugby)|"#,
-            r#"minutes|hours|prozess\w*|tv shows?|tv series|netflix|episodes?|"#,
+            r#"kill(?:ing)? (?:some |the |a few |a couple (?:of )?|an? |one |two |three |\d+ )?(?:spare |extra )?(?:time|minutes?|hours?)|prozess\w*|tv shows?|tv series|netflix|episodes?|"#,
             r#"(?:computer|video|brett|karten)?spiel\w*|schach|"#,
             r#"(?:in|für) (?:meine[mnr]?|eine[mnr]?|de[mnr]|die) (?:\w+ )?(?:krimi|roman|geschichte|drehbuch|film|serie|buch)|"#,
             r#"figur(?:en)?|selbstverteidigung|kampfsport|ausgesperrt|unkraut|schädling\w*|"#,
@@ -1191,7 +1191,11 @@ fn benign_request_context(text: &str, start: usize, end: usize) -> bool {
         .rfind(['.', '!', '?', '\n'])
         .map_or(from, |offset| from + offset + 1);
     let first_end = sentence_end(text, end);
-    let to = sentence_end(text, (first_end + 1).min(text.len()));
+    let next = text[first_end..]
+        .chars()
+        .next()
+        .map_or(first_end, |c| first_end + c.len_utf8());
+    let to = sentence_end(text, next);
     context.is_match(&text[from..to])
 }
 
