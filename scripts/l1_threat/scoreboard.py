@@ -100,7 +100,7 @@ import os
 import shutil
 import subprocess
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable, NamedTuple
 
@@ -126,6 +126,7 @@ DLP_SCOREBOARD = sys.modules.get("_ark_l1_dlp_scoreboard") or _load_file(
     "_ark_l1_dlp_scoreboard", ROOT / "scripts" / "l1_dlp" / "scoreboard.py")
 HARMFUL_SUBCLASS = sys.modules.get("_ark_l1_threat_harmful_subclass") or _load_file(
     "_ark_l1_threat_harmful_subclass", HERE / "harmful_subclass.py")
+MIX = sys.modules.get("_ark_l1_threat_mix") or _load_file("_ark_l1_threat_mix", HERE / "mix.py")
 
 REPORT_SCHEMA = "ark-l1-threat-scoreboard-v3"
 CASCADE_SCHEMA = "ark-l1-threat-cascade-v1"
@@ -1099,6 +1100,260 @@ def calibrate(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], base: dic
     return config
 
 
+# ── fair measurement on the mix ──────────────────────────────────────────────
+
+
+class MixRow(NamedTuple):
+    """A row of the mix (``part``: train, calibration or measurement) or of a report set (``part``: report)."""
+
+    row: dict[str, Any]
+    source: str
+    part: str
+
+
+def mix_sets(dev: Path, mix_root: Path) -> tuple[list[SetFile], list[SetFile]]:
+    """The sets of the mix (gated dev sets and the frozen extra sets under ``mix_root/mix``) and the report sets."""
+    dev_sets = split_sets(dev)
+    extra = split_sets(mix_root / MIX.MIX_DIR)
+    return [s for s in dev_sets if s.role != "report"] + extra, [s for s in dev_sets if s.role == "report"]
+
+
+def mix_files() -> dict[str, bytes]:
+    """``{file: bytes}`` of the frozen extra-set directory of the mix, in the form of a generated directory."""
+    files, sets = {}, {}
+    for set_id, rows in MIX.extra_sets(ROOT).items():
+        data = CORPORA.BENIGN_CODE._jsonl(rows)
+        files[f"{set_id}.jsonl"] = data
+        sets[set_id] = {"dataset": set_id, "file": f"{set_id}.jsonl", "role": "dev", "rows": len(rows),
+                        "sha256": CORPORA.PRESIDIO._sha256(data), "benign": len(rows),
+                        "languages": dict(sorted(Counter(row["language"] for row in rows).items()))}
+    manifest = CORPORA.BENIGN_CODE._manifest_bytes({"schema": GENERATORS.SCHEMA, "generator": "mix", "seed": MIX.SEED,
+                                                    "sets": sets})
+    return {**files, "manifest.json": manifest,
+            CORPORA.READY: f"{CORPORA.PRESIDIO._sha256(manifest)}  manifest.json\n".encode("utf-8")}
+
+
+def build_mix(dev: Path, out: Path, force: bool = False) -> dict[str, Any]:
+    """Freeze the extra sets under ``out/mix`` and the row-wise split of the whole mix in ``out/parts.json``."""
+    files, target = mix_files(), out / MIX.MIX_DIR
+    if (target / "manifest.json").is_file() and (target / "manifest.json").read_bytes() != files["manifest.json"] \
+            and not force:
+        raise ValueError(f"{target}: frozen extra sets differ from this run; use --force to re-freeze")
+    CORPORA.BENIGN_CODE._write(target, files)
+    sets, _ = mix_sets(dev, out)
+    sources = {entry.set_id: list(BASELINES.read_rows(entry.path)) for entry in sets}
+    document = MIX.parts_document(sources, {entry.set_id: entry.sha256 for entry in sets})
+    MIX.freeze_parts(out / MIX.PARTS_FILE, document, force)
+    return document
+
+
+def load_parts(mix_root: Path, sets: list[SetFile]) -> dict[str, str]:
+    """The frozen parts of ``mix_root``; they must have been dealt from exactly these sets."""
+    document = json.loads((mix_root / MIX.PARTS_FILE).read_text(encoding="utf-8"))
+    if document.get("schema") != MIX.PARTS_SCHEMA or document["sets"] != {s.set_id: s.sha256 for s in sets}:
+        raise ValueError(f"{mix_root / MIX.PARTS_FILE}: dealt from other sets; run `scoreboard.py mix` again")
+    return document["parts"]
+
+
+def mix_rows(sets: list[SetFile], report_sets: list[SetFile], parts: dict[str, str]) -> list[MixRow]:
+    rows = [MixRow(row, entry.set_id, parts[row["id"]]) for entry in sets for row in BASELINES.read_rows(entry.path)]
+    return rows + [MixRow(row, entry.set_id, "report") for entry in report_sets for row in BASELINES.read_rows(entry.path)]
+
+
+def mix_label(row: dict[str, Any], cls: str) -> bool | None:
+    """True for a positive of ``cls``, False for a negative (a benign row or a positive of another class), None for a
+    row that is neither (``cls`` only reported, or an attack of no scored class)."""
+    if cls in row["classes"]:
+        return True
+    if cls in (row.get("reported_classes") or ()) or (not row["benign"] and not row["classes"]):
+        return None
+    return False
+
+
+def mix_cut(negatives: list[float], target: float) -> float:
+    """The detect cut at ``target`` FPR of ``negatives`` (a row counts at or above it); any score above 0 when the
+    non-zero negatives cannot fill the budget."""
+    cut = fpr_threshold(negatives, target)
+    return math.nextafter(0.0, math.inf) if cut is None else cut
+
+
+def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes: Iterable[str]) -> dict[str, Any]:
+    """Per class, language and FPR level: the cut from the calibration part's negatives only, TPR, FPR and
+    hard-negative FPR on the measurement part at that cut, the same on the report sets, the TPR on the calibration
+    part (used only to pick the best heuristic) and the number of sources behind the measured positives.
+    ``scores``: row id -> class -> score of one system (a missing row or class scores 0)."""
+    part = np.asarray([r.part for r in rows])
+    language_of = np.asarray([r.row.get("language") or "unknown" for r in rows])
+    source = np.asarray([r.source for r in rows])
+    hard = np.asarray([is_hard_benign(r.row) for r in rows], dtype=bool)
+    out: dict[str, Any] = {}
+    for cls in classes:
+        labels = [mix_label(r.row, cls) for r in rows]
+        positive = np.asarray([label is True for label in labels])
+        negative = np.asarray([label is False for label in labels])
+        values = np.asarray([float(scores.get(r.row["id"], {}).get(cls, 0.0)) for r in rows])
+        for language in LANGUAGES:
+            in_language = np.ones(len(rows), dtype=bool) if language == "all" else language_of == language
+            calibration_neg = values[negative & in_language & (part == "calibration")]
+            if not len(calibration_neg):
+                continue
+            measured = positive & in_language & (part == "measurement")
+            cell: dict[str, Any] = {"sources": len(set(source[measured].tolist()))}
+            for fpr in FPRS:
+                cut = mix_cut(calibration_neg.tolist(), fpr)
+                hit = values >= cut
+                entry: dict[str, Any] = {"cut": cut}
+                for name in ("calibration", "measurement", "report"):
+                    scope = in_language & (part == name)
+                    pos, neg, hb = scope & positive, scope & negative, scope & negative & hard
+                    counts = {"pos": int(pos.sum()), "tp": int((hit & pos).sum()), "neg": int(neg.sum()),
+                              "fp": int((hit & neg).sum()), "hard": int(hb.sum()), "hard_fp": int((hit & hb).sum())}
+                    entry[name] = {**counts, "tpr": counts["tp"] / counts["pos"] if counts["pos"] else None,
+                                   "fpr": counts["fp"] / counts["neg"] if counts["neg"] else None,
+                                   "hard_fpr": counts["hard_fp"] / counts["hard"] if counts["hard"] else None}
+                cell[f"{fpr:g}"] = entry
+            out.setdefault(cls, {})[language] = cell
+    return out
+
+
+def core_scores(sets: list[SetFile], predictions: dict[str, Path], key: str) -> dict[str, dict[str, float]]:
+    """Row id -> class -> score of Core predictions: ``scores`` (the L1 score curve, rules only) or ``l1_score`` (the
+    cascade's L1 score: the heuristic, then the L1 model)."""
+    out = {}
+    for entry in sets:
+        for prediction in BASELINES.read_rows(predictions[entry.set_id]):
+            out[prediction["id"]] = (prediction["scores"] if key == "scores" else
+                                     {cls: float(stage["l1_score"]) for cls, stage in prediction["cascade"].items()})
+    return out
+
+
+def cached_scores(sets: list[SetFile], cache: Path, baseline_id: str) -> tuple[dict[str, dict[str, float]], list[str]] | None:
+    """Row id -> class -> score and the classes of one cached baseline, or None when a set is not cached."""
+    version = BASELINES.latest_version(cache, baseline_id)
+    if version is None:
+        return None
+    out, classes = {}, set()
+    for entry in sets:
+        path = BASELINES.cached_predictions(cache, baseline_id, version, entry.set_id, entry.sha256)
+        if path is None:
+            return None
+        classes |= set(json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))["classes"])
+        out.update((p["id"], p["scores"]) for p in BASELINES.read_rows(path))
+    return out, sorted(classes)
+
+
+def best_of(candidates: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Per class and language the candidate with the highest calibration-part TPR at 0.1 % FPR (then 1 %); the
+    measurement part never picks it. Each picked cell names its candidate under ``system``."""
+    out: dict[str, Any] = {}
+    for name, cells in sorted(candidates.items()):
+        for cls, languages in cells.items():
+            for language, cell in languages.items():
+                rank = tuple(cell[fpr]["calibration"]["tpr"] or 0.0 for fpr in GATE_FPRS[::-1])
+                current = out.get(cls, {}).get(language)
+                if current is None or rank > current[0]:
+                    out.setdefault(cls, {})[language] = (rank, {**cell, "system": name})
+    return {cls: {language: cell for language, (_, cell) in languages.items()} for cls, languages in out.items()}
+
+
+FAIR_SYSTEMS = (("rules", "rules only"), ("l1_model", "L1 model"), ("cascade", "cascade"),
+                ("prompt_guard_2", "Prompt Guard 2"), ("heuristic", "best heuristic"))
+
+
+def _tpr_fpr(part: dict[str, Any]) -> str:
+    """``TPR / FPR`` in percent; the FPR with two decimals, so 0.1 % budgets stay readable."""
+    return f"{_pct(part['tpr'])} / {'–' if part['fpr'] is None else f'{part["fpr"] * 100:.2f}'}"
+
+
+def fair_lines(report: dict[str, Any], fpr: str, systems: Iterable[str]) -> list[str]:
+    """Markdown table at one FPR level: per class and language the measured rows, the sources behind the positives
+    and, per system, TPR / FPR on the measurement part and TPR / FPR on the report sets at the same cut."""
+    names = dict(FAIR_SYSTEMS)
+    systems = [s for s in systems if s in report["systems"]]
+    header = ["class", "lang", "pos", "sources", "neg", "hard neg"]
+    header += [f"{names[s]} TPR / FPR" for s in systems] + [f"{names[s]} report TPR / FPR" for s in systems]
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    for cls in CLASSES:
+        for language in LANGUAGES:
+            cells = {s: report["systems"][s].get(cls, {}).get(language) for s in systems}
+            first = next((c for c in cells.values() if c is not None), None)
+            if first is None or not first[fpr]["measurement"]["pos"]:
+                continue
+            m = first[fpr]["measurement"]
+            values = [cls, language, str(m["pos"]), str(first["sources"]), str(m["neg"]), str(m["hard"])]
+            for part in ("measurement", "report"):
+                for s in systems:
+                    cell = cells[s]
+                    if cell is None:
+                        values.append("–")
+                        continue
+                    p = cell[fpr][part]
+                    picked = f" ({cell['system']})" if "system" in cell and part == "measurement" else ""
+                    values.append(f"{_tpr_fpr(p)}{picked}")
+            lines.append("| " + " | ".join(values) + " |")
+    return lines
+
+
+def render_fair(report: dict[str, Any], title: str, lead: list[str], systems: Iterable[str],
+                source: str | None = None, inputs: str | None = None) -> str:
+    """A fair-measurement report: one table per FPR level (0.1 % first, the decisive one)."""
+    systems = list(systems)
+    counts = report["parts"]
+    lines = [f"# {title}", "", "Generated by `scripts/l1_threat/scoreboard.py fair`; do not edit by hand.", "",
+             *([source, ""] if source else []), *inputs_lines(inputs), *lead,
+             f"Mix: {counts['rows']} rows from {counts['sources']} sources, dealt row-wise and stratified by source "
+             f"(seed `{report['seed']}`, split `{report['parts_hash']}`): train {counts['train']}, calibration "
+             f"{counts['calibration']}, measurement {counts['measurement']}; report sets outside the mix: "
+             f"{', '.join(report['report_sets'])} ({counts['report']} rows).", "",
+             "For a class, the negatives are the benign rows (benign pool, hard benigns, PII and DLP texts, trigger-word "
+             "hard negatives) and the positives of every other class. Every cut comes from the calibration part's "
+             "negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, "
+             "the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. "
+             "`–`: the system does not score the class.", ""]
+    if report.get("missing"):
+        lines += ["Not measured: " + "; ".join(f"{k} ({v})" for k, v in sorted(report["missing"].items())) + ".", ""]
+    for fpr in GATE_FPRS[::-1]:
+        lines += [f"## At {_fpr_label(fpr)} FPR" + (" (decisive)" if fpr == "0.001" else ""), "",
+                  *fair_lines(report, fpr, systems), ""]
+    return "\n".join(lines)
+
+
+def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baseline_cache: Path | None) -> dict[str, Any]:
+    """Every system on the same mix rows: ``predictions`` maps ``rules``, ``l1_model`` and ``cascade`` to Core
+    prediction directories (the cascade's L1 score of ``l1_model`` and ``cascade``); the baselines come from the
+    cache (Prompt Guard 2 22M, and per class and language the heuristic picked on the calibration part)."""
+    sets, report_sets = mix_sets(dev, mix_root)
+    parts = load_parts(mix_root, sets)
+    everything = sets + report_sets
+    rows = mix_rows(sets, report_sets, parts)
+    systems: dict[str, Any] = {}
+    missing: dict[str, str] = {}
+    for name, directory in predictions.items():
+        found = core_predictions(everything, directory)
+        if len(found) != len(everything):
+            missing[name] = "no Core predictions for every set"
+            continue
+        systems[name] = fair_cells(rows, core_scores(everything, found, "scores" if name == "rules" else "l1_score"),
+                                   CLASSES)
+    heuristics = {}
+    if baseline_cache is not None:
+        for baseline_id in BASELINES.baseline_ids(BASELINES.entity_map.load()):
+            cached = cached_scores(everything, baseline_cache, baseline_id)
+            if cached is None:
+                missing[baseline_id] = "not cached for every set of the mix"
+            elif baseline_id == "prompt_guard_2_22m":
+                systems["prompt_guard_2"] = fair_cells(rows, cached[0], cached[1])
+            elif baseline_id not in BASELINES.REFERENCE_MODELS:
+                heuristics[baseline_id] = fair_cells(rows, cached[0], cached[1])
+    if heuristics:
+        systems["heuristic"] = best_of(heuristics)
+    counted = Counter(r.part for r in rows)
+    return {"seed": MIX.SEED, "parts_hash": hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()[:12],
+            "report_sets": [s.set_id for s in report_sets], "systems": systems, "missing": missing,
+            "parts": {**{p: counted[p] for p in (*MIX.PARTS, "report")}, "rows": sum(counted[p] for p in MIX.PARTS),
+                      "sources": len(sets)}}
+
+
 def baseline_reports(sets: list[SetFile], cache: Path) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
     """Score reports of every baseline with cached predictions for all sets (latest version each).
 
@@ -1383,6 +1638,17 @@ def main(argv: list[str] | None = None) -> int:
     clear.add_argument("--no-clear", action="store_true", help="no clear threshold: every undetected row escalates")
     cal.add_argument("--exclude-ids", type=Path, help="row ids (one per line) left out, e.g. train negatives")
     cal.add_argument("--out", type=Path, required=True)
+    mx = commands.add_parser("mix", help="freeze the measurement mix (extra sets and the row-wise split)")
+    mx.add_argument("--dev", type=Path, required=True, help="dev split root")
+    mx.add_argument("--out", type=Path, required=True, help="mix root (extra sets under mix/, parts.json)")
+    mx.add_argument("--force", action="store_true", help="re-deal a frozen mix of other inputs")
+    fa = commands.add_parser("fair", help="every system on the same mix rows, cut from the calibration part")
+    fa.add_argument("--dev", type=Path, required=True, help="dev split root (its report sets stay outside the mix)")
+    fa.add_argument("--mix", type=Path, required=True, help="mix root written by `mix`")
+    fa.add_argument("--predictions", action="append", default=[], metavar="SYSTEM=DIR",
+                    help="Core predictions of the dev split and the mix: rules=DIR, l1_model=DIR, cascade=DIR")
+    fa.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache (Prompt Guard 2, heuristics)")
+    fa.add_argument("--output", type=Path, required=True, help="fair report (JSON)")
     rf = commands.add_parser("refresh", help="re-render baseline.md (and cascade.md) in a checkout of main")
     rf.add_argument("--tree", type=Path, default=ROOT, help="checkout of main; its HEAD is measured, its reports rewritten")
     rf.add_argument("--since", help="commit the reports were last rendered from: render only after a detector, "
@@ -1398,6 +1664,19 @@ def main(argv: list[str] | None = None) -> int:
             return gate(args.head, args.base_sha, args.dev, args.holdout, args.cache, args.jobs)
         if args.command == "refresh":
             return refresh(args.tree, args.since, args.dev, args.cache, args.baseline_cache, args.jobs)
+        if args.command == "mix":
+            document = build_mix(args.dev, args.out, args.force)
+            print(f"mix of {sum(map(sum, (c.values() for c in document['counts'].values())))} rows from "
+                  f"{len(document['counts'])} sources frozen under {args.out}")
+            return 0
+        if args.command == "fair":
+            predictions = dict(item.split("=", 1) for item in args.predictions)
+            unknown = set(predictions) - {"rules", "l1_model", "cascade"}
+            if unknown:
+                raise ValueError(f"unknown systems: {', '.join(sorted(unknown))}")
+            _write_json(args.output, fair_report(args.dev, args.mix, {k: Path(v) for k, v in predictions.items()},
+                                                 args.baseline_cache))
+            return 0
         if args.command == "predict":
             config = load_config(args.cascade)
             binary = args.predictor or build_local_predictor(config)
