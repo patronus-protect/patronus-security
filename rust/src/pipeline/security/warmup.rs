@@ -300,12 +300,22 @@ impl SecurityGateway {
                 {
                     continue;
                 }
-                assets::DYNAMIC_PII_ASSET.prepare(
-                    &base_dir,
-                    download_policy(allow_download && self.should_download_assets_for(*category)),
-                    allow_download,
-                    progress,
-                )?;
+                if std::env::var("PATRONUS_GLINER_TRITON_URL").is_ok_and(|value| !value.is_empty())
+                {
+                    // Tokenization stays on the Worker; inference weights live on L4.
+                    GlinerEngine::validate_path(
+                        assets::DYNAMIC_PII_ASSET.spec.cache_dir(&base_dir),
+                    )?;
+                } else {
+                    assets::DYNAMIC_PII_ASSET.prepare(
+                        &base_dir,
+                        download_policy(
+                            allow_download && self.should_download_assets_for(*category),
+                        ),
+                        allow_download,
+                        progress,
+                    )?;
+                }
                 continue;
             }
 
@@ -439,20 +449,7 @@ impl SecurityGateway {
                         })?;
                     }
                 } else if let Some(asset) = assets::dedicated_l3_asset(*category) {
-                    if *category == SecurityCategory::DynamicPii
-                        && std::env::var("PATRONUS_GLINER_TRITON_URL")
-                            .is_ok_and(|value| !value.is_empty())
-                    {
-                        // Tokenization stays on the Worker; inference weights live on L4.
-                        GlinerEngine::validate_path(asset.spec.cache_dir(&base_dir))?;
-                    } else {
-                        asset.prepare(
-                            &base_dir,
-                            download_policy(download),
-                            allow_download,
-                            None,
-                        )?;
-                    }
+                    asset.prepare(&base_dir, download_policy(download), allow_download, None)?;
                 }
             }
         }
