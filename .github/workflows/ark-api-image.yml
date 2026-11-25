@@ -87,6 +87,15 @@ jobs:
         run: |
           docker compose -f ark-api/deploy/compose.yaml config --quiet
           docker compose -f ark-api/deploy/compose.yaml --profile local-redis config --quiet
+      - name: Build Cube worker binary for isolated validation
+        if: github.event_name == 'pull_request' && github.head_ref == 'bv/wolf-triton-l4'
+        run: cargo build --locked --release -p ark-api --bin ark-api
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' && github.head_ref == 'bv/wolf-triton-l4'
+        with:
+          name: wolf-triton-cube-worker-${{ github.sha }}
+          path: target/release/ark-api
+          if-no-files-found: error
 
   publish:
     if: github.event_name != 'pull_request'
