@@ -136,7 +136,10 @@ T28 (TRIAGE 2026-W48, Bucket 4) schließt zwei Lücken mit je zwei auditierten R
   Autoritätsschlüssel, (b) eine Verschlusssachen-Markierung (VS-…, geheim, streng vertraulich, nur für den
   Dienstgebrauch, eyes only, top secret) neben einem Memo-Schlüssel, oder (c) eine An-/Empfänger-Zeile an
   das KI-System selbst (KI-Assistenzsystem, …modul, …instanz, Sprachmodell, LLM, Session-ID). Gewöhnliche
-  Memo-, Mandanten- und Einstellungsköpfe (Betreff, Mandant, Aktenzeichen, „Modus: dunkel“) fallen heraus.
+  Memo-, Mandanten- und Einstellungsköpfe (Betreff, Mandant, Aktenzeichen, „Modus: dunkel“) fallen heraus,
+  ebenso ein Autoritätswert, der die Autorität verneint (`DISABLED`, `DENIED`, `pending`, `DEAKTIVIERT`,
+  `ABGELEHNT`, `ausstehend`; optionale Gruppen `negated…`), und ein Modellname in der Empfängerzeile ohne
+  Modellzusatz („An: Claude Martin“; „Claude Sonnet 4.5“, „GPT-4“, „Claude-Instanz“ bleiben Treffer).
 
 Dev-Regex-Scan (alle Dateien unter `$ARK_L1_DEV_DATA`): Persona 44/44 `class_templates/persona_unlock`
 (DE 22, EN 22) plus je eine Zeile jackhhao und WildJailbreak; Kopfzeilen 251/450 `xl_safetybench` (DE);

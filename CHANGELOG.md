@@ -22,6 +22,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   instance itself. Role-play personas that keep their limits, game character sheets, ordinary
   request headers in documentation, memos with a client or case-number line, negations and
   write-ups that quote such a prompt stay clean. L1 latency is unchanged within noise.
+- **Detection change (`jailbreak`, opt-in category):** a spoofed header whose authority value
+  says the authority is missing ("[SYSTEM PROMPT OVERRIDE: DISABLED]", "[ETHICS APPROVAL: DENIED]",
+  "**Ethikvotum:** ausstehend", "ABGELEHNT", "DEAKTIVIERT") is no longer reported, and a
+  "To:"/"An:" line names a model only with a model qualifier ("Claude Sonnet 4.5", "GPT-4",
+  "Claude-Instanz"), so mail to a person ("To: Claude Martin") stays clean. No dev row changes.
 - **Detection change (`memory_poisoning`, opt-in category):** a request to keep a claim the agent
   would act on later is now reported in German and English when it names the store target by its
   role — the agent's long-term memory, a permanent rule in its memory, the stored profile, every
