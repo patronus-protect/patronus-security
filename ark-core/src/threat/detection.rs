@@ -450,7 +450,10 @@ pub fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -> Vec<L
             for window in text_windows(text, WINDOW_BYTES) {
                 let start = window.as_ptr() as usize - text.as_ptr() as usize;
                 let map: fn(char) -> Option<char> = if family == "zero_width_obfuscation" {
-                    if window.chars().all(|c| text_views::visible_character(c).is_some()) {
+                    if window
+                        .chars()
+                        .all(|c| text_views::visible_character(c).is_some())
+                    {
                         continue;
                     }
                     text_views::visible_character

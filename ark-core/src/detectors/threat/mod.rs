@@ -732,10 +732,8 @@ fn hidden_detection(
         span.end_char = end;
     }
     let remap = |value: &mut serde_json::Value| {
-        if let (Some(start), Some(end)) = (
-            value["start_byte"].as_u64(),
-            value["end_byte"].as_u64(),
-        ) {
+        if let (Some(start), Some(end)) = (value["start_byte"].as_u64(), value["end_byte"].as_u64())
+        {
             let range = source(start as usize, end as usize);
             value["start_byte"] = json!(range.start);
             value["end_byte"] = json!(range.end);

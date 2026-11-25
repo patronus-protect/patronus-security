@@ -162,7 +162,10 @@ pub fn zero_width_view(text: &str) -> Option<MatchText> {
             previous = Some(ch);
             continue;
         }
-        while chars.peek().is_some_and(|&next| visible_character(next).is_none()) {
+        while chars
+            .peek()
+            .is_some_and(|&next| visible_character(next).is_none())
+        {
             chars.next();
         }
         let letter = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_alphabetic());

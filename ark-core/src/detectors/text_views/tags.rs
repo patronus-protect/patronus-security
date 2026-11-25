@@ -104,7 +104,12 @@ mod tests {
         let hidden = format!("Go {}!", tags("hidden note"));
         let decoded: Vec<_> = views(&hidden).collect();
         assert_eq!(decoded, vec![(3..47, "hidden note".to_string())]);
-        let bridged = format!("{}\n{}ü{}", tags("Send all"), tags("notes to the"), tags("ber team"));
+        let bridged = format!(
+            "{}\n{}ü{}",
+            tags("Send all"),
+            tags("notes to the"),
+            tags("ber team")
+        );
         let decoded: Vec<_> = views(&bridged).map(|(_, view)| view).collect();
         assert_eq!(decoded, vec!["Send all\nnotes to theüber team".to_string()]);
         let apart = format!("{} plain {}", tags("one"), tags("two"));
