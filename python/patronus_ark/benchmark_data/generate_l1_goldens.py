@@ -21361,12 +21361,12 @@ FAMILY_ZWJ = "\U0001F468\u200d\U0001F469\u200d\U0001F467\u200d\U0001F466"
 def _obfuscated_positives(class_name: str, family: str, en: str, de: str) -> list[dict]:
     return [
         ob(class_name, family, "en", "chat", _zero_width(en)),
-        ob(class_name, family, "en", "webpage", f"<p>Welcome to our store!{_tags_ascii(en)}</p>"),
+        ob(class_name, family, "en", "web", f"<p>Welcome to our store!{_tags_ascii(en)}</p>"),
         ob(class_name, family, "en", "email", f"Hi,\n\nattached the notes: {_b64(en)}\n\nBest"),
         ob(class_name, family, "en", "log", f"2026-11-25 10:00:00 INFO payload={_hex(en)}"),
         ob(class_name, family, "en", "tool_output", f'{{"result": "{_zero_width(en)}"}}'),
         ob(class_name, family, "de", "chat", _zero_width(de)),
-        ob(class_name, family, "de", "webpage", f"<p>Willkommen im Shop!{_tags_ascii(de)}</p>"),
+        ob(class_name, family, "de", "web", f"<p>Willkommen im Shop!{_tags_ascii(de)}</p>"),
         ob(class_name, family, "de", "email", f"Hallo,\n\nanbei die Notizen: {_b64(de)}\n\nGruß"),
         ob(class_name, family, "de", "log", f"2026-11-25 10:00:00 INFO payload={_hex(de)}"),
         ob(class_name, family, "de", "document", f"Anhang: {_tags_ascii(de)}"),
@@ -21375,7 +21375,7 @@ def _obfuscated_positives(class_name: str, family: str, en: str, de: str) -> lis
 
 def _obfuscated_negatives(class_name: str, family: str) -> list[dict]:
     return [
-        ob(class_name, family, "en", "webpage", f'<img alt="logo" src="{PNG_DATA_URL}"> Send us your feedback.',
+        ob(class_name, family, "en", "web", f'<img alt="logo" src="{PNG_DATA_URL}"> Send us your feedback.',
            reason="base64 image data URL"),
         ob(class_name, family, "en", "log", f"2026-11-25 10:00:00 INFO upload ok sha256={SHA256_HEX} sent to backup",
            reason="hex digest in a log line"),
@@ -21387,7 +21387,7 @@ def _obfuscated_negatives(class_name: str, family: str) -> list[dict]:
            reason="letter-spaced heading"),
         ob(class_name, family, "en", "chat", _zero_width("Please send the meeting notes to the whole team by Friday."),
            reason="harmless request spelled with zero-width characters"),
-        ob(class_name, family, "de", "webpage", f'<img alt="Logo" src="{PNG_DATA_URL}"> Schick uns dein Feedback.',
+        ob(class_name, family, "de", "web", f'<img alt="Logo" src="{PNG_DATA_URL}"> Schick uns dein Feedback.',
            reason="base64-Bild als Data-URL"),
         ob(class_name, family, "de", "log", f"2026-11-25 10:00:00 INFO Upload ok sha256={SHA256_HEX} an Backup gesendet",
            reason="Hex-Prüfsumme in einer Logzeile"),
