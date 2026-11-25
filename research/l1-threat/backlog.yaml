@@ -810,6 +810,7 @@ tasks:
       up in de and en on the eval half at 0 hard-benign FP; civil_comments and textdetox_de (report) stated;
       FT/B4/B1 re-calibrated with native positives and the decision recorded
   - id: T31
+    status: done
     title: "exfiltration in code snippets: BIPIA code attacks 0 of 50 (injection finds them) — 'use the following code in your solution' with a snippet that sends network or system info, a cookie file or a renamed file to a foreign host by HTTP POST, FTP upload or socket; the same snippets miss in obfuscation_slices and the carriers (39 of 75); shell commands stay with shell_command"
     type: recall-fix
     deps: [T13, T22]

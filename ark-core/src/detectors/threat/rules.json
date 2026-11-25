@@ -947,6 +947,18 @@
       }
     },
     {
+      "id": "ark.threat.ex_code_snippet_sink",
+      "class_name": "exfiltration",
+      "family": "secret_to_sink",
+      "upstream_groups": [],
+      "pattern": "(?:(?P<hesitate>(?-u:\\b)don'?t\\s{1,4}(?:hesitate|forget)(?-u:\\b))[^`\\n.!?;]{0,80}?)?(?P<directive>(?-u:\\b)(?:following|below|subsequent|folgenden?|nachstehenden?|untenstehenden?|unten\\s{1,4}stehenden?)\\s{1,4}code(?:\\s{1,4}|-)?(?:snippet|block|excerpt|section|segment|fragment|sample|ausschnitt|schnipsel|abschnitt)(?-u:\\b))[^`]{0,120}?```[^`]{0,700}?(?P<sink>requests\\.(?:post|put|patch)\\s{0,4}\\(|requests\\.get\\s{0,4}\\([^`)]{0,200}?cookies\\s{0,4}=|\\.stor(?:binary|lines)\\s{0,4}\\(|\\.send(?:all|to|mail)?\\s{0,4}\\(|\\.request\\s{0,4}\\(\\s{0,4}[\\\"']post[\\\"']|publish\\.single\\s{0,4}\\(|[\\\"'](?:scp|rsync)[\\\"']\\s{0,4},[^`\\]]{0,120}?@[a-z0-9._-]{1,63}:|[\\\"']-F[\\\"']\\s{0,4},\\s{0,4}[\\\"'][a-z0-9_]{1,20}=@)",
+      "points": {
+        "base_score": 40,
+        "validator": "structure",
+        "requires_context": false
+      }
+    },
+    {
       "id": "ark.threat.ex_tool_param_egress",
       "class_name": "exfiltration",
       "family": "tool_param_egress",

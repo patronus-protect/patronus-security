@@ -655,7 +655,7 @@ Each rule reports under the category of its attack class: a jailbreak rule under
 | `ark.injection.tool_call.injected` | `injection` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `injection` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (88)
+## Threat rules (89)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -739,6 +739,7 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.ex_collect_and_post` | `exfiltration` | `send_directive` |  |
 | `ark.threat.ex_mail_body` | `exfiltration` | `send_directive` |  |
 | `ark.threat.ex_secret_to_sink` | `exfiltration` | `secret_to_sink` |  |
+| `ark.threat.ex_code_snippet_sink` | `exfiltration` | `secret_to_sink` |  |
 | `ark.threat.ex_tool_param_egress` | `exfiltration` | `tool_param_egress` |  |
 | `ark.threat.ex_dns_channel` | `exfiltration` | `dns_channel` |  |
 | `ark.threat.ex_link_smuggling` | `exfiltration` | `link_smuggling` |  |
