@@ -9,10 +9,12 @@ use ort::{
 use regex::Regex;
 use sentencepiece_rust::SentencePieceProcessor;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
     fs, io,
     path::{Component, Path, PathBuf},
+    time::Duration,
 };
 
 /// Errors returned by the GLiNER ONNX engine.
@@ -126,7 +128,7 @@ struct PreparedInput {
 }
 
 pub struct GlinerEngine {
-    session: Session,
+    session: GlinerBackend,
     tokenizer: SentencePieceProcessor,
     splitter: Regex,
     special_tokens: HashMap<String, u32>,
@@ -137,32 +139,161 @@ pub struct GlinerEngine {
     model_path: PathBuf,
 }
 
+enum GlinerBackend {
+    Local(Session),
+    Triton(RemoteGliner),
+}
+
+struct RemoteGliner {
+    agent: ureq::Agent,
+    endpoint: String,
+}
+
+const TRITON_MODEL: &str = "gliner_small_6cfcbd93d7fc6f5e1658f80afa38f73891b91693_fp16";
+
+fn remote_configured() -> bool {
+    std::env::var("PATRONUS_GLINER_TRITON_URL").is_ok_and(|value| !value.is_empty())
+}
+
+impl RemoteGliner {
+    fn from_env() -> EngineResult<Option<Self>> {
+        let endpoint = match std::env::var("PATRONUS_GLINER_TRITON_URL") {
+            Ok(value) if !value.is_empty() => value,
+            Ok(_) | Err(std::env::VarError::NotPresent) => return Ok(None),
+            Err(error) => return Err(ArkEngineError::Inference(error.to_string())),
+        };
+        let url = url::Url::parse(&endpoint).map_err(onnx_error)?;
+        if !matches!(url.scheme(), "http" | "https")
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+            || url.path() != "/"
+        {
+            return Err(ArkEngineError::InvalidInput(
+                "PATRONUS_GLINER_TRITON_URL must be an HTTP(S) origin".into(),
+            ));
+        }
+        let timeout_ms = match std::env::var("PATRONUS_GLINER_TRITON_TIMEOUT_MS") {
+            Ok(value) => value.parse::<u64>().map_err(onnx_error)?,
+            Err(std::env::VarError::NotPresent) => 3000,
+            Err(error) => return Err(ArkEngineError::Inference(error.to_string())),
+        };
+        if !(1..=30_000).contains(&timeout_ms) {
+            return Err(ArkEngineError::InvalidInput(
+                "GLiNER Triton timeout must be between 1 and 30000 ms".into(),
+            ));
+        }
+        let remote = Self {
+            agent: ureq::AgentBuilder::new()
+                .timeout(Duration::from_millis(timeout_ms))
+                .redirects(0)
+                .build(),
+            endpoint: endpoint.trim_end_matches('/').into(),
+        };
+        remote
+            .agent
+            .get(&format!(
+                "{}/v2/models/{TRITON_MODEL}/versions/1/ready",
+                remote.endpoint
+            ))
+            .call()
+            .map_err(onnx_error)?;
+        Ok(Some(remote))
+    }
+
+    fn infer(&self, input: &PreparedInput, labels: usize) -> EngineResult<(Vec<usize>, Vec<f32>)> {
+        let sequence = input.input_ids.len();
+        let spans = input.span_mask.len();
+        let response = self.agent
+            .post(&format!("{}/v2/models/{TRITON_MODEL}/versions/1/infer", self.endpoint))
+            .send_json(json!({"inputs": [
+                {"name": "input_ids", "shape": [1, sequence], "datatype": "INT64", "data": input.input_ids},
+                {"name": "attention_mask", "shape": [1, sequence], "datatype": "INT64", "data": input.attention_mask},
+                {"name": "words_mask", "shape": [1, sequence], "datatype": "INT64", "data": input.words_mask},
+                {"name": "text_lengths", "shape": [1, 1], "datatype": "INT64", "data": [input.text_length]},
+                {"name": "span_idx", "shape": [1, spans, 2], "datatype": "INT64", "data": input.span_idx},
+                {"name": "span_mask", "shape": [1, spans], "datatype": "BOOL", "data": input.span_mask}
+            ], "outputs": [{"name": "logits"}]}))
+            .map_err(onnx_error)?;
+        let limit = spans
+            .saturating_mul(labels)
+            .saturating_mul(40)
+            .saturating_add(64 * 1024)
+            .clamp(64 * 1024, 32 * 1024 * 1024);
+        let parsed: TritonResponse =
+            serde_json::from_reader(std::io::Read::take(response.into_reader(), limit as u64))
+                .map_err(onnx_error)?;
+        if parsed.model_name != TRITON_MODEL
+            || parsed.model_version != "1"
+            || parsed.outputs.len() != 1
+        {
+            return Err(ArkEngineError::Inference(
+                "unexpected GLiNER Triton model".into(),
+            ));
+        }
+        let output = parsed.outputs.into_iter().next().unwrap();
+        if output.name != "logits"
+            || output.datatype != "FP32"
+            || output.data.iter().any(|v| !v.is_finite())
+        {
+            return Err(ArkEngineError::Inference(
+                "invalid GLiNER Triton logits".into(),
+            ));
+        }
+        Ok((output.shape, output.data))
+    }
+}
+
+#[derive(Deserialize)]
+struct TritonResponse {
+    model_name: String,
+    model_version: String,
+    outputs: Vec<TritonOutput>,
+}
+
+#[derive(Deserialize)]
+struct TritonOutput {
+    name: String,
+    datatype: String,
+    shape: Vec<usize>,
+    data: Vec<f32>,
+}
+
 impl GlinerEngine {
     /// Validate a local Edge bundle without creating an ONNX session.
     pub fn validate_path(path: impl AsRef<Path>) -> EngineResult<()> {
-        validated_bundle(path.as_ref()).map(|_| ())
+        validated_bundle(path.as_ref(), remote_configured()).map(|_| ())
     }
 
     pub fn from_path(path: impl AsRef<Path>) -> EngineResult<Self> {
         let path = path.as_ref();
-        let (bundle, model, model_file) = validated_bundle(path)?;
+        let remote = RemoteGliner::from_env()?;
+        let (bundle, model, model_file) = validated_bundle(path, remote.is_some())?;
         let model_path = path.join(model_file);
         let tokenizer = SentencePieceProcessor::open(path.join("spm.model")).map_err(|error| {
             ArkEngineError::Tokenizer(format!("failed to load spm.model: {error}"))
         })?;
-        let (session_builder, _) = crate::ml::onnx::configured_session_builder(
-            crate::ExecutionBackend::Auto,
-            Some(path),
-            crate::OnnxRuntimeOptions::default(),
-        )
-        .map_err(|error| ArkEngineError::Onnx(error.to_string()))?;
-        let session_builder = session_builder
-            .with_memory_pattern(false)
-            .map_err(onnx_error)?
-            .with_prepacking(false)
-            .map_err(onnx_error)?;
-        let session =
-            crate::ml::onnx::commit_session(session_builder, &model_path).map_err(onnx_error)?;
+        let session = if let Some(remote) = remote {
+            GlinerBackend::Triton(remote)
+        } else {
+            let (session_builder, _) = crate::ml::onnx::configured_session_builder(
+                crate::ExecutionBackend::Auto,
+                Some(path),
+                crate::OnnxRuntimeOptions::default(),
+            )
+            .map_err(|error| ArkEngineError::Onnx(error.to_string()))?;
+            let session_builder = session_builder
+                .with_memory_pattern(false)
+                .map_err(onnx_error)?
+                .with_prepacking(false)
+                .map_err(onnx_error)?;
+            GlinerBackend::Local(
+                crate::ml::onnx::commit_session(session_builder, &model_path)
+                    .map_err(onnx_error)?,
+            )
+        };
         Ok(Self {
             session,
             tokenizer,
@@ -214,47 +345,48 @@ impl GlinerEngine {
 
         let sequence_length = prepared.input_ids.len();
         let span_count = prepared.span_mask.len();
-        let outputs = self
-            .session
-            .run(vec![
-                input("input_ids", vec![1, sequence_length], prepared.input_ids)?,
-                input(
-                    "attention_mask",
-                    vec![1, sequence_length],
-                    prepared.attention_mask,
-                )?,
-                input("words_mask", vec![1, sequence_length], prepared.words_mask)?,
-                input(
-                    "text_lengths",
-                    vec![1, 1],
-                    vec![prepared.text_length as i64],
-                )?,
-                input("span_idx", vec![1, span_count, 2], prepared.span_idx)?,
-                (
-                    "span_mask".to_string(),
-                    Tensor::from_array((vec![1, span_count], prepared.span_mask))
-                        .map_err(onnx_error)?
-                        .into_dyn(),
-                ),
-            ])
-            .map_err(onnx_error)?;
-        let logits = outputs
-            .get("logits")
-            .ok_or_else(|| ArkEngineError::Inference("missing logits output".to_string()))?;
-        let (shape, logits) = if let Ok((shape, logits)) = logits.try_extract_tensor::<f32>() {
-            (shape.as_ref().to_vec(), logits.to_vec())
-        } else {
-            let (shape, logits) = logits.try_extract_tensor::<f16>().map_err(onnx_error)?;
-            (
-                shape.as_ref().to_vec(),
-                logits.iter().map(|value| value.to_f32()).collect(),
-            )
+        let (shape, logits) = match &mut self.session {
+            GlinerBackend::Triton(remote) => remote.infer(&prepared, labels.len())?,
+            GlinerBackend::Local(session) => {
+                let outputs = session
+                    .run(vec![
+                        input("input_ids", vec![1, sequence_length], prepared.input_ids)?,
+                        input(
+                            "attention_mask",
+                            vec![1, sequence_length],
+                            prepared.attention_mask,
+                        )?,
+                        input("words_mask", vec![1, sequence_length], prepared.words_mask)?,
+                        input(
+                            "text_lengths",
+                            vec![1, 1],
+                            vec![prepared.text_length as i64],
+                        )?,
+                        input("span_idx", vec![1, span_count, 2], prepared.span_idx)?,
+                        (
+                            "span_mask".to_string(),
+                            Tensor::from_array((vec![1, span_count], prepared.span_mask))
+                                .map_err(onnx_error)?
+                                .into_dyn(),
+                        ),
+                    ])
+                    .map_err(onnx_error)?;
+                let logits = outputs.get("logits").ok_or_else(|| {
+                    ArkEngineError::Inference("missing logits output".to_string())
+                })?;
+                if let Ok((shape, logits)) = logits.try_extract_tensor::<f32>() {
+                    (shape.iter().map(|&n| n as usize).collect(), logits.to_vec())
+                } else {
+                    let (shape, logits) = logits.try_extract_tensor::<f16>().map_err(onnx_error)?;
+                    (
+                        shape.iter().map(|&n| n as usize).collect(),
+                        logits.iter().map(|value| value.to_f32()).collect(),
+                    )
+                }
+            }
         };
         let expected_shape = [1, prepared.text_length, self.max_width, labels.len()];
-        let actual_shape = shape
-            .iter()
-            .map(|dimension| usize::try_from(*dimension).unwrap_or(usize::MAX))
-            .collect::<Vec<_>>();
+        let actual_shape = shape;
         if actual_shape != expected_shape {
             return Err(ArkEngineError::Inference(format!(
                 "logits has shape {actual_shape:?}; expected {expected_shape:?}"
@@ -392,7 +524,10 @@ impl GlinerEngine {
     }
 }
 
-fn validated_bundle(path: &Path) -> EngineResult<(BundleConfig, ModelConfig, PathBuf)> {
+fn validated_bundle(
+    path: &Path,
+    remote: bool,
+) -> EngineResult<(BundleConfig, ModelConfig, PathBuf)> {
     let bundle: BundleConfig = read_json(&path.join("gliner_onnx_config.json"))?;
     let model: ModelConfig = read_json(&path.join("gliner_config.json"))?;
     let quantization: QuantizationManifest = read_json(&path.join("quantization_manifest.json"))?;
@@ -403,7 +538,7 @@ fn validated_bundle(path: &Path) -> EngineResult<(BundleConfig, ModelConfig, Pat
     };
     validate_bundle(&bundle, &model, &quantization, &model_file)?;
     let model_path = path.join(&model_file);
-    if !model_path.is_file() {
+    if !remote && !model_path.is_file() {
         return Err(ArkEngineError::MissingAsset(format!(
             "missing GLiNER ONNX model: {}",
             model_path.display()

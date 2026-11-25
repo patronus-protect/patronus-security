@@ -690,6 +690,7 @@ tasks:
   - {id: HC01, title: "harmful_content rules at intent level (AILuminate hazards; request framing + hazard class; self-harm and child safety as separate subclasses, normal verdict), meta-context damping; mandatory L1 n-gram model (char+word n-grams → LR) over all subclasses, sole detector for the model-only subclasses specialized_advice, ip, defamation, elections, privacy (off if TPR < 50 % at 1 % FPR)", type: new-family, deps: [TX01, T08], status: done}
   - {id: HC02, title: "harmful_content points + ablation decision; category stays default off (decided 2026-11-10)", type: scorer, deps: [HC01, S05], status: done}
   - id: HC03
+    status: done
     title: "harmful_content intent rules and the subclass n-gram model on the HC01 labels — HC01 shipped the
       subclass labels (research/l1-threat/labels/harmful_subclass.jsonl) and evaluation tooling but no rules and
       no model; rules-only TPR is still 0.0 DE/EN"
@@ -701,6 +702,37 @@ tasks:
       dev rises above 0 for DE and EN and is reported per subclass next to the cascade number; benign FPR per
       language <= 0.1% and the holdout hard-benign budget hold; subclasses with < 20 positives per language are
       named as gaps; unit tests for every rule and for loading the model
+
+  # Owner, 2026-11-25: the L1-model and cascade numbers so far are in-distribution (detect cut set on the
+  # same benign rows the FPR is reported on; train and measurement share sources). Report sets show
+  # cascade FPR 2.1% (jailbreak) and 4.2% (toxic_language). Goal: one broad mix on which every L1 model is
+  # trained, calibrated and measured. Model and cascade tasks wait for E10; rule work goes on.
+  - id: E10
+    status: todo
+    title: "Fair measurement on one broad mix: every L1 model and the cascade trained, calibrated and measured on one mix (benign pool, positives of the other ten classes as negatives, PII and DLP texts, trigger-word hard negatives in the NotInject style, DE + EN), split row-wise and stratified by source into train / calibration / measurement; cut only from calibration, FPR and TPR only from measurement; report sets kept outside the mix"
+    type: eval-infra
+    deps: [E09]
+    accept: >-
+      scoreboard.py builds the mix and the three row-wise parts (stratified by source, every source in every
+      part, no row in two parts, seeded and frozen like the dev split); trigger-word hard negatives come from
+      own DE/EN generators (NotInject, XSTest and OR-Bench-Hard stay holdout only) and PII/DLP texts from the
+      existing research/l1-pii and research/dlp corpora; the detect cut comes only from the calibration part;
+      rules only, L1 model, cascade, Prompt Guard 2 and the best heuristic are reported on the same rows at
+      0.1% (decisive) and 1% FPR per class and language, with a mandatory report-set column (FPR and TPR) and
+      the number of sources behind the positives; fasttext-all-classes.md, builtin-models.md, cascade.md and
+      baseline.md are regenerated and their old numbers replaced, not extended; unit tests in
+      scripts/tests for the split (stratification, disjointness, cut only from calibration)
+  - id: E11
+    status: todo
+    title: "More sources and native German in the dev set: write the recipes for the registered but unwritten sets (deepset prompt-injections, hackaprompt, GermEval 2019/2021/2025, GERMS-AT, InjecAgent, TensorTrust, GenTel, PolyGuardPrompts, NeurAlchemy, SaTML CTF, nemotron IPI, AI Safety Brazil), licence checked; today prompt_extraction EN is ~all mosscap, injection EN mostly spml, the four agent classes are only synthetic and injection, prompt_extraction, harmful_content and toxic_language have no native German positive"
+    type: eval-infra
+    deps: [E10]
+    accept: >-
+      each listed set has a recipe in scripts/l1_threat/datasets.yaml with source, licence, revision and
+      commercial flag, or is named with the reason it is dropped (licence, quality, overlap with the holdout);
+      sets that are not commercially usable stay report-only; the PR states the owner command that regenerates
+      DEV and the expected positives and sources per class and language afterwards; after the owner run,
+      gold.md shows the new source counts and no class loses its go
 
   # TRIAGE 2026-W48: generation-23 dev split — baseline column, rule transfer to the second generator family,
   # secret extraction, jailbreak personas and spoofed headers, decoded views for all classes, native toxic text.
@@ -854,7 +886,9 @@ tasks:
   # ── H: Hardening and wrap-up ──────────────────────────────────────────
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03]}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02]}
+  # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
+  # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E11, T29, T32, T33]}
 
 recurring:
   - id: TRIAGE

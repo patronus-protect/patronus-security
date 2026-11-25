@@ -123,10 +123,15 @@ def test_compose_isolates_internal_services_and_uses_registry_images():
         assert service["read_only"] is True
         if name != "entrypoint":
             assert "ports" not in service
-            assert all(config["networks"][network]["internal"] for network in service["networks"])
+            assert all(config["networks"][network]["internal"]
+                       for network in service["networks"] if network != "l3_egress")
     for name in ("worker-1", "worker-2", "worker-3"):
         assert services[name]["cpus"] == 2.5
         assert "/readyz" in str(services[name]["healthcheck"])
+        assert services[name]["networks"] == ["workers", "l3_egress"]
+        assert services[name]["environment"]["PATRONUS_WOLF_TRITON_URL"].endswith("private L4 Triton URL}")
+        assert services[name]["environment"]["PATRONUS_GLINER_TRITON_URL"].endswith("private L4 Triton URL}")
+    assert config["networks"]["l3_egress"] == {"external": True, "name": "ark-l3-egress"}
     assert all("0.0.0.0" not in port for port in services["entrypoint"]["ports"])
 
 

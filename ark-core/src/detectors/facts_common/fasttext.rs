@@ -322,7 +322,7 @@ fn check_form(
 
 /// Visit the FNV-1a hash of every feature of `text` and its tokens, in order;
 /// features are hashed in parts, so no feature string is built.
-fn visit_feature_hashes(
+pub(crate) fn visit_feature_hashes(
     text: &str,
     (min_n, max_n): (usize, usize),
     tokens: impl FnOnce(&mut dyn FnMut(&str)),
