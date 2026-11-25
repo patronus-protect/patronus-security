@@ -10,7 +10,7 @@ Mix: 86700 rows from 28 sources, dealt row-wise and stratified by source (seed `
 
 For a class, the negatives are the benign rows (benign pool, hard benigns, PII and DLP texts, trigger-word hard negatives) and the positives of every other class. Every cut comes from the calibration part's negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. `–`: the system does not score the class. `n/r`: the budget is not reachable (more calibration negatives than the budget share the system's top score, e.g. heuristic detections of another class's positives).
 
-Not measured: atr (not cached for every set of the mix); cascade (no Core predictions of a config with a later layer than the L1 model); llamafirewall (not cached for every set of the mix); nemo (not cached for every set of the mix); prompt_guard (not cached for every set of the mix); prompt_guard_2_22m (not cached for every set of the mix); prompt_guard_2_86m (not cached for every set of the mix); protectai_v2 (not cached for every set of the mix); vigil (not cached for every set of the mix).
+Not measured: cascade (no Core predictions of a config with a later layer than the L1 model); prompt_guard_2_22m (not cached for every set of the mix); prompt_guard_2_86m (not cached for every set of the mix); protectai_v2 (not cached for every set of the mix).
 
 ## At 0.1% FPR (decisive)
 

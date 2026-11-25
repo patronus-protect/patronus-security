@@ -8,80 +8,80 @@ Mix: 86700 rows from 28 sources, dealt row-wise and stratified by source (seed `
 
 For a class, the negatives are the benign rows (benign pool, hard benigns, PII and DLP texts, trigger-word hard negatives) and the positives of every other class. Every cut comes from the calibration part's negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. `–`: the system does not score the class. `n/r`: the budget is not reachable (more calibration negatives than the budget share the system's top score, e.g. heuristic detections of another class's positives).
 
-Not measured: atr (not cached for every set of the mix); cascade (no Core predictions of a config with a later layer than the L1 model); llamafirewall (not cached for every set of the mix); nemo (not cached for every set of the mix); prompt_guard (not cached for every set of the mix); prompt_guard_2_22m (not cached for every set of the mix); prompt_guard_2_86m (not cached for every set of the mix); protectai_v2 (not cached for every set of the mix); vigil (not cached for every set of the mix).
+Not measured: cascade (no Core predictions of a config with a later layer than the L1 model); prompt_guard_2_22m (not cached for every set of the mix); prompt_guard_2_86m (not cached for every set of the mix); protectai_v2 (not cached for every set of the mix).
 
 ## At 0.1% FPR (decisive)
 
 | class | lang | pos | sources | neg | hard neg | rules only TPR / FPR | best heuristic TPR / FPR | rules only report TPR / FPR | best heuristic report TPR / FPR |
 |---|---|---|---|---|---|---|---|---|---|
-| instruction_injection | all | 677 | 7 | 16660 | 604 | n/r | 0.0 / 0.00 (cisco_yara) | n/r | 0.1 / 0.00 |
+| instruction_injection | all | 677 | 7 | 16660 | 604 | n/r | 10.8 / 0.05 (llamafirewall) | n/r | 7.4 / 0.07 |
 | instruction_injection | de | 54 | 4 | 5838 | 229 | 68.5 / 0.03 | 0.0 / 0.02 (pipelock) | – / 0.00 | – / 0.00 |
-| instruction_injection | en | 623 | 5 | 10822 | 375 | n/r | 0.0 / 0.00 (cisco_yara) | n/r | 0.1 / 0.00 |
-| jailbreak | all | 521 | 5 | 16816 | 604 | 13.2 / 0.02 | 0.2 / 0.02 (pipelock) | 18.8 / 0.09 | 14.7 / 0.01 |
-| jailbreak | de | 98 | 2 | 5794 | 229 | 49.0 / 0.00 | 0.0 / 0.02 (pipelock) | – / 0.00 | – / 0.00 |
-| jailbreak | en | 423 | 4 | 11022 | 375 | 5.0 / 0.04 | 0.2 / 0.03 (pipelock) | 18.8 / 0.13 | 14.7 / 0.02 |
-| prompt_extraction | all | 3091 | 4 | 14246 | 604 | 1.6 / 0.03 | – | 0.4 / 0.00 | – |
-| prompt_extraction | de | 77 | 3 | 5815 | 229 | 3.9 / 0.05 | – | – / 0.00 | – |
-| prompt_extraction | en | 3014 | 3 | 8431 | 375 | 0.1 / 0.02 | – | 0.2 / 0.00 | – |
+| instruction_injection | en | 623 | 5 | 10822 | 375 | n/r | 11.2 / 0.06 (atr) | n/r | 6.0 / 0.11 |
+| jailbreak | all | 521 | 5 | 16816 | 604 | 13.2 / 0.02 | 1.5 / 0.05 (atr) | 18.8 / 0.09 | 53.3 / 0.05 |
+| jailbreak | de | 98 | 2 | 5794 | 229 | 49.0 / 0.00 | 1.0 / 0.07 (prompt_guard) | – / 0.00 | – / 0.00 |
+| jailbreak | en | 423 | 4 | 11022 | 375 | 5.0 / 0.04 | 1.9 / 0.07 (atr) | 18.8 / 0.13 | 53.3 / 0.07 |
+| prompt_extraction | all | 3091 | 4 | 14246 | 604 | 1.6 / 0.03 | 0.3 / 0.06 (atr) | 0.4 / 0.00 | 2.6 / 0.01 |
+| prompt_extraction | de | 77 | 3 | 5815 | 229 | 3.9 / 0.05 | 0.0 / 0.02 (atr) | – / 0.00 | – / 0.00 |
+| prompt_extraction | en | 3014 | 3 | 8431 | 375 | 0.1 / 0.02 | 0.2 / 0.04 (atr) | 0.2 / 0.00 | 0.6 / 0.00 |
 | tool_poisoning | all | 48 | 2 | 17289 | 604 | 100.0 / 0.00 | 18.8 / 0.01 (pipelock) | – / 0.00 | – / 0.00 |
-| tool_poisoning | de | 24 | 2 | 5868 | 229 | 100.0 / 0.00 | 0.0 / 0.00 (cisco_yara) | – / 0.00 | – / 0.00 |
+| tool_poisoning | de | 24 | 2 | 5868 | 229 | 100.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.00 |
 | tool_poisoning | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | 37.5 / 0.00 (pipelock) | – / 0.00 | – / 0.00 |
-| agent_config_tampering | all | 49 | 2 | 17288 | 604 | 100.0 / 0.00 | – | – / 0.00 | – |
-| agent_config_tampering | de | 25 | 2 | 5867 | 229 | 100.0 / 0.00 | – | – / 0.00 | – |
-| agent_config_tampering | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | – | – / 0.00 | – |
-| memory_poisoning | all | 50 | 2 | 17287 | 604 | 100.0 / 0.01 | n/r (pipelock) | – / 0.00 | n/r |
-| memory_poisoning | de | 25 | 2 | 5867 | 229 | 100.0 / 0.00 | n/r (pipelock) | – / 0.00 | n/r |
-| memory_poisoning | en | 25 | 2 | 11420 | 375 | 100.0 / 0.01 | n/r (pipelock) | – / 0.00 | n/r |
-| exfiltration | all | 109 | 5 | 17228 | 604 | 84.4 / 0.01 | 0.0 / 0.00 (cisco_yara) | – / 0.00 | – / 0.00 |
+| agent_config_tampering | all | 49 | 2 | 17288 | 604 | 100.0 / 0.00 | 0.0 / 0.06 (prompt_guard) | – / 0.00 | – / 0.01 |
+| agent_config_tampering | de | 25 | 2 | 5867 | 229 | 100.0 / 0.00 | 0.0 / 0.03 (atr) | – / 0.00 | – / 0.00 |
+| agent_config_tampering | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | 0.0 / 0.10 (prompt_guard) | – / 0.00 | – / 0.01 |
+| memory_poisoning | all | 50 | 2 | 17287 | 604 | 100.0 / 0.01 | 2.0 / 0.00 (prompt_guard) | – / 0.00 | – / 0.00 |
+| memory_poisoning | de | 25 | 2 | 5867 | 229 | 100.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.00 |
+| memory_poisoning | en | 25 | 2 | 11420 | 375 | 100.0 / 0.01 | 4.0 / 0.00 (prompt_guard) | – / 0.00 | – / 0.00 |
+| exfiltration | all | 109 | 5 | 17228 | 604 | 84.4 / 0.01 | 0.9 / 0.04 (atr) | – / 0.00 | – / 0.00 |
 | exfiltration | de | 30 | 1 | 5862 | 229 | 100.0 / 0.00 | 0.0 / 0.00 (cisco_yara) | – / 0.00 | – / 0.00 |
-| exfiltration | en | 79 | 5 | 11366 | 375 | 78.5 / 0.01 | 0.0 / 0.00 (cisco_yara) | – / 0.00 | – / 0.00 |
+| exfiltration | en | 79 | 5 | 11366 | 375 | 78.5 / 0.01 | 1.3 / 0.04 (atr) | – / 0.00 | – / 0.00 |
 | unsafe_action | all | 157 | 7 | 17180 | 604 | n/r | 6.4 / 0.13 (cisco_yara) | n/r | – / 0.00 |
-| unsafe_action | de | 28 | 4 | 5864 | 229 | 32.1 / 0.03 | 3.6 / 0.03 (cisco_yara) | – / 0.00 | – / 0.00 |
+| unsafe_action | de | 28 | 4 | 5864 | 229 | 32.1 / 0.03 | 21.4 / 0.09 (nemo) | – / 0.00 | – / 0.00 |
 | unsafe_action | en | 129 | 6 | 11316 | 375 | n/r | 7.0 / 0.15 (cisco_yara) | n/r | – / 0.00 |
-| resource_exhaustion | all | 48 | 2 | 17289 | 604 | 100.0 / 0.00 | – | – / 0.00 | – |
-| resource_exhaustion | de | 24 | 2 | 5868 | 229 | 100.0 / 0.00 | – | – / 0.00 | – |
-| resource_exhaustion | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | – | – / 0.00 | – |
-| harmful_content | all | 180 | 2 | 16757 | 604 | 22.2 / 0.01 | n/r (cisco_yara) | 19.8 / 0.07 | n/r |
-| harmful_content | de | 63 | 1 | 5829 | 229 | 19.0 / 0.00 | n/r (cisco_yara) | – / 0.00 | n/r |
-| harmful_content | en | 117 | 2 | 10928 | 375 | 23.9 / 0.01 | n/r (cisco_yara) | 19.8 / 0.10 | n/r |
-| toxic_language | all | 201 | 3 | 17136 | 604 | 10.0 / 0.02 | – | 0.8 / 0.02 | – |
-| toxic_language | de | 41 | 2 | 5851 | 229 | 34.1 / 0.00 | – | 0.6 / 0.00 | – |
-| toxic_language | en | 160 | 2 | 11285 | 375 | 3.8 / 0.04 | – | 3.5 / 0.03 | – |
+| resource_exhaustion | all | 48 | 2 | 17289 | 604 | 100.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.01 |
+| resource_exhaustion | de | 24 | 2 | 5868 | 229 | 100.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.13 |
+| resource_exhaustion | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.02 |
+| harmful_content | all | 180 | 2 | 16757 | 604 | 22.2 / 0.01 | 0.0 / 0.00 (atr) | 19.8 / 0.07 | 0.0 / 0.00 |
+| harmful_content | de | 63 | 1 | 5829 | 229 | 19.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.07 |
+| harmful_content | en | 117 | 2 | 10928 | 375 | 23.9 / 0.01 | 0.0 / 0.00 (atr) | 19.8 / 0.10 | 0.0 / 0.00 |
+| toxic_language | all | 201 | 3 | 17136 | 604 | 10.0 / 0.02 | 0.0 / 0.00 (atr) | 0.8 / 0.02 | 0.0 / 0.01 |
+| toxic_language | de | 41 | 2 | 5851 | 229 | 34.1 / 0.00 | 0.0 / 0.00 (atr) | 0.6 / 0.00 | 0.0 / 0.00 |
+| toxic_language | en | 160 | 2 | 11285 | 375 | 3.8 / 0.04 | 0.0 / 0.00 (atr) | 3.5 / 0.03 | 0.0 / 0.01 |
 
 ## At 1% FPR
 
 | class | lang | pos | sources | neg | hard neg | rules only TPR / FPR | best heuristic TPR / FPR | rules only report TPR / FPR | best heuristic report TPR / FPR |
 |---|---|---|---|---|---|---|---|---|---|
-| instruction_injection | all | 677 | 7 | 16660 | 604 | 71.6 / 0.72 | 47.3 / 0.36 (cisco_yara) | 47.0 / 0.44 | 38.7 / 0.38 |
+| instruction_injection | all | 677 | 7 | 16660 | 604 | 71.6 / 0.72 | 10.8 / 0.05 (llamafirewall) | 47.0 / 0.44 | 7.4 / 0.07 |
 | instruction_injection | de | 54 | 4 | 5838 | 229 | 70.4 / 0.09 | 0.0 / 0.02 (pipelock) | – / 0.00 | – / 0.00 |
-| instruction_injection | en | 623 | 5 | 10822 | 375 | 71.7 / 1.06 | 51.4 / 0.55 (cisco_yara) | 47.0 / 0.63 | 38.7 / 0.55 |
-| jailbreak | all | 521 | 5 | 16816 | 604 | 13.2 / 0.02 | 0.2 / 0.02 (pipelock) | 18.8 / 0.09 | 14.7 / 0.01 |
-| jailbreak | de | 98 | 2 | 5794 | 229 | 49.0 / 0.00 | 0.0 / 0.02 (pipelock) | – / 0.00 | – / 0.00 |
-| jailbreak | en | 423 | 4 | 11022 | 375 | 5.0 / 0.04 | 0.2 / 0.03 (pipelock) | 18.8 / 0.13 | 14.7 / 0.02 |
-| prompt_extraction | all | 3091 | 4 | 14246 | 604 | 35.0 / 0.87 | – | 19.0 / 0.00 | – |
-| prompt_extraction | de | 77 | 3 | 5815 | 229 | 35.1 / 0.22 | – | – / 0.00 | – |
-| prompt_extraction | en | 3014 | 3 | 8431 | 375 | 14.0 / 0.58 | – | 9.0 / 0.00 | – |
+| instruction_injection | en | 623 | 5 | 10822 | 375 | 71.7 / 1.06 | 40.9 / 0.62 (atr) | 47.0 / 0.63 | 29.9 / 1.00 |
+| jailbreak | all | 521 | 5 | 16816 | 604 | 13.2 / 0.02 | 11.9 / 0.83 (atr) | 18.8 / 0.09 | 89.9 / 1.12 |
+| jailbreak | de | 98 | 2 | 5794 | 229 | 49.0 / 0.00 | 75.5 / 0.83 (prompt_guard) | – / 0.00 | – / 5.24 |
+| jailbreak | en | 423 | 4 | 11022 | 375 | 5.0 / 0.04 | 4.0 / 0.20 (atr) | 18.8 / 0.13 | 70.0 / 0.13 |
+| prompt_extraction | all | 3091 | 4 | 14246 | 604 | 35.0 / 0.87 | 0.3 / 0.06 (atr) | 19.0 / 0.00 | 2.6 / 0.01 |
+| prompt_extraction | de | 77 | 3 | 5815 | 229 | 35.1 / 0.22 | 0.0 / 0.02 (atr) | – / 0.00 | – / 0.00 |
+| prompt_extraction | en | 3014 | 3 | 8431 | 375 | 14.0 / 0.58 | 0.3 / 0.11 (atr) | 9.0 / 0.00 | 2.6 / 0.02 |
 | tool_poisoning | all | 48 | 2 | 17289 | 604 | 100.0 / 0.00 | 18.8 / 0.01 (pipelock) | – / 0.00 | – / 0.00 |
-| tool_poisoning | de | 24 | 2 | 5868 | 229 | 100.0 / 0.00 | 0.0 / 0.00 (cisco_yara) | – / 0.00 | – / 0.00 |
+| tool_poisoning | de | 24 | 2 | 5868 | 229 | 100.0 / 0.00 | 8.3 / 0.19 (atr) | – / 0.00 | – / 0.02 |
 | tool_poisoning | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | 37.5 / 0.00 (pipelock) | – / 0.00 | – / 0.00 |
-| agent_config_tampering | all | 49 | 2 | 17288 | 604 | 100.0 / 0.00 | – | – / 0.00 | – |
-| agent_config_tampering | de | 25 | 2 | 5867 | 229 | 100.0 / 0.00 | – | – / 0.00 | – |
-| agent_config_tampering | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | – | – / 0.00 | – |
-| memory_poisoning | all | 50 | 2 | 17287 | 604 | 100.0 / 0.01 | n/r (pipelock) | – / 0.00 | n/r |
-| memory_poisoning | de | 25 | 2 | 5867 | 229 | 100.0 / 0.00 | n/r (pipelock) | – / 0.00 | n/r |
-| memory_poisoning | en | 25 | 2 | 11420 | 375 | 100.0 / 0.01 | n/r (pipelock) | – / 0.00 | n/r |
-| exfiltration | all | 109 | 5 | 17228 | 604 | 84.4 / 0.01 | 40.4 / 0.64 (cisco_yara) | – / 0.00 | – / 0.05 |
+| agent_config_tampering | all | 49 | 2 | 17288 | 604 | 100.0 / 0.00 | 4.1 / 0.12 (prompt_guard) | – / 0.00 | – / 0.10 |
+| agent_config_tampering | de | 25 | 2 | 5867 | 229 | 100.0 / 0.00 | 16.0 / 0.10 (atr) | – / 0.00 | – / 0.00 |
+| agent_config_tampering | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | 8.3 / 0.18 (prompt_guard) | – / 0.00 | – / 0.14 |
+| memory_poisoning | all | 50 | 2 | 17287 | 604 | 100.0 / 0.01 | 2.0 / 0.07 (prompt_guard) | – / 0.00 | – / 0.10 |
+| memory_poisoning | de | 25 | 2 | 5867 | 229 | 100.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.00 |
+| memory_poisoning | en | 25 | 2 | 11420 | 375 | 100.0 / 0.01 | 4.0 / 0.11 (prompt_guard) | – / 0.00 | – / 0.13 |
+| exfiltration | all | 109 | 5 | 17228 | 604 | 84.4 / 0.01 | 20.2 / 0.48 (atr) | – / 0.00 | – / 0.10 |
 | exfiltration | de | 30 | 1 | 5862 | 229 | 100.0 / 0.00 | 66.7 / 0.94 (cisco_yara) | – / 0.00 | – / 0.00 |
-| exfiltration | en | 79 | 5 | 11366 | 375 | 78.5 / 0.01 | 30.4 / 0.49 (cisco_yara) | – / 0.00 | – / 0.07 |
+| exfiltration | en | 79 | 5 | 11366 | 375 | 78.5 / 0.01 | 27.8 / 0.55 (atr) | – / 0.00 | – / 0.13 |
 | unsafe_action | all | 157 | 7 | 17180 | 604 | 70.1 / 0.22 | 8.9 / 0.24 (cisco_yara) | – / 0.08 | – / 0.04 |
-| unsafe_action | de | 28 | 4 | 5864 | 229 | 32.1 / 0.03 | 28.6 / 0.77 (cisco_yara) | – / 0.00 | – / 0.00 |
+| unsafe_action | de | 28 | 4 | 5864 | 229 | 32.1 / 0.03 | 28.6 / 0.77 (nemo) | – / 0.00 | – / 2.10 |
 | unsafe_action | en | 129 | 6 | 11316 | 375 | 78.3 / 0.31 | 10.1 / 0.27 (cisco_yara) | – / 0.12 | – / 0.05 |
-| resource_exhaustion | all | 48 | 2 | 17289 | 604 | 100.0 / 0.00 | – | – / 0.00 | – |
-| resource_exhaustion | de | 24 | 2 | 5868 | 229 | 100.0 / 0.00 | – | – / 0.00 | – |
-| resource_exhaustion | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | – | – / 0.00 | – |
-| harmful_content | all | 180 | 2 | 16757 | 604 | 22.2 / 0.01 | n/r (cisco_yara) | 19.8 / 0.07 | n/r |
-| harmful_content | de | 63 | 1 | 5829 | 229 | 19.0 / 0.00 | n/r (cisco_yara) | – / 0.00 | n/r |
-| harmful_content | en | 117 | 2 | 10928 | 375 | 23.9 / 0.01 | n/r (cisco_yara) | 19.8 / 0.10 | n/r |
-| toxic_language | all | 201 | 3 | 17136 | 604 | 10.0 / 0.02 | – | 0.8 / 0.02 | – |
-| toxic_language | de | 41 | 2 | 5851 | 229 | 34.1 / 0.00 | – | 0.6 / 0.00 | – |
-| toxic_language | en | 160 | 2 | 11285 | 375 | 3.8 / 0.04 | – | 3.5 / 0.03 | – |
+| resource_exhaustion | all | 48 | 2 | 17289 | 604 | 100.0 / 0.00 | 10.4 / 0.72 (atr) | – / 0.00 | – / 0.47 |
+| resource_exhaustion | de | 24 | 2 | 5868 | 229 | 100.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.13 |
+| resource_exhaustion | en | 24 | 2 | 11421 | 375 | 100.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.02 |
+| harmful_content | all | 180 | 2 | 16757 | 604 | 22.2 / 0.01 | 1.1 / 0.13 (atr) | 19.8 / 0.07 | 2.7 / 0.32 |
+| harmful_content | de | 63 | 1 | 5829 | 229 | 19.0 / 0.00 | 0.0 / 0.00 (atr) | – / 0.00 | – / 0.07 |
+| harmful_content | en | 117 | 2 | 10928 | 375 | 23.9 / 0.01 | 1.7 / 0.19 (atr) | 19.8 / 0.10 | 2.7 / 0.45 |
+| toxic_language | all | 201 | 3 | 17136 | 604 | 10.0 / 0.02 | 0.0 / 0.00 (atr) | 0.8 / 0.02 | 0.0 / 0.01 |
+| toxic_language | de | 41 | 2 | 5851 | 229 | 34.1 / 0.00 | 0.0 / 0.00 (atr) | 0.6 / 0.00 | 0.0 / 0.00 |
+| toxic_language | en | 160 | 2 | 11285 | 375 | 3.8 / 0.04 | 0.0 / 0.00 (atr) | 3.5 / 0.03 | 0.0 / 0.01 |
