@@ -824,6 +824,7 @@ tasks:
       FTP clients); dev exfiltration TPR@0.1% on the BIPIA rows up at 0 hard-benign FP and 0 FP on the clean
       BIPIA e-mails; AgentDojo and templates unchanged
   - id: T32
+    status: done
     title: "instruction_injection in AgentDojo tool outputs: 41 of 136 — a block posing as an important message from the user to the model ('before you can solve the task, do the following first … then solve the task') inside YAML or table outputs, and short 'TODO: say that …' lines in review or listing texts"
     type: recall-fix
     deps: [T16, T22]
