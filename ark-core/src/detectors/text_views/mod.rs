@@ -31,6 +31,7 @@ use std::{ops::Range, sync::LazyLock};
 
 use regex::Regex;
 
+use super::evidence::MatchText;
 use super::obfuscation::{Deobfuscated, Level};
 use decode::{base64_decode_text, continuous_hex_decode, rot13_decode_text, split_fragments};
 use fold::{folded, Folded};
@@ -43,6 +44,8 @@ const ROT13_SPAN: usize = 512;
 const MAX_ROT13_MARKERS: usize = 4;
 /// Bytes decoded as ROT13 text without a marker.
 const BARE_ROT13_SPAN: usize = 2048;
+/// Zero-width characters between ASCII letters that make a zero-width view.
+const MIN_ZERO_WIDTH_SPLITS: usize = 4;
 /// Longest `Label: ` kept plain in front of marker-less ROT13 text.
 const LABEL_BYTES: usize = 24;
 
@@ -133,13 +136,53 @@ impl TextViews {
     }
 }
 
+/// `c` unless it is a zero-width character (space, joiner, non-joiner, word
+/// joiner, byte order mark).
+pub fn visible_character(c: char) -> Option<char> {
+    (!matches!(
+        c,
+        '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}'
+    ))
+    .then_some(c)
+}
+
+/// The text without its zero-width characters, with a byte map back, when at
+/// least [`MIN_ZERO_WIDTH_SPLITS`] of them split ASCII letters: text spelled
+/// letter by letter with invisible separators. Emoji ZWJ sequences, a
+/// non-joiner in non-Latin script or a stray byte order mark do not count.
+pub fn zero_width_view(text: &str) -> Option<MatchText> {
+    if text.is_ascii() {
+        return None;
+    }
+    let mut splits = 0;
+    let mut previous = None;
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if visible_character(ch).is_some() {
+            previous = Some(ch);
+            continue;
+        }
+        while chars.peek().is_some_and(|&next| visible_character(next).is_none()) {
+            chars.next();
+        }
+        let letter = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_alphabetic());
+        if letter(previous) && letter(chars.peek().copied()) {
+            splits += 1;
+            if splits == MIN_ZERO_WIDTH_SPLITS {
+                return Some(MatchText::mapped(text, visible_character, false));
+            }
+        }
+    }
+    None
+}
+
 /// The decoded views of `text`: Unicode tag runs, base64 and hex fragments that
 /// decode to printable text (prose or not), and ROT13 text.
 pub fn decoded_views(text: &str) -> Vec<DecodedView> {
     let mut decoded: Vec<DecodedView> = tags::views(text)
-        .map(|(start, view)| DecodedView {
+        .map(|(source, view)| DecodedView {
             encoding: Encoding::UnicodeTags,
-            source: start..start + view.len() * 4,
+            source,
             text: view,
             prose: true,
         })

@@ -184,11 +184,16 @@ impl MatchText {
     }
 
     pub fn component(&self, id: impl Into<String>, range: Range<usize>) -> L1Component {
+        L1Component::new(id, self.original(range))
+    }
+
+    /// Original byte range of the non-empty view range `range`.
+    pub fn original(&self, range: Range<usize>) -> Range<usize> {
         assert!(range.start < range.end);
         if self.starts.is_empty() {
-            return L1Component::new(id, range);
+            return range;
         }
-        L1Component::new(id, self.starts[range.start]..self.ends[range.end - 1])
+        self.starts[range.start]..self.ends[range.end - 1]
     }
 }
 
