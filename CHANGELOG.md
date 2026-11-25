@@ -49,6 +49,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   its human reader to do something first, a hotel review recommending another hotel, quoted and
   negated mentions stay clean. The decision threshold is unchanged; L1 latency is unchanged within
   noise.
+- **Detection change (`injection`):** the user-message block is now also reported when it says
+  "the task that I sent/asked you" or when a YAML line continuation (a backslash before the line
+  break) splits "important message" or "gave you" / "ich dir"; before, the literal prefilter skipped
+  these. A `TODO:` after sentence punctuation on a code comment line ("# Maintenance. TODO: send the
+  user …", "x = 3  // Begrenzt. TODO: schick mir …") stays clean in German and English.
 - **Detection change (`memory_poisoning`, opt-in category):** a request to keep a claim the agent
   would act on later is now reported in German and English when it names the store target by its
   role — the agent's long-term memory, a permanent rule in its memory, the stored profile, every
