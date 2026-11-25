@@ -1394,7 +1394,8 @@ def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baselin
     everything = sets + report_sets
     rows = mix_rows(sets, report_sets, parts)
     systems: dict[str, Any] = {}
-    missing: dict[str, str] = {}
+    missing = {name: "no Core predictions of a config with a later layer than the L1 model" if name == "cascade"
+               else "no Core predictions" for name in ("rules", "l1_model", "cascade") if name not in predictions}
     for name, directory in predictions.items():
         found = core_predictions(everything, directory)
         if len(found) != len(everything):

@@ -594,9 +594,9 @@ einer Runde. Nachfüllen außerhalb einer Runde (Owner, auf der VPS, je Modell m
 rendert `baseline.md` danach ohne Code-Änderung neu (neue Cache-Einträge ändern den Eingabe-Fingerabdruck).
 
 **Scoreboard von main nach jedem Merge (E09).** Damit jede Klasse eine aktuelle Zahl hat statt einer Base je PR,
-rendert `scoreboard.py refresh` in einem Checkout von main `scoreboard/baseline.md` (L1-Kaskade, mit den
-Baseline-Spalten) und, sobald die kalibrierte Konfiguration `scoreboard/cascade-config.json` auf main liegt, auch
-`scoreboard/cascade.md` aus dem aktuellen Dev-Split neu; eine Zeile nennt den Commit. Der Runner (`ark-l1 refresh`,
+rendert `scoreboard.py refresh` in einem Checkout von main seit E10 die vier Berichte der fairen Messung
+(`scoreboard/baseline.md`, `cascade.md`, `builtin-models.md`, `fasttext-all-classes.md`, siehe unten) auf dem Mix
+neu, mit `scoreboard/cascade-config.json` als L1-Modell- bzw. Kaskaden-Spalte; eine Zeile nennt den Commit. Der Runner (`ark-l1 refresh`,
 zu Beginn jedes Threat-Laufs, nur Lane a) ruft es auf, sobald sich main, die Dev-Manifeste oder der Baseline-Cache
 bewegt haben; gerendert wird nach einer Änderung an Detektoren oder Scorern (`ark-core`, Cargo-Dateien), an
 `scripts/l1_threat/`, an der Gold-Bereinigung (`scoreboard/gold-dev.json`, `gold-leakage.json`), an
@@ -605,6 +605,23 @@ aktuellen: ein Re-Freeze von `DEV` (SHA-256 der Sätze) oder, für `baseline.md`
 sich geändert hat, geht als ein Folge-PR (`threat/scoreboard`, bei jedem Refresh neu gepusht) über den normalen
 Auto-Merge nach main; ein Bericht mit unveränderten Zahlen bleibt stehen. Der Refresh läuft wie ein Gate-Schritt
 in der Sandbox, ohne Netz und ohne Holdout, und teilt Builds und Vorhersagen mit dem Gate.
+
+**Faire Messung auf einem Mix (E10, Owner 2026-11-25).** Modell-, Kaskaden- und Vergleichszahlen kommen nur noch
+aus einem breiten Mix (`scoreboard.py mix`, `mix.py`): die gegateten Dev-Sätze (Benign-Pool samt Hard-Benigns; für
+eine Klasse sind die Positiven aller anderen Klassen Negative), PII- und DLP-Texte aus den Korpora der PII- und
+DLP-Programme (die eingecheckten L1-Goldens `pii_l1.jsonl`/`dlp_l1.jsonl`, DE und EN) und Trigger-Wort-Hard-Negatives
+im NotInject-Stil aus einem eigenen DE/EN-Generator (`trigger_negatives`, 300 je Sprache; NotInject, XSTest und
+OR-Bench-Hard bleiben reine Holdout-Sets). Der Mix wird zeilenweise, geschichtet nach Quelle (Satz-ID; darin nach
+Sprache und Klassen), mit festem Seed (`ark-l1-threat-e10-mix-v1`) im Verhältnis 3 : 1 : 1 in Train, Kalibrierung
+und Messung geteilt und als `parts.json` mit den Satz-Hashes eingefroren: jede Quelle in allen drei Teilen, keine
+Zeile in zweien. `scoreboard.py fair` misst Regeln allein, L1-Modell, Kaskade, Prompt Guard 2 22M und die beste
+Heuristik (auf dem Kalibrier-Teil gewählt) auf denselben Zeilen; jeder Schnitt kommt nur aus den Negativen des
+Kalibrier-Teils (je Klasse und Sprache, 0,1 % entscheidend, 1 % daneben), TPR/FPR nur aus dem Mess-Teil, dazu als
+Pflichtspalte TPR/FPR auf den Report-Sätzen (außerhalb des Mixes) am selben Schnitt und die Zahl der Quellen hinter
+den Positiven. Die alten Zahlen in `baseline.md`, `cascade.md`, `builtin-models.md` und `fasttext-all-classes.md`
+sind ersetzt. Offen: die eingebauten L1-Modelle sind noch auf der alten Teilung innerhalb derselben Sätze
+trainiert, ihre Spalten sind darum als Obergrenze gekennzeichnet, bis sie auf dem Train-Teil des Mixes neu trainiert
+sind; die Wolf-Stufe (L3) fehlt in der Kaskaden-Spalte, solange auf dem Host kein Wolf-Edge-fp32-Bundle vorbereitet ist.
 
 **Kaskade statt vollem Stack (Owner 2026-11-19, ersetzt die L1+L2-Messung aus E07).** Gemessen wird ark-core
 allein, und die Ebenen sind eine Kaskade: L1-Heuristik → L1-Modell → L3 (Wolf Defender für `injection`, mit
