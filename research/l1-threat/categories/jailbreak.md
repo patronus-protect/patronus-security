@@ -115,6 +115,56 @@ Offen in JB01 (Folgerunde): übernommene prompt-guard-/ATR-Jailbreak-Regeln aus 
 `jailbreak_many_shot` (Struktur über Rollenmarker), Persona-/Modus-Lücken (die
 DAN-Goldens bleiben `known_gap`), Policy-Spoof als Behauptung („authorized red team, filters are off“).
 
+T28 (TRIAGE 2026-W48, Bucket 4) schließt zwei Lücken mit je zwei auditierten Regeln (EN/DE) in
+`source_derived_coverage_0_1_6.json`:
+
+- `jailbreak.persona_unlock_en` / `_de` (Familie `unbounded_persona`, Alias `skillspector.anti_refusal`):
+  Persona-Zuweisung am Klauselanfang („you are (now)“, „from now on you are“, „act as“, „pretend to be“,
+  „role-play as“; „du bist (jetzt)“, „ab jetzt bist du“, „spiel die Rolle von“, „verhalte dich wie“, „tu so, als
+  wärst du“, „sei“), optional ein Name mit Komma, dann KI/Assistent/Modell/Bot/Figur mit **einem**
+  Grenzenlos-Hinweis („with no / without any restrictions, filters, rules, content policy“, „that has no
+  content policy“, „not bound by any guidelines“; „ohne (jegliche) Einschränkungen/Filter/Regeln/
+  Inhaltsrichtlinien“, „das an keine Richtlinien gebunden ist“). Vorher brauchte die Persona mehrere Hinweise
+  zugleich (`class_templates/persona_unlock` 0 von 44). Zitierte Prompts (kein Klauselanfang vor der
+  Zuweisung), Verneinung („you are not an AI without …“, „du bist keine KI ohne …“), Personas mit Grenzen und
+  Fiktionsrahmen in dritter Person fallen heraus; `fiction_frame` bleibt bis nach HC01 offen.
+- `jailbreak.header_spoof_en` / `_de` (Familie `policy_spoof`, Alias `skillspector.policy_nullification`):
+  Kopfzeilen in eckigen Klammern oder Fettschrift (`[SCHLÜSSEL: …]`, `**SCHLÜSSEL:**`), und zwar (a) ein
+  Autoritätsschlüssel (Systemprompt-Überschreibung/Prompt-Override, Zugriffsstufe/-berechtigung/-ebene,
+  Sicherheitsfreigabe, Freigabestufe, Ethikvotum/-freigabe, Autorisierung; EN access level, security
+  clearance, ethics/IRB approval, authorization level) höchstens 16 Zeilen neben einem weiteren Memo- oder
+  Autoritätsschlüssel, (b) eine Verschlusssachen-Markierung (VS-…, geheim, streng vertraulich, nur für den
+  Dienstgebrauch, eyes only, top secret) neben einem Memo-Schlüssel, oder (c) eine An-/Empfänger-Zeile an
+  das KI-System selbst (KI-Assistenzsystem, …modul, …instanz, Sprachmodell, LLM, Session-ID). Gewöhnliche
+  Memo-, Mandanten- und Einstellungsköpfe (Betreff, Mandant, Aktenzeichen, „Modus: dunkel“) fallen heraus,
+  ebenso ein Autoritätswert, der die Autorität verneint (`DISABLED`, `DENIED`, `pending`, `DEAKTIVIERT`,
+  `ABGELEHNT`, `ausstehend`; optionale Gruppen `negated…`), und ein Modellname in der Empfängerzeile ohne
+  Modellzusatz („An: Claude Martin“; „Claude Sonnet 4.5“, „GPT-4“, „Claude-Instanz“ bleiben Treffer).
+
+Dev-Regex-Scan (alle Dateien unter `$ARK_L1_DEV_DATA`): Persona 44/44 `class_templates/persona_unlock`
+(DE 22, EN 22) plus je eine Zeile jackhhao und WildJailbreak; Kopfzeilen 251/450 `xl_safetybench` (DE);
+0 Benign-Zeilen (einschließlich WildJailbreak adversarial-benign und WildGuardMix). Die übrigen 199
+`xl_safetybench`-Zeilen haben keinen Autoritätsschlüssel und kein KI-adressiertes Memo (reine Behörden- oder
+Forschungsmemos mit Betreff/Priorität); sie brauchen einen Gefahren-Anker (HC01/HC03) statt weiterer Kopf-
+Regeln. Goldens: 7 Positive und 7 Hard Negatives je Sprache (Persona mit Grenzen, Charakterbogen, echter
+Systemkopf in Doku, Rechtsrecherche mit Mandantenzeile, Sicherheitsbericht mit zitiertem DAN-Prompt,
+Verneinung); zwei JB02-Lücken (FreeGPT/FreiGPT) sind geschlossen.
+
+Die Persona-Regel allein meldete die Vorlage nicht: das „and never refuses“/„die nie ablehnt“ hinter dem Treffer
+zählte im Satz als Verneinung (Gegenkontext). Wie eine verneinte Einschränkung („not bound by any rules“)
+gehört jetzt auch eine verneinte Ablehnung (refus-, declin-, ablehn-, verweiger-) hinter einem Jailbreak-Treffer
+zur Behauptung des Jailbreaks; „never refuses refunds“ bleibt verneint.
+
+Messung (ark-core-Kaskade, nur L1, Dev-Split, Basis c65bc131 gegen Head, `scoreboard.py score`/`compare`):
+`jailbreak` TPR@0,1 % FPR all 5,2 → 14,4, DE 7,5 → 51,6, EN 4,7 → 5,8; TPR@1 % gleich; Hard-Benign-FP 0/2412
+(DE 0/841, EN 0/1571) in Basis und Head; neue Benign-Flags in irgendeiner Klasse 0 (WildJailbreak
+adversarial_benign und WildGuardMix eingeschlossen); `compare`: 77/77 Checks ohne Regression. Neu gemeldet:
+`class_templates` 44 (DE 22, EN 22), `xl_safetybench` 203 von 450 (die übrigen Regex-Treffer setzt der
+Kontext ab), jackhhao 2, WildJailbreak 1. jackhhao (nur Bericht): TPR@0,1 % 18,4 → 18,8 (102/544), Bericht-FP
+unverändert 6. Latenz (Release-`threat_cascade`, alle elf Klassen, je 30 Fenster à 100 KiB GermanQuAD bzw.
+Dolly, zwei verschränkte Läufe Basis/Head): DE Median 135–138 / 133–139 ms, p95 181–182 / 178–181 ms; EN
+Median 163–172 / 163–164 ms, p95 277–290 / 286–292 ms, also im Rauschen.
+
 ## 5. Struktur und Träger
 
 - Many-Shot nutzt die Dialogstruktur aus den Core-`Fields` (Zeilen mit Rollenmarkern); Few-Shot-Beispiele
