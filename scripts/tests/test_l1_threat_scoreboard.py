@@ -515,7 +515,8 @@ QUIET = {"l1": "escalate", "l1_score": 0.0, "decision": "clear", "decided_by": "
 
 
 def stage(l1, decision, decided_by, l1_score=0.5):
-    return {"l1": l1, "l1_score": l1_score, "decision": decision, "decided_by": decided_by}
+    return {"l1": l1, "l1_score": l1_score, "decision": decision, "decided_by": decided_by,
+            "score": 1.0 if decision == "detected" else 0.0}
 
 
 def cascade_pred(item, ms_l3=None, **stages):

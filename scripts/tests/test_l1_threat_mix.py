@@ -152,3 +152,13 @@ def test_fair_report_renders_the_decisive_level_first():
     assert text.index("At 0.1% FPR (decisive)") < text.index("At 1% FPR")
     assert "| jailbreak | all | 10 | 1 | 1000 | 0 | 100.0 / 0.00 | 100.0 / 0.00 |" in text
     assert "Not measured: cascade (why)." in text
+
+
+def test_decision_score_puts_heuristic_detections_above_every_model_score():
+    stage = {"l1": "escalate", "l1_score": 0.2, "decision": "clear", "decided_by": "l1_model", "score": 0.0}
+    assert MODULE.decision_score(stage) == 0.5
+    assert MODULE.decision_score({**stage, "score": -1e6}) == pytest.approx(0.0)
+    assert 0.5 < MODULE.decision_score({**stage, "score": 3.0}) < 1.0
+    assert MODULE.decision_score({**stage, "l1": "detected", "decided_by": "heuristic", "decision": "detected"}) == 1.0
+    assert MODULE.decision_score({**stage, "l1": "clear", "decided_by": "heuristic"}) == 0.2
+    assert MODULE.decision_score({**stage, "decided_by": "l3", "score": 0.7}) == 0.7

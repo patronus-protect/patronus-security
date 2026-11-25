@@ -64,14 +64,23 @@ holdout leaves as a verdict and the names of failing checks only, its report sta
 Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1 = regression,
 2 = error.
 
-``refresh`` keeps the scoreboard of main current: in a checkout of main it builds the predictor of
-HEAD and re-renders ``research/l1-threat/scoreboard/baseline.md`` from the dev split (and
-``cascade.md`` when the checkout holds the calibrated ``cascade-config.json``), with a line naming the
-commit and a line naming its inputs (the dev split's set hashes, for baseline.md also the cached
-baseline predictions). ``--since`` (the commit of the last render) skips the run when no detector,
-scorer or gold path (``REFRESH_PATHS``) changed and every report names the current inputs, so a
-re-frozen dev split re-renders on its own; a report whose numbers did not change stays as it is. The runner commits
-what it rewrote as a follow-up PR after each merge.
+``mix`` and ``fair`` are the fair measurement (``mix.py``): ``mix`` freezes one broad mix (the gated dev sets, PII
+and DLP texts and the own DE/EN trigger-word hard negatives) and its row-wise split, stratified by source, into
+train, calibration and measurement; ``fair`` scores rules only (the L1 score curve), the L1 model and the cascade
+(``decision_score``: their answer with the L1 model's logit), Prompt Guard 2 22M and the best heuristic baseline (picked on the calibration part) on the same
+rows. For a class, the negatives are the benign rows and the positives of every other class. Every cut comes from
+the calibration part's negatives only, per class and language, at 0.1 % (decisive) and 1 % FPR; TPR, FPR and
+hard-negative FPR come from the measurement part and, at the same cut, from the report sets, which stay outside
+the mix; each cell names the sources behind its measured positives.
+
+``refresh`` keeps the scoreboard of main current: in a checkout of main it builds the predictor of HEAD, freezes
+the mix in the cache, predicts it (rules only, and the calibrated ``cascade-config.json`` when the checkout has
+one) and re-renders ``FAIR_FILES`` under ``research/l1-threat/scoreboard/`` (``baseline.md``, ``cascade.md``,
+``builtin-models.md``, ``fasttext-all-classes.md``) with ``fair``, with a line naming the commit and a line naming
+its inputs (the set hashes of the mix and the report sets and the cached baseline predictions). ``--since`` (the
+commit of the last render) skips the run when no detector, scorer or gold path (``REFRESH_PATHS``) changed and
+every report names the current inputs, so a re-frozen dev split re-renders on its own; a report whose numbers did
+not change stays as it is. The runner commits what it rewrote as a follow-up PR after each merge.
 
     python3 scripts/l1_threat/scoreboard.py predict --split DIR --out PRED_DIR [--cascade CONFIG] [--predictor BIN]
     python3 scripts/l1_threat/scoreboard.py score --split DIR --predictions PRED_DIR [--output REPORT]
@@ -83,6 +92,10 @@ what it rewrote as a follow-up PR after each merge.
     python3 scripts/l1_threat/scoreboard.py calibrate --split DIR --predictions PRED_DIR [--cascade BASE] \\
         [--target-fpr 0.001] [--clear-fpr 0.01 | --no-clear] [--exclude-ids FILE] --out CONFIG
     python3 scripts/l1_threat/scoreboard.py gate --head WT --base-sha SHA --dev DIR [--holdout DIR] --cache DIR
+    python3 scripts/l1_threat/scoreboard.py mix --dev DIR --out MIX [--force]
+    python3 scripts/l1_threat/scoreboard.py fair --dev DIR --mix MIX --predictions rules=PRED_DIR \\
+        [--predictions l1_model=PRED_DIR] [--predictions cascade=PRED_DIR] [--baseline-cache CACHE] \\
+        --output REPORT [--scoreboard research/l1-threat/scoreboard]
     python3 scripts/l1_threat/scoreboard.py refresh [--tree MAIN] [--since SHA] --dev DIR --cache DIR \\
         [--baseline-cache CACHE]
 """
@@ -172,7 +185,7 @@ REFRESH_PATHS = (*PREDICTOR_SOURCES, "scripts/l1_threat", "research/l1-threat/en
 RENDERED_FROM = "Rendered by `scoreboard.py refresh` from commit"
 # The line naming the fingerprint of what a refreshed report read besides the code: the dev split (and the
 # baseline cache); a re-frozen split or new cached baselines re-render a report even when main's code did not change.
-RENDERED_INPUTS = "Inputs (dev split set hashes, cached baseline predictions):"
+RENDERED_INPUTS = "Inputs (set hashes of the mix and the report sets, cached baseline predictions):"
 
 
 def category(cls: str) -> str:
@@ -1217,14 +1230,25 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
     return out
 
 
-def core_scores(sets: list[SetFile], predictions: dict[str, Path], key: str) -> dict[str, dict[str, float]]:
-    """Row id -> class -> score of Core predictions: ``scores`` (the L1 score curve, rules only) or ``l1_score`` (the
-    cascade's L1 score: the heuristic, then the L1 model)."""
+def decision_score(stage: dict[str, Any]) -> float:
+    """One score in [0, 1] for the cascade's answer of a class: 1 for a heuristic detection (final at Core's
+    acceptance), the sigmoid of the L1 model's decision logit where the model decided, the deciding stage's
+    probability where a later layer decided, else the heuristic's score."""
+    if stage["decided_by"] == "l1_model":
+        return 1.0 / (1.0 + math.exp(-min(max(float(stage["score"]), -700.0), 700.0)))
+    if stage["decided_by"] == "heuristic":
+        return 1.0 if stage["l1"] == "detected" else float(stage["l1_score"])
+    return float(stage["score"])
+
+
+def core_scores(sets: list[SetFile], predictions: dict[str, Path], curve: bool) -> dict[str, dict[str, float]]:
+    """Row id -> class -> score of Core predictions: the L1 score curve (``curve``, rules only) or the cascade's
+    answer (``decision_score``)."""
     out = {}
     for entry in sets:
         for prediction in BASELINES.read_rows(predictions[entry.set_id]):
-            out[prediction["id"]] = (prediction["scores"] if key == "scores" else
-                                     {cls: float(stage["l1_score"]) for cls, stage in prediction["cascade"].items()})
+            out[prediction["id"]] = (prediction["scores"] if curve else
+                                     {cls: decision_score(stage) for cls, stage in prediction["cascade"].items()})
     return out
 
 
@@ -1376,7 +1400,7 @@ def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baselin
         if len(found) != len(everything):
             missing[name] = "no Core predictions for every set"
             continue
-        systems[name] = fair_cells(rows, core_scores(everything, found, "scores" if name == "rules" else "l1_score"),
+        systems[name] = fair_cells(rows, core_scores(everything, found, name == "rules"),
                                    CLASSES)
     heuristics = {}
     if baseline_cache is not None:
@@ -1689,7 +1713,7 @@ def main(argv: list[str] | None = None) -> int:
     fa.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache (Prompt Guard 2, heuristics)")
     fa.add_argument("--output", type=Path, required=True, help="fair report (JSON)")
     fa.add_argument("--scoreboard", type=Path, help=f"also render {', '.join(FAIR_FILES)} into this directory")
-    rf = commands.add_parser("refresh", help="re-render baseline.md (and cascade.md) in a checkout of main")
+    rf = commands.add_parser("refresh", help="re-render the fair scoreboard reports in a checkout of main")
     rf.add_argument("--tree", type=Path, default=ROOT, help="checkout of main; its HEAD is measured, its reports rewritten")
     rf.add_argument("--since", help="commit the reports were last rendered from: render only after a detector, "
                                     "scorer or gold change since then")
