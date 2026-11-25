@@ -25,7 +25,9 @@ x-worker: &worker
     RUST_LOG: info
     TOKIO_WORKER_THREADS: "2"
     PATRONUS_L3_PRECISION: fp16
-    PATRONUS_L3_TTL_SECS: "-1"
+    # Dedicated models are evicted after idle time so several L3 models do
+    # not accumulate indefinitely in each worker's 4 GiB memory limit.
+    PATRONUS_L3_TTL_SECS: "300"
   volumes:
     - ./worker.yaml:/etc/ark-api/config.yaml:ro
   healthcheck:

@@ -63,6 +63,9 @@ pub struct GatewayConfig {
     pub core: ScannerConfig,
     /// Physical L3 classifier topology: `dedicated` (default) or `multi`.
     pub l3_strategy: L3Strategy,
+    /// Categories permitted to load and run L3. Unset preserves all configured
+    /// categories; L1 and NTDB L2 remain available for excluded categories.
+    pub l3_categories: Option<Vec<SecurityCategory>>,
     /// Calibrated NTDB operating point. Default: `best_promote`.
     pub ntdb_operating_point: NtdbOperatingPoint,
     /// Calibrated NTDB final-decision threshold set. Default: `best_f1`.

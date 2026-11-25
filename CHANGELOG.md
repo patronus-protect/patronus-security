@@ -9,6 +9,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Added
+
+- Ark gateway and HTTP API: optional server-side `l3_categories` limits which configured
+  categories prepare and run L3. When unset, every configured category remains eligible;
+  excluded categories retain their L1 and NTDB L2 analysis where available. The Cube worker
+  template selects `injection` and `dynamic-pii` for dedicated L3.
+- Ark API Entrypoint: forwarded scan results retain an opt-in cascade's `module_decision`
+  and expose Cat's `shell_decision` (`allow`, `ask` or `block`) with bounded
+  `shell_details` for the `shell_command` category.
+
 ### Detection changes
 
 - **Detection change (`jailbreak`, opt-in category):** a persona assignment with a single

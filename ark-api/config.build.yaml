@@ -10,13 +10,13 @@ auth:
       key_hash: "sha256:3d46dab01df11228e2ccf88613ed995487c65cba309568731273f0988e5416b1"
 
 pipeline:
-  # L3 classifier categories share the unified model at runtime. Dynamic PII
-  # keeps its separate GLiNER bundle and shell_command its JSON model. All are
-  # baked into the final image.
+  # Bake dedicated Wolf Small v2.2, its matching injection NTDB, all other
+  # configured NTDB/L3 assets, GLiNER and Cat into the final image.
   categories: ["injection", "dlp", "pii", "sensitive_document", "jailbreak", "prompt_extraction", "tool_poisoning", "agent_config_tampering", "memory_poisoning", "exfiltration", "unsafe_action", "resource_exhaustion", "harmful_content", "toxic_language", "routing", "dynamic-pii", "tool_class", "tool_action", "tool_tags", "shell_command"]
   max_level: "L3"
-  # The deployment serves L3 from the shared multi-head model; the server
-  # default is `dedicated`.
-  l3_strategy: multi
+  l3_strategy: dedicated
+  l3_categories: [injection, dynamic-pii]
+  wolf:
+    model: small
   cache_root: "/data/models"
   download: missing

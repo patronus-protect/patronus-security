@@ -46,8 +46,15 @@ A custom `cache_root` is convenient for shipping a pre-populated cache to anothe
 | `"download": "never"` | Never download; use native L1 + already-cached assets only. |
 | `"download": "missing"` | Download required assets for configured categories on demand. |
 | `download_categories=[…]` | Restrict automatic downloads to just these categories. |
+| `l3_categories=[…]` | Restrict which configured categories prepare and load dedicated L3 assets while retaining their L1 and NTDB L2 paths. Unset allows L3 for all configured categories. |
 
 Required assets download during `warmup()` (or, in Rust, `prepare_assets()`).
+
+The production worker profile sets `l3_categories: [injection, dynamic-pii]` with
+`l3_strategy: dedicated`. This prepares Wolf Defender Small and, when requested,
+GLiNER for L3; other enabled model-backed categories continue with their NTDB L2
+packages. `download_categories` controls whether missing assets may be fetched;
+`l3_categories` controls which L3 models are needed and allowed at runtime.
 
 ### `shell_command` model
 

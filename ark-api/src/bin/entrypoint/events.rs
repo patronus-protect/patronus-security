@@ -210,7 +210,7 @@ pub(super) fn compact_result(result: &Value) -> Value {
                 })
         })
         .or_else(|| l2_chunk_evidence(result));
-    json!({
+    let mut compact = json!({
         "category": result.get("category"),
         "class_name": result.get("class_name"),
         "confidence": result.get("confidence"),
@@ -221,7 +221,30 @@ pub(super) fn compact_result(result: &Value) -> Value {
         "final_result": result.pointer("/decision/final_result"),
         "decision_evidence": decision_evidence,
         "evidence_spans": result.get("evidence_spans").cloned().unwrap_or_else(|| json!([])),
-    })
+    });
+    if let Some(decision) = result
+        .get("module_decision")
+        .filter(|value| !value.is_null())
+    {
+        compact["module_decision"] = decision.clone();
+    }
+    if result.get("category").and_then(Value::as_str) == Some("shell_command") {
+        if let Some(details) = result
+            .get("layers")
+            .and_then(Value::as_array)
+            .and_then(|layers| layers.iter().find_map(|layer| layer.get("details")))
+        {
+            if let Some(decision) = details.get("decision").and_then(Value::as_str) {
+                compact["shell_decision"] = json!(decision);
+            }
+            if serde_json::to_vec(details).is_ok_and(|bytes| bytes.len() <= 65_536) {
+                compact["shell_details"] = details.clone();
+            } else {
+                compact["shell_details"] = json!({"truncated": true});
+            }
+        }
+    }
+    compact
 }
 
 fn l2_chunk_evidence(result: &Value) -> Option<Value> {
@@ -260,4 +283,29 @@ fn l2_chunk_evidence(result: &Value) -> Option<Value> {
         "contributors": contributors,
         "decisive_chunks": [decisive_chunk],
     }))
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    #[test]
+    fn compact_result_keeps_cat_verdict_and_cascade_decision() {
+        let result = json!({
+            "category": "shell_command", "class_name": "shell_risk", "confidence": 0.8,
+            "level": "L1", "model": "cat-shell-risk-commander", "evidence_spans": [],
+            "module_decision": {"module":"shell_command","outcome":"detected","decided_by":"heuristic","score":0.8},
+            "layers": [{"details": {"decision":"ask","decision_score":1.5,"verdict":{"version":"patronus.verdict/1"}}}]
+        });
+        let compact = compact_result(&result);
+        assert_eq!(compact["module_decision"]["outcome"], "detected");
+        assert_eq!(compact["shell_decision"], "ask");
+        assert_eq!(
+            compact["shell_details"]["verdict"]["version"],
+            "patronus.verdict/1"
+        );
+        let other = compact_result(&json!({"category":"pii","evidence_spans":[]}));
+        assert!(other.get("module_decision").is_none());
+        assert!(other.get("shell_details").is_none());
+    }
 }

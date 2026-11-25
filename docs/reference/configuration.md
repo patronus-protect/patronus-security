@@ -27,6 +27,7 @@ means the same in Ark, and Ark adds the keys of its later layers. Unknown keys a
 | `execution_backend` | str | ONNX [execution backend](#execution-backend) of every ONNX model, Wolf included (default `"auto"`). | yes | yes |
 | `onnx_runtime` | dict | ONNX Runtime `intra_threads`, `inter_threads`, `spinning` of every ONNX model, Wolf included (default `1/1/false`). | yes | yes |
 | `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. Default `"dedicated"` in Rust, Python and the server. | no | yes |
+| `l3_categories` | list of category names or unset | Limit which configured categories load and run L3. Unset permits L3 for every configured category. L1 and NTDB L2 remain available for excluded categories. | no | yes |
 | `ntdb_operating_point` | str | [NTDB operating point](#ntdb-operating-point), default `"best_promote"`. | no | yes |
 | `ntdb_decision_threshold_point` | str | [Final-decision threshold profile](#ntdb-operating-point), default `"best_f1"`. | no | yes |
 | `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); unset follows the backend. | no | yes |
@@ -119,6 +120,20 @@ the shared `multi` model. Existing HTTP configs without these fields keep `multi
 and the `256/0/1` Wolf profile. Python gateways default to `dedicated`.
 The generic request `chunk_overlap_tokens` setting remains separate from Wolf's
 content-token overlap.
+
+### Limit dedicated L3 models
+
+`l3_categories` is a server-side gateway setting. Each entry must also appear in
+`categories`, and duplicate entries are rejected. Omitting it keeps the previous
+behavior: every configured category may use L3. A category excluded from this list
+still runs its L1 and NTDB L2 stages where available; its promoted L3 work is skipped
+and the L2 decision is retained. `dynamic-pii` is L3-only, so include it to serve
+request-local GLiNER scans.
+
+For example, the Cube worker profile uses `l3_strategy: dedicated` and
+`l3_categories: [injection, dynamic-pii]`: Wolf Defender Small handles injection
+L3, GLiNER remains available on request, and the other model-backed categories
+keep their NTDB L2 results without loading their dedicated L3 models.
 
 ## Runtime setters (Rust)
 
