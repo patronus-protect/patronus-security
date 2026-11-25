@@ -96,3 +96,42 @@ def test_agree_lists_the_rows_the_two_passes_label_differently():
 
 def test_missing_label_file_loads_empty(tmp_path):
     assert MODULE.load(tmp_path / "none.jsonl") == {}
+
+
+def test_features_hash_into_the_buckets_of_the_category_model():
+    counts = MODULE.feature_counts("Wie Wie", buckets=64)
+    # Two words, one bigram, the char n-grams of "<wie>" twice: every feature counted.
+    expected = [MODULE.fnv1a_32(f) % 64 for f in MODULE.fasttext_features("Wie Wie", (), *MODULE.CHAR_NGRAMS)]
+    assert sum(counts.values()) == len(expected) and counts == __import__("collections").Counter(expected)
+    assert MODULE.feature_counts("", buckets=64) == {}
+
+
+def test_quantize_rounds_and_clamps_to_i16():
+    assert MODULE.quantize([0.0014, -0.0016, 40.0, -40.0], scale=1000) == [1, -2, 32767, -32768]
+
+
+def test_train_and_predict_toy_subclasses():
+    texts = ["steal the car", "steal a wallet", "hack the server", "hack an account"] * 3
+    targets = [0, 0, 1, 1] * 3
+    weights, bias = MODULE.fit(texts, targets, 2, buckets=256, epochs=100)
+    model = MODULE.model_document(["nonviolent_crime", "cyber_harm"], weights, bias, buckets=256)
+    assert model["weights"] and len(model["weights"][0]) == 256
+    subclass, numerators, total = MODULE.predict(model, "how to hack a server")
+    assert subclass == "cyber_harm" and numerators[1] > numerators[0] and total > 0
+    assert MODULE.predict(model, "steal it")[0] == "nonviolent_crime"
+    # A text without features counts as one feature: the numerators are the biases.
+    assert MODULE.predict(model, "") [1:] == (model["bias"], 1)
+
+
+def test_ties_go_to_the_first_class_and_folds_are_stratified():
+    model = {"buckets": 8, "char_ngram_range": [3, 5], "classes": ["a", "b"], "bias": [0, 0],
+             "weights": [[0] * 8, [0] * 8]}
+    assert MODULE.predict(model, "x")[0] == "a"
+    assert MODULE.folds([0, 0, 1, 0, 1], count=2) == [0, 1, 0, 0, 1]
+
+
+def test_parity_file_matches_the_built_in_model():
+    model = json.loads(MODULE.MODEL_PATH.read_text(encoding="utf-8"))
+    for line in MODULE.PARITY_PATH.read_text(encoding="utf-8").splitlines():
+        case = json.loads(line)
+        assert MODULE.predict(model, case["text"]) == (case["subclass"], case["numerators"], case["total"])

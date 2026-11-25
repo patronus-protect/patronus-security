@@ -688,6 +688,8 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.dynamic_ssrf` | `unsafe_action` | `metadata_ssrf` | SSRF3, TT |
 | `ark.threat.unauthorized_autonomy` | `unsafe_action` | `unattended` | EA2, EA3 |
 | `ark.threat.harmful_intent` | `harmful_content` | `howto_hazard` | P5 |
+| `ark.threat.hc_howto_hazard` | `harmful_content` | `howto_hazard` | P5 |
+| `ark.threat.hc_evasion` | `harmful_content` | `evasion` | P5 |
 | `ark.threat.secret_source_transfer` | `exfiltration` | `secret_to_sink` | E3, E5 |
 | `ark.threat.ua_credential_store_access` | `unsafe_action` | `credential_access` | PE3, AS1 |
 | `ark.threat.ua_metadata_fetch` | `unsafe_action` | `metadata_ssrf` | SSRF1 |

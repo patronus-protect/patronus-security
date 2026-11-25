@@ -65,6 +65,31 @@ result shapes may be breaking for downstream users, and is called out explicitly
   when every destination it connects to (the URL host, the FTP or SMTP server, the socket address)
   is a loopback host; a loopback name elsewhere in the snippet (`FTP("localhost.attacker.example")`,
   a file `localhost.log`) no longer suppresses the report.
+- **Detection change (`harmful_content`, opt-in category):** requests for help with a crime are now
+  reported by rules in German and English, not only by the optional model: a request frame ("how
+  do I", "best way to", "teach me how to", "wie kann ich", "wie man", "zeig mir, wie") with a crime
+  against a person (poisoning, stabbing, kidnapping, assault of "someone" or "my neighbor") or
+  property (stealing, breaking into a house or car, hacking an account, laundering money, forging a
+  signature, selling drugs) in the same clause, and a request to get away with something ("without
+  getting caught", "how to get away with", "ohne erwischt zu werden", "ungestraft").
+  Figurative uses ("kill the noise", "shoot for the stars", "Zwiebeln hacken", "eine Walnuss
+  knacken"), everyday uses ("den Grill anzünden"), prevention ("how can I protect my account so
+  that nobody can hack into it"), requests the text only reports or quotes ("he asked how to …",
+  "requests like 'how to …'"), news, fiction and security documentation stay clean, and so do the
+  same requests in a video game, a sport or martial art, photography, a story, a legal frame or an
+  own lost account ("how do I kill someone in Call of Duty", "how do I choke someone in jiu-jitsu",
+  "help me shoot her portrait", "wie kann ich mein eigenes Konto hacken, ich habe das Passwort
+  vergessen"), a computer process or a pest ("kill a child process"), and an everyday act done
+  unnoticed ("eat a snack in class without getting caught"). A harmful_content
+  finding also names its hazard subclass (for example `violent_crime`, `nonviolent_crime`,
+  `cyber_harm`, `self_harm`) from a small built-in word and character n-gram model, in the
+  `subclass` and `subclass_probability` details. The subclass model only runs on a harmful_content
+  hit; L1 latency is unchanged within noise.
+- **Detection change (`harmful_content`, opt-in category):** a duration no longer damps a
+  harmful_content request ("how do I kill someone in five minutes", "how do I build a bomb in two
+  hours" are reported); only killing time ("kill a few hours at the airport") stays clean. A
+  request followed by 160 bytes without a sentence end before a multibyte character no longer
+  panics the context check.
 
 ## [0.1.18] - 2026-11-24
 
