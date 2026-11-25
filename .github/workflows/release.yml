@@ -269,6 +269,19 @@ jobs:
     permissions:
       actions: write
     steps:
+      # Wait for the started run and take over its result, so a failed Core upload fails the release.
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run core-python.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f publish=true
+        run: |
+          started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gh workflow run core-python.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f publish=true
+          for _ in $(seq 30); do
+            run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow core-python.yml --event workflow_dispatch \
+              --branch "$GITHUB_REF_NAME" --limit 5 --json databaseId,createdAt \
+              --jq "[.[] | select(.createdAt >= \"$started\")] | last | .databaseId // empty")
+            [ -n "$run" ] && break
+            sleep 10
+          done
+          [ -n "$run" ] || { echo "the started core-python.yml run did not appear"; exit 1; }
+          echo "Core Python run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$run"
+          gh run watch "$run" --repo "$GITHUB_REPOSITORY" --interval 60 --exit-status
