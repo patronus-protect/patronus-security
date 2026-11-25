@@ -99,10 +99,10 @@ impl<'a> NativeText<'a> {
             let text = self.text();
             let mut views: Vec<HiddenView<'a>> = text_views::decoded_views(text)
                 .into_iter()
-                .map(|view| HiddenView {
+                .map(|mut view| HiddenView {
                     kind: view.encoding.as_str(),
-                    origin: Origin::Decoded(view.encoding, view.source),
-                    text: Self::from_text(Cow::Owned(view.text)),
+                    text: Self::from_text(Cow::Owned(std::mem::take(&mut view.text))),
+                    origin: Origin::Decoded(view),
                 })
                 .collect();
             views.extend(text_views::zero_width_view(text).map(|view| HiddenView {
@@ -133,8 +133,9 @@ pub struct HiddenView<'a> {
 
 /// How a view range maps back to original bytes.
 enum Origin {
-    /// Decoded from this source range; every encoding has a fixed byte ratio.
-    Decoded(Encoding, Range<usize>),
+    /// Decoded from the encoded fragment of the view (its text moved to the
+    /// hidden view); every encoding has a fixed byte ratio to it.
+    Decoded(text_views::DecodedView),
     /// The folded view with its byte map.
     Folded(text_views::fold::Folded),
     /// The text without zero-width characters, with its byte map.
@@ -145,7 +146,7 @@ impl HiddenView<'_> {
     /// Original byte range of the view range `range`.
     pub fn source(&self, range: Range<usize>) -> Range<usize> {
         match &self.origin {
-            Origin::Decoded(encoding, source) => {
+            Origin::Decoded(view) => {
                 // A tag character takes four bytes; a bridged line break or
                 // umlaut keeps its own length.
                 let tag_bytes = |at: usize| -> usize {
@@ -157,13 +158,13 @@ impl HiddenView<'_> {
                         })
                         .sum()
                 };
-                let (start, end) = match encoding {
+                let (start, end) = match view.encoding {
                     Encoding::UnicodeTags => (tag_bytes(range.start), tag_bytes(range.end)),
                     Encoding::Hex => (range.start * 2, range.end * 2),
                     Encoding::Base64 => (range.start / 3 * 4, range.end.div_ceil(3) * 4),
                     Encoding::Rot13 => (range.start, range.end),
                 };
-                source.start + start..(source.start + end).min(source.end)
+                view.original(start..end)
             }
             Origin::Folded(folded) => folded.original(range),
             Origin::Stripped(view) => view.original(range),

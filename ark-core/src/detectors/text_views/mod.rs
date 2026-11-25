@@ -27,7 +27,10 @@ pub mod decode;
 pub mod fold;
 pub mod tags;
 
-use std::{ops::Range, sync::LazyLock};
+use std::{
+    ops::Range,
+    sync::{Arc, LazyLock},
+};
 
 use regex::Regex;
 
@@ -77,6 +80,25 @@ pub struct DecodedView {
     pub text: String,
     /// Whether the text reads as prose; only prose views count as facts.
     pub prose: bool,
+    /// The text without zero-width characters the fragment was read from, and
+    /// the fragment's range in it; `None` when read from the original text.
+    pub stripped: Option<(Arc<Deobfuscated>, Range<usize>)>,
+}
+
+impl DecodedView {
+    /// Original byte range of `range`, counted in bytes of the encoded
+    /// fragment and cut at its end.
+    pub fn original(&self, range: Range<usize>) -> Range<usize> {
+        match &self.stripped {
+            Some((view, fragment)) => view.original(
+                fragment.start + range.start..(fragment.start + range.end).min(fragment.end),
+            ),
+            None => {
+                self.source.start + range.start
+                    ..(self.source.start + range.end).min(self.source.end)
+            }
+        }
+    }
 }
 
 /// The `obfuscated` and `decoded` facts of a text, sorted and without duplicates.
@@ -188,6 +210,7 @@ pub fn decoded_views(text: &str) -> Vec<DecodedView> {
             source,
             text: view,
             prose: true,
+            stripped: None,
         })
         .collect();
     decoded.extend(encoded_fragments(text));
@@ -202,7 +225,7 @@ pub fn decoded_views(text: &str) -> Vec<DecodedView> {
 /// Base64 and hex fragments of `text` that decode to printable text, read
 /// after zero-width characters inside them are removed.
 fn encoded_fragments(text: &str) -> Vec<DecodedView> {
-    let visible = Deobfuscated::invisible(text);
+    let visible = Deobfuscated::invisible(text).map(Arc::new);
     let scanned = visible.as_ref().map_or(text, |view| view.text.as_str());
     split_fragments(scanned)
         .filter_map(|fragment| {
@@ -217,9 +240,10 @@ fn encoded_fragments(text: &str) -> Vec<DecodedView> {
                 encoding,
                 source: visible
                     .as_ref()
-                    .map_or(range.clone(), |view| view.original(range)),
+                    .map_or(range.clone(), |view| view.original(range.clone())),
                 prose: is_prose(&decoded),
                 text: decoded,
+                stripped: visible.clone().map(|view| (view, range)),
             })
         })
         .take(MAX_DECODED)
@@ -254,6 +278,7 @@ fn rot13_views(text: &str) -> impl Iterator<Item = DecodedView> + '_ {
                     source: marker.end()..marker.end() + span.len(),
                     text: decoded,
                     prose: true,
+                    stripped: None,
                 },
             )
         })
@@ -302,6 +327,7 @@ fn bare_rot13_view(text: &str) -> Option<DecodedView> {
         source: start..end,
         text: decoded,
         prose: true,
+        stripped: None,
     })
 }
 

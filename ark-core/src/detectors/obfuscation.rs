@@ -54,20 +54,21 @@ impl Kind {
 }
 
 /// One rewrite of the original text: `range` becomes `with`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Edit {
     range: Range<usize>,
     with: Replacement,
     kind: Kind,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Replacement {
     Remove,
     Char(char),
 }
 
 /// Normalized view of a text with a byte map back to the original.
+#[derive(Debug, PartialEq, Eq)]
 pub struct Deobfuscated {
     pub text: String,
     /// Original byte range of every normalized byte.
