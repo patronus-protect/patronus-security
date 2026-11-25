@@ -51,9 +51,9 @@ def test_split_is_seeded_and_independent_of_row_order():
     assert MIX.assign_parts(sources, seed="another seed") != parts
 
 
-def test_split_refuses_a_too_small_source_and_a_row_in_two_sources():
-    with pytest.raises(ValueError, match="cannot fill"):
-        MIX.assign_parts({"tiny": rows("tiny", 4)})
+def test_split_names_a_too_small_source_and_refuses_a_row_in_two_sources():
+    document = MIX.parts_document({"tiny": rows("tiny", 2), "full": rows("full", 5)}, {})
+    assert document["short_sources"] == ["tiny"]
     with pytest.raises(ValueError, match="twice"):
         MIX.assign_parts({"a": rows("a", 5), "b": rows("a", 5)})
 
@@ -145,7 +145,7 @@ def test_best_heuristic_is_picked_on_the_calibration_part():
 def test_fair_report_renders_the_decisive_level_first():
     rows, scores = mix_rows({"calibration": ([0.9] * 10, [0.0] * 1000), "measurement": ([0.9] * 10, [0.0] * 1000),
                              "report": ([0.9] * 2, [0.0] * 5)})
-    report = {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": ["r"], "missing": {"cascade": "why"},
+    report = {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": ["r"], "missing": {"cascade": "why"}, "short_sources": [],
               "parts": {"train": 0, "calibration": 1010, "measurement": 1010, "report": 7, "rows": 2020, "sources": 1},
               "systems": {"rules": MODULE.fair_cells(rows, scores, ["jailbreak"])}}
     text = MODULE.render_fair(report, "T", [], ["rules", "cascade"])

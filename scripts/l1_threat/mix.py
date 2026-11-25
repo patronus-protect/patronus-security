@@ -14,7 +14,7 @@ The extra sets are a frozen directory like a generated one (``manifest.json`` + 
 mix --out DIR`` writes ``DIR/mix``). The split is row-wise and stratified by source (the set id): per source the
 rows are ordered by stratum (language, classes) and a seeded SHA-256 of the row id, and dealt in the pattern
 ``PATTERN`` (3 train : 1 calibration : 1 measurement) from a seeded offset, so every source with at least
-``len(PATTERN)`` rows has rows in all three parts, every stratum is spread in proportion and no row is in two
+``len(PATTERN)`` rows has rows in all three parts (a smaller one is named in ``short_sources``), every stratum is spread in proportion and no row is in two
 parts. The assignment is a pure function of the seed and the rows; ``parts.json`` freezes it with the set
 hashes it was dealt from.
 """
@@ -165,13 +165,11 @@ def _stratum(row: dict[str, Any]) -> tuple[str, str]:
 
 
 def assign_parts(sources: dict[str, Iterable[dict[str, Any]]], seed: str = SEED) -> dict[str, str]:
-    """Row id -> part, dealt per source (see the module docstring). A source smaller than ``PATTERN`` or a row id in
-    two sources is an error: every source must reach every part and no row may land in two."""
+    """Row id -> part, dealt per source (see the module docstring). A row id in two sources is an error: no row may
+    land in two parts. A source smaller than ``PATTERN`` cannot reach every part; ``short_sources`` names it."""
     parts: dict[str, str] = {}
     for source, rows in sorted(sources.items()):
         rows = list(rows)
-        if len(rows) < len(PATTERN):
-            raise ValueError(f"source {source}: {len(rows)} rows cannot fill all {len(PARTS)} parts")
         offset = int(_digest(seed, source), 16) % len(PATTERN)
         ordered = sorted(rows, key=lambda row: (_stratum(row), _digest(seed, row["id"])))
         for index, row in enumerate(ordered):
@@ -194,8 +192,14 @@ def parts_document(sources: dict[str, Iterable[dict[str, Any]]], set_hashes: dic
     """The frozen split: seed, pattern, the set hashes it was dealt from, counts per source and part, and the parts."""
     sources = {source: list(rows) for source, rows in sources.items()}
     parts = assign_parts(sources, seed)
+    counts = part_counts(sources, parts)
     return {"schema": PARTS_SCHEMA, "seed": seed, "pattern": list(PATTERN), "sets": dict(sorted(set_hashes.items())),
-            "counts": part_counts(sources, parts), "parts": dict(sorted(parts.items()))}
+            "counts": counts, "short_sources": short_sources(counts), "parts": dict(sorted(parts.items()))}
+
+
+def short_sources(counts: dict[str, dict[str, int]]) -> list[str]:
+    """The sources without a row in some part (fewer rows than ``PATTERN``)."""
+    return sorted(source for source, by_part in counts.items() if not all(by_part.values()))
 
 
 def freeze_parts(path: Path, document: dict[str, Any], force: bool = False) -> bool:

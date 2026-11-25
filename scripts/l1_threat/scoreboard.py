@@ -145,7 +145,8 @@ BOOTSTRAP_SEED = 20261114
 # Benign sets of security-adjacent text (trigger words, seemingly harmful prompts, jailbreak-shaped
 # prompts without harmful intent, harmless requests that sound risky, hard-negative goldens); together with the generated look-alike twins
 # they make up the hard-benign pool.
-HARD_BENIGN_SETS = frozenset({"notinject", "or_bench_hard", "xstest", "wildjailbreak", "wildguardmix", "l1_goldens"})
+HARD_BENIGN_SETS = frozenset({"notinject", "or_bench_hard", "xstest", "wildjailbreak", "wildguardmix", "l1_goldens",
+                              "trigger_negatives"})
 JOBS = 4
 # The Core predictor: an example of patronus-ark-core, built from these sources.
 PREDICTOR = "threat_cascade"
@@ -1147,12 +1148,12 @@ def build_mix(dev: Path, out: Path, force: bool = False) -> dict[str, Any]:
     return document
 
 
-def load_parts(mix_root: Path, sets: list[SetFile]) -> dict[str, str]:
-    """The frozen parts of ``mix_root``; they must have been dealt from exactly these sets."""
+def load_parts(mix_root: Path, sets: list[SetFile]) -> dict[str, Any]:
+    """The frozen split of ``mix_root``; it must have been dealt from exactly these sets."""
     document = json.loads((mix_root / MIX.PARTS_FILE).read_text(encoding="utf-8"))
     if document.get("schema") != MIX.PARTS_SCHEMA or document["sets"] != {s.set_id: s.sha256 for s in sets}:
         raise ValueError(f"{mix_root / MIX.PARTS_FILE}: dealt from other sets; run `scoreboard.py mix` again")
-    return document["parts"]
+    return document
 
 
 def mix_rows(sets: list[SetFile], report_sets: list[SetFile], parts: dict[str, str]) -> list[MixRow]:
@@ -1310,6 +1311,8 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], systems: It
              "negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, "
              "the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. "
              "`–`: the system does not score the class.", ""]
+    if report["short_sources"]:
+        lines += ["Sources too small to reach every part: " + ", ".join(report["short_sources"]) + ".", ""]
     if report.get("missing"):
         lines += ["Not measured: " + "; ".join(f"{k} ({v})" for k, v in sorted(report["missing"].items())) + ".", ""]
     for fpr in GATE_FPRS[::-1]:
@@ -1318,12 +1321,52 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], systems: It
     return "\n".join(lines)
 
 
+UPPER_BOUND = ("**Upper bound:** the eleven built-in L1 models were trained before this mix existed, on the train half of a "
+               "split inside the same dev sets; part of the mix's calibration and measurement rows were their training "
+               "rows, so the `L1 model` and `cascade` columns are upper bounds until the models are retrained on the "
+               "mix's train part.")
+FAIR_FILES = {
+    "baseline.md": ("Threat scoreboard: baseline", ("rules", "prompt_guard_2", "heuristic"),
+                    ["Rules only: Core's L1 heuristic score per class (the L1 score curve, no model). Prompt Guard 2 "
+                     "22M and the heuristic baselines (`scripts/l1_threat/run_baselines.py`) from their cached "
+                     "predictions; the best heuristic is picked per class and language on the calibration part and "
+                     "named in brackets."]),
+    "cascade.md": ("Threat scoreboard: cascade", ("rules", "l1_model", "cascade"),
+                   ["The cascade of `research/l1-threat/scoreboard/cascade-config.json` (the L1 heuristic, then the "
+                    "built-in L1 model of every class, then L3 Wolf where the config names it), each cut from the "
+                    "calibration part on the cascade's L1 score. `L1 model`: the cascade up to L1 (heuristic, then "
+                    "model).", UPPER_BOUND]),
+    "builtin-models.md": ("Built-in L1 models in Ark Core", ("rules", "l1_model", "prompt_guard_2", "heuristic"),
+                          ["The eleven fastText-type L1 models are compiled into `patronus-ark-core` "
+                           "(`ark-core/models/l1/<class>.ftpack`) and run only for the modules a cascade names "
+                           "(`cascade.modules.<category>.l1_model: {\"builtin\": \"<class>\"}`); the parity tests "
+                           "(`ark-core/tests/text_model_parity.rs`, `scripts/tests/test_l1_threat_category_model.py`) "
+                           "pin the packed values. Their shipped cuts are replaced here by the cut from the "
+                           "calibration part.", UPPER_BOUND]),
+    "fasttext-all-classes.md": ("fastText-type L1 models for all eleven classes", ("rules", "l1_model"),
+                                ["Every class's fastText-type model (the built-in models) next to the rules alone, on "
+                                 "the same rows and at the same FPR.", UPPER_BOUND]),
+}
+
+
+def write_fair_files(report: dict[str, Any], directory: Path, source: str | None = None,
+                     inputs: str | None = None) -> list[str]:
+    """Render ``FAIR_FILES`` into ``directory``; the names of the files whose numbers changed."""
+    written = []
+    for name, (title, systems, lead) in FAIR_FILES.items():
+        text = render_fair(report, title, [line for item in lead for line in (item, "")], systems, source, inputs)
+        if write_rendered(directory / name, text):
+            written.append(name)
+    return written
+
+
 def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baseline_cache: Path | None) -> dict[str, Any]:
     """Every system on the same mix rows: ``predictions`` maps ``rules``, ``l1_model`` and ``cascade`` to Core
     prediction directories (the cascade's L1 score of ``l1_model`` and ``cascade``); the baselines come from the
     cache (Prompt Guard 2 22M, and per class and language the heuristic picked on the calibration part)."""
     sets, report_sets = mix_sets(dev, mix_root)
-    parts = load_parts(mix_root, sets)
+    document = load_parts(mix_root, sets)
+    parts = document["parts"]
     everything = sets + report_sets
     rows = mix_rows(sets, report_sets, parts)
     systems: dict[str, Any] = {}
@@ -1349,7 +1392,8 @@ def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baselin
         systems["heuristic"] = best_of(heuristics)
     counted = Counter(r.part for r in rows)
     return {"seed": MIX.SEED, "parts_hash": hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()[:12],
-            "report_sets": [s.set_id for s in report_sets], "systems": systems, "missing": missing,
+            "report_sets": [s.set_id for s in report_sets], "short_sources": document["short_sources"],
+            "systems": systems, "missing": missing,
             "parts": {**{p: counted[p] for p in (*MIX.PARTS, "report")}, "rows": sum(counted[p] for p in MIX.PARTS),
                       "sources": len(sets)}}
 
@@ -1513,47 +1557,42 @@ def write_rendered(path: Path, text: str) -> bool:
 
 def refresh(tree: Path, since: str | None, dev: Path, cache: Path, baseline_cache: Path | None,
             jobs: int = JOBS) -> int:
-    """Re-render the scoreboard of the checkout ``tree`` (main) from its HEAD on the dev split.
+    """Re-render the scoreboard of the checkout ``tree`` (main) from its HEAD on the measurement mix.
 
-    baseline.md always (L1 cascade, with the cached baselines), cascade.md when the checkout holds
-    ``CASCADE_CONFIG``. With ``since`` (the commit the reports were last rendered from) nothing runs
-    unless a file under ``REFRESH_PATHS`` changed or a report names other inputs than the current ones
-    (``inputs_fingerprint``: a re-frozen dev split, for baseline.md also new cached baselines). A report
-    whose numbers and inputs did not change is left as it is. Builds and predictions share the gate's cache.
+    The mix (``build_mix``) is frozen under the cache; Core predicts it and the dev split's report sets with
+    ``L1_CASCADE`` (rules only) and, when the checkout holds ``CASCADE_CONFIG``, with that config (``cascade`` when it
+    names Wolf, else ``l1_model``); ``fair_report`` scores them with the cached baselines into ``FAIR_FILES``. With
+    ``since`` (the commit the reports were last rendered from) nothing runs unless a file under ``REFRESH_PATHS``
+    changed or a report names other inputs than the current ones (``inputs_fingerprint`` over the mix's sets, the
+    report sets and the cached baselines). A report whose numbers and inputs did not change is left as it is.
     """
     tree = tree.resolve()
     commit = DLP_SCOREBOARD.resolve_commit(tree, "HEAD")
-    sets = split_sets(dev)
-    reports = [("baseline.md", L1_CASCADE)]
-    if (tree / CASCADE_CONFIG).is_file():
-        reports.append(("cascade.md", load_config(tree / CASCADE_CONFIG)))
-    inputs = {name: inputs_fingerprint(sets, baseline_cache if name == "baseline.md" else None) for name, _ in reports}
+    cache = cache.resolve() / "threat-scoreboard"
+    build_mix(dev, cache / "mix", force=True)
+    sets, report_sets = mix_sets(dev, cache / "mix")
+    everything = sets + report_sets
+    inputs = inputs_fingerprint(everything, baseline_cache)
     if (since is not None and not changed_paths(tree, DLP_SCOREBOARD.resolve_commit(tree, since), commit)
-            and all(recorded_inputs(tree / SCOREBOARD_DIR / name) == inputs[name] for name, _ in reports)):
+            and all(recorded_inputs(tree / SCOREBOARD_DIR / name) == inputs for name in FAIR_FILES)):
         print(f"threat scoreboard refresh: no detector, scorer, gold or input change since {since[:12]}; "
               "nothing to render")
         return 0
-    cache = cache.resolve() / "threat-scoreboard"
-    source = f"{RENDERED_FROM} `{commit[:12]}` on the dev split."
-    builds, written = set(), []
-    for name, config in reports:
+    configs = {"rules": L1_CASCADE}
+    if (tree / CASCADE_CONFIG).is_file():
+        config = load_config(tree / CASCADE_CONFIG)
+        configs["cascade" if needs_wolf(config) else "l1_model"] = config
+    builds, directories = set(), {}
+    for name, config in configs.items():
         build = ensure_predictor(tree, commit, cache, needs_wolf(config))
         builds.add(build.key)
-        out = cache / "predictions" / f"{build.key[:16]}-{config_hash(config)[:12]}"
-        predict_split(sets, out, build.binary, config, jobs)
-        predictions = core_predictions(sets, out)
-        if name == "baseline.md":
-            baselines, left_out = baseline_reports(sets, baseline_cache) if baseline_cache else (None, None)
-            text = render_baseline(score_split(sets, predictions), baselines, "Threat scoreboard: baseline",
-                                   left_out, source, inputs[name])
-        else:
-            text = render_cascade(cascade_split(sets, predictions), config, "Threat scoreboard: cascade",
-                                  source=source, inputs=inputs[name])
-        if write_rendered(tree / SCOREBOARD_DIR / name, text):
-            written.append(str(SCOREBOARD_DIR / name))
+        directories[name] = cache / "predictions" / f"{build.key[:16]}-{config_hash(config)[:12]}"
+        predict_split(everything, directories[name], build.binary, config, jobs)
+    report = fair_report(dev, cache / "mix", directories, baseline_cache)
+    written = write_fair_files(report, tree / SCOREBOARD_DIR, f"{RENDERED_FROM} `{commit[:12]}` on the mix.", inputs)
     DLP_SCOREBOARD.prune(cache, builds)
     print(f"threat scoreboard refresh of {commit[:12]}: "
-          + (f"rewrote {', '.join(written)}" if written else "numbers unchanged"))
+          + (f"rewrote {', '.join(str(SCOREBOARD_DIR / name) for name in written)}" if written else "numbers unchanged"))
     return 0
 
 
@@ -1649,6 +1688,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="Core predictions of the dev split and the mix: rules=DIR, l1_model=DIR, cascade=DIR")
     fa.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache (Prompt Guard 2, heuristics)")
     fa.add_argument("--output", type=Path, required=True, help="fair report (JSON)")
+    fa.add_argument("--scoreboard", type=Path, help=f"also render {', '.join(FAIR_FILES)} into this directory")
     rf = commands.add_parser("refresh", help="re-render baseline.md (and cascade.md) in a checkout of main")
     rf.add_argument("--tree", type=Path, default=ROOT, help="checkout of main; its HEAD is measured, its reports rewritten")
     rf.add_argument("--since", help="commit the reports were last rendered from: render only after a detector, "
@@ -1674,8 +1714,10 @@ def main(argv: list[str] | None = None) -> int:
             unknown = set(predictions) - {"rules", "l1_model", "cascade"}
             if unknown:
                 raise ValueError(f"unknown systems: {', '.join(sorted(unknown))}")
-            _write_json(args.output, fair_report(args.dev, args.mix, {k: Path(v) for k, v in predictions.items()},
-                                                 args.baseline_cache))
+            report = fair_report(args.dev, args.mix, {k: Path(v) for k, v in predictions.items()}, args.baseline_cache)
+            _write_json(args.output, report)
+            if args.scoreboard:
+                write_fair_files(report, args.scoreboard)
             return 0
         if args.command == "predict":
             config = load_config(args.cascade)
