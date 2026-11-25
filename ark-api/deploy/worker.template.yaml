@@ -11,9 +11,13 @@ pipeline:
   # Availability/warmup is independent of the default inference selection above.
   categories: [injection, dlp, jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion, harmful_content, toxic_language, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags, shell_command]
   max_level: L3
-  # The deployment serves L3 from the shared multi-head model; the server
-  # default is `dedicated`.
-  l3_strategy: multi
+  # Dedicated Wolf Small v2.2 uses the matching injection NTDB; other enabled
+  # model-backed categories use their revision-pinned dedicated bundles.
+  l3_strategy: dedicated
+  # Keep all NTDB L2 categories, but load L3 only for Wolf and opt-in GLiNER.
+  l3_categories: [injection, dynamic-pii]
+  wolf:
+    model: small
   cache_root: /data/models
   download: never
   onnx_runtime:
@@ -21,6 +25,8 @@ pipeline:
     inter_threads: 1
     spinning: false
   explain: false
+  pii_mode: strict
+  dlp_mode: strict
   l1: true
   l2: true
   l3: true

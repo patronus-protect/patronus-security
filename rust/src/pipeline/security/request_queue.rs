@@ -713,19 +713,26 @@ impl SecurityGateway {
         let policy = execution.l3_policy();
         let mut jobs = Vec::new();
         for result in results.iter_mut().filter(|result| has_l3_pending(result)) {
-            let allowed = patronus_ark_core::cascade::pipeline_allowed(
-                &execution.gates().conditional,
-                SecurityLevel::L3,
-                &result.category,
-                metadata,
-                gate_results,
-            ) && patronus_ark_core::cascade::pipeline_allowed(
-                &execution.gates().conditional,
-                SecurityLevel::L3,
-                &result.model,
-                metadata,
-                gate_results,
-            );
+            let category_allowed = self.l3_categories.as_ref().is_none_or(|categories| {
+                categories
+                    .iter()
+                    .any(|category| category.as_str() == result.category)
+            });
+            let allowed = category_allowed
+                && patronus_ark_core::cascade::pipeline_allowed(
+                    &execution.gates().conditional,
+                    SecurityLevel::L3,
+                    &result.category,
+                    metadata,
+                    gate_results,
+                )
+                && patronus_ark_core::cascade::pipeline_allowed(
+                    &execution.gates().conditional,
+                    SecurityLevel::L3,
+                    &result.model,
+                    metadata,
+                    gate_results,
+                );
             if !allowed {
                 if let Some(layer) = result
                     .layers
@@ -736,7 +743,11 @@ impl SecurityGateway {
                     layer.class_name = "skipped".to_string();
                     layer.details.insert(
                         "skip_reason".to_string(),
-                        serde_json::json!("conditional_gate"),
+                        serde_json::json!(if category_allowed {
+                            "conditional_gate"
+                        } else {
+                            "l3_categories"
+                        }),
                     );
                 }
                 *result = super::ntdb_l2::restore_l2_decision(
@@ -797,6 +808,7 @@ impl SecurityGateway {
         if !inputs
             .iter()
             .any(|input| input.category == SecurityCategory::DynamicPii)
+            || !self.allows_l3_category(SecurityCategory::DynamicPii)
             || !dynamic_pii_runs(execution, metadata, gate_results)
         {
             return None;
@@ -2239,6 +2251,52 @@ mod tests {
                 .collect::<Vec<_>>();
             assert_eq!(pipelines, vec!["injection", "tool_class"]);
         }
+    }
+
+    #[test]
+    fn l3_category_ceiling_keeps_ntdb_l2_and_skips_other_promotions() {
+        let mut config = GatewayConfig::new(
+            vec![SecurityCategory::Injection, SecurityCategory::ToolClass],
+            SecurityLevel::L3,
+        );
+        config.l3_categories = Some(vec![SecurityCategory::Injection]);
+        let gateway = SecurityGateway::new(config).unwrap();
+        let execution = gateway.scan_execution();
+        let pipelines = gateway.distributed_l2_pipelines(
+            &[SecurityCategory::Injection, SecurityCategory::ToolClass],
+            &execution,
+        );
+        assert!(pipelines
+            .iter()
+            .any(|pipeline| pipeline.category == SecurityCategory::ToolClass && !pipeline.has_l3));
+
+        let mut results = vec![pending_l3_result_with_chunks(
+            "tool_class",
+            "unified-v3-tool-class",
+            vec![l2_chunk_output(0, 10, "tool_class", "vcs", false)],
+        )];
+        let jobs = gateway.l3_jobs_for_results(
+            "rq-test",
+            Arc::<str>::from("text"),
+            &mut results,
+            &execution,
+            &serde_json::json!({}),
+            &[],
+        );
+        assert!(jobs.is_empty());
+        assert!(results[0]
+            .layers
+            .iter()
+            .any(|layer| layer.layer_type == "l3_skipped"));
+        assert_eq!(
+            results[0]
+                .layers
+                .iter()
+                .find(|layer| layer.layer_type == "l3_skipped")
+                .unwrap()
+                .details["skip_reason"],
+            "l3_categories"
+        );
     }
 
     fn pending_l3_result_with_chunks(

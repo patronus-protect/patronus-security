@@ -621,6 +621,8 @@ pub struct SecurityGatewayCore {
     categories: Vec<SecurityCategory>,
     /// Maximum layer to evaluate for configured categories.
     max_level: SecurityLevel,
+    /// Deployment ceiling for L3; requests cannot expand this set.
+    l3_categories: Option<HashSet<SecurityCategory>>,
     /// Model cache root (`cache_root`). Defaults to Core's default cache root.
     cache_root: Option<PathBuf>,
     /// Core's `max_input_bytes`, when set: larger inputs are refused unscanned.
@@ -838,6 +840,7 @@ impl SecurityGateway {
         let GatewayConfig {
             core,
             l3_strategy,
+            l3_categories,
             ntdb_operating_point,
             ntdb_decision_threshold_point,
             onnx_batch_mode,
@@ -866,6 +869,7 @@ impl SecurityGateway {
         let core = SecurityGatewayCore {
             categories,
             max_level,
+            l3_categories: l3_categories.map(|categories| categories.into_iter().collect()),
             cache_root: core.cache_root.clone(),
             max_input_bytes: core.max_input_bytes,
             max_findings: core.max_findings,
@@ -967,6 +971,7 @@ impl SecurityGateway {
             .categories
             .iter()
             .copied()
+            .filter(|category| self.allows_l3_category(*category))
             .flat_map(|category| {
                 ntdb_l2::classifier_model_configs_for_category(&execution, category)
             })
@@ -991,6 +996,7 @@ impl SecurityGateway {
                 .collect::<Vec<_>>(),
         };
         if self.categories.contains(&SecurityCategory::DynamicPii)
+            && self.allows_l3_category(SecurityCategory::DynamicPii)
             && execution.allows_level(SecurityLevel::L3)
             && execution.gates().allows_model(DYNAMIC_PII_ASSET.spec.id)
         {
@@ -1247,7 +1253,11 @@ impl SecurityGateway {
                 configs
                     .iter()
                     .find(|config| config.model_id == decision.model_id)
-                    .map(|config| ntdb_l2_scan_result(*config, decision, execution, duration_ms))
+                    .map(|config| {
+                        let mut config = *config;
+                        config.has_l3 &= self.allows_l3_category(config.category);
+                        ntdb_l2_scan_result(config, decision, execution, duration_ms)
+                    })
             })
             .collect::<Vec<_>>();
         // As in the queue: an L2 result without a pending L3 is final.
@@ -1282,7 +1292,7 @@ impl SecurityGateway {
                 category: config.category,
                 model_id: config.model_id.to_string(),
                 public_model: config.public_model.to_string(),
-                has_l3: config.has_l3,
+                has_l3: config.has_l3 && self.allows_l3_category(config.category),
             })
             .collect()
     }
@@ -1352,6 +1362,12 @@ impl SecurityGateway {
         let categories = l2_results
             .iter()
             .filter(|result| crate::pipeline::has_l3_pending(result))
+            .filter(|result| {
+                result
+                    .category
+                    .parse()
+                    .is_ok_and(|category| self.allows_l3_category(category))
+            })
             .filter(|result| {
                 patronus_ark_core::cascade::pipeline_allowed(
                     &execution.gates().conditional,
@@ -1427,6 +1443,12 @@ impl SecurityGateway {
             .expect("execution mutex poisoned")
             .clone()
             .with_max_level(self.max_level)
+    }
+
+    fn allows_l3_category(&self, category: SecurityCategory) -> bool {
+        self.l3_categories
+            .as_ref()
+            .is_none_or(|categories| categories.contains(&category))
     }
 
     /// Whether the shell command model is configured and allowed by the gates.

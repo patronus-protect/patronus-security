@@ -54,6 +54,9 @@ impl SecurityGateway {
     ) -> Vec<SecurityScanResult> {
         let mut results = Vec::new();
         for input in inputs {
+            if !self.allows_l3_category(input.category) {
+                continue;
+            }
             let configs = direct_l3_configs(execution, metadata, gate_results, input.category);
             if configs.is_empty() {
                 continue;

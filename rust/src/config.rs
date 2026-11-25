@@ -30,6 +30,9 @@ pub struct GatewayConfig {
     pub core: ScannerConfig,
     /// Physical L3 classifier topology: `dedicated` (default) or `multi`.
     pub l3_strategy: L3Strategy,
+    /// Categories permitted to load and run L3. Unset preserves all configured
+    /// categories; L1 and NTDB L2 remain available for excluded categories.
+    pub l3_categories: Option<Vec<SecurityCategory>>,
     /// Calibrated NTDB operating point. Default: `best_promote`.
     pub ntdb_operating_point: NtdbOperatingPoint,
     /// Calibrated NTDB final-decision threshold set. Default: `best_f1`.
@@ -50,6 +53,7 @@ impl Default for GatewayConfig {
         Self {
             core: ScannerConfig::default(),
             l3_strategy: L3Strategy::default(),
+            l3_categories: None,
             ntdb_operating_point: NtdbOperatingPoint::default(),
             ntdb_decision_threshold_point: NtdbOperatingPoint::BestF1,
             onnx_batch_mode: None,
@@ -92,6 +96,22 @@ impl GatewayConfig {
             .find_map(|(i, c)| categories[..i].contains(c).then_some(c))
         {
             return Err(format!("duplicate category {}", category.as_str()));
+        }
+        if let Some(l3_categories) = &self.l3_categories {
+            for (index, category) in l3_categories.iter().enumerate() {
+                if !categories.contains(category) {
+                    return Err(format!(
+                        "l3_categories contains unconfigured category {}",
+                        category.as_str()
+                    ));
+                }
+                if l3_categories[..index].contains(category) {
+                    return Err(format!(
+                        "duplicate l3_categories entry {}",
+                        category.as_str()
+                    ));
+                }
+            }
         }
         if self.core.max_input_bytes == Some(0) || self.core.max_findings == Some(0) {
             return Err("max_input_bytes and max_findings must be positive when set".into());
@@ -280,6 +300,29 @@ mod tests {
         let config = parse(serde_json::json!({"wolf": {"threshold": 0.7}})).unwrap();
         config.validate().unwrap();
         assert_eq!(config.core.wolf.unwrap().threshold, Some(0.7));
+    }
+
+    #[test]
+    fn l3_categories_keep_l2_categories_and_validate_membership() {
+        let config = parse(serde_json::json!({
+            "categories": ["injection", "tool_class", "dynamic-pii"],
+            "l3_categories": ["injection", "dynamic-pii"]
+        }))
+        .unwrap();
+        config.validate().unwrap();
+        assert_eq!(config.l3_categories.unwrap().len(), 2);
+
+        for l3_categories in [
+            serde_json::json!(["injection", "injection"]),
+            serde_json::json!(["injection", "pii"]),
+        ] {
+            let config = parse(serde_json::json!({
+                "categories": ["injection", "tool_class"],
+                "l3_categories": l3_categories,
+            }))
+            .unwrap();
+            assert!(config.validate().is_err());
+        }
     }
 
     #[test]

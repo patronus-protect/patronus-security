@@ -140,9 +140,10 @@ impl SecurityGateway {
                 .gates()
                 .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
             && self.categories.iter().copied().any(|category| {
-                super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
-                    .iter()
-                    .any(|config| config.has_l3)
+                self.allows_l3_category(category)
+                    && super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
+                        .iter()
+                        .any(|config| config.has_l3)
             })
         {
             let bundle_dir = assets::UNIFIED_L3_ASSET.spec.cache_dir(&base_dir);
@@ -157,6 +158,7 @@ impl SecurityGateway {
         }
 
         if self.categories.contains(&SecurityCategory::DynamicPii)
+            && self.allows_l3_category(SecurityCategory::DynamicPii)
             && self.max_level >= SecurityLevel::L3
             && self.scan_execution().allows_level(SecurityLevel::L3)
             && self
@@ -218,9 +220,10 @@ impl SecurityGateway {
             .gates()
             .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL);
         let unified_category_has_l3 = self.categories.iter().copied().any(|category| {
-            super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
-                .iter()
-                .any(|config| config.has_l3)
+            self.allows_l3_category(category)
+                && super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
+                    .iter()
+                    .any(|config| config.has_l3)
         });
         log::debug!(
             "checked unified L3 asset preparation state; base_dir={}; allow_download={}; strategy_multi={}; l3_allowed={}; unified_model_allowed={}; category_has_l3={}",
@@ -243,6 +246,7 @@ impl SecurityGateway {
                     .iter()
                     .copied()
                     .filter(|category| category.is_unified_classifier())
+                    .filter(|category| self.allows_l3_category(*category))
                     .any(|category| self.should_download_assets_for(category));
             // Runtime startup and readiness checks only consume prepared files.
             // Converting the source tokenizer and weights belongs to delivery.
@@ -286,7 +290,8 @@ impl SecurityGateway {
                 continue;
             }
             if *category == SecurityCategory::DynamicPii {
-                if self.max_level < SecurityLevel::L3
+                if !self.allows_l3_category(*category)
+                    || self.max_level < SecurityLevel::L3
                     || !execution.allows_level(SecurityLevel::L3)
                     || !execution
                         .gates()
@@ -328,6 +333,7 @@ impl SecurityGateway {
             };
             let configs = if execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
+                && self.allows_l3_category(*category)
             {
                 super::ntdb_l2::classifier_model_configs_for_category(&execution, *category)
             } else {
@@ -391,6 +397,7 @@ impl SecurityGateway {
 
             if execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
+                && self.allows_l3_category(*category)
             {
                 let download = allow_download && self.should_download_assets_for(*category);
                 if *category == SecurityCategory::Injection {
@@ -438,20 +445,25 @@ impl SecurityGateway {
                 .gates()
                 .allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
                 && self.categories.iter().copied().any(|category| {
-                    super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
+                    self.allows_l3_category(category)
+                        && super::ntdb_l2::classifier_model_configs_for_category(
+                            &execution, category,
+                        )
                         .iter()
                         .any(|config| config.has_l3)
                 })
         } else {
             self.categories.iter().copied().any(|category| {
-                super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
-                    .iter()
-                    .any(|config| config.has_l3)
+                self.allows_l3_category(category)
+                    && super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
+                        .iter()
+                        .any(|config| config.has_l3)
             })
         };
         let l3_configured = execution.allows_level(SecurityLevel::L3)
             && (classifier_l3
                 || (self.categories.contains(&SecurityCategory::DynamicPii)
+                    && self.allows_l3_category(SecurityCategory::DynamicPii)
                     && execution
                         .gates()
                         .allows_model(assets::DYNAMIC_PII_ASSET.spec.id)));
@@ -492,7 +504,10 @@ impl SecurityGateway {
         category_dir: &Path,
         manifest: &PackageManifest,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if !config.has_l3 || self.max_level < SecurityLevel::L3 {
+        if !config.has_l3
+            || self.max_level < SecurityLevel::L3
+            || !self.allows_l3_category(config.category)
+        {
             return Ok(());
         }
         if self.scan_execution().l3_strategy() == L3Strategy::Multi {
