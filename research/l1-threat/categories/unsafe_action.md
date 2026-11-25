@@ -531,7 +531,6 @@ Kandidatin lizenzprüfen (nur MIT/Apache/CC-BY, nicht aus den Holdout-Quellen) u
 
 Latenz (Release, `threat_cascade` alle elf Klassen, 4 × 100 KiB deutsche Benign-Prosa aus Dev (GermanQuAD,
 MASSIVE), je 8 Samples × 3, Basis 4d4c2b0c gegen Head, je zwei Läufe): p50 152,8 / 152,8 → 153,5 / 156,4 ms
-(+0,5 % bis +2,4 %), p95 194,3 / 181,3 → 189,8 / 227,2 ms (Streuung der Sandbox; drei weitere Head-Läufe 195,0,
-196,9, 195,0). Die fünf Regeln haben Literal-Anker (`nopasswd`, `history`/`histfile`/`/var/log`, `curl`/`wget`/
-`download`, `prod`/`production`/`live`, `rmtree`/`rm`/`/home`); auf Prosa ohne diese Anker läuft kein Regex.
+(+0,5 % bis +2,4 %), p95 194,3 / 181,3 → 189,8 / 227,2 ms (Streuung der Sandbox; drei weitere Head-Läufe 196,9,
+195,7, 195,0). Die fünf Regeln laufen hinter dem aus ihrem Regex abgeleiteten Anker-Gate wie alle Punkte-Regeln.
 Das E03-Korpus (`scripts/l1_threat/latency.py`) fehlt in der Sandbox.
