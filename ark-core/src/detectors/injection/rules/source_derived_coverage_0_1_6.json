@@ -1130,7 +1130,7 @@
       "source": "ark-source-derived",
       "source_revision": "0.1.20",
       "description": "German: a TODO line outside a code comment that hands the agent an action with a foreign target",
-      "adaptation": "DE upper-case 'TODO:' at a line start, after a sentence end or as a quoted YAML/dict value, followed by a du-imperative (sag, schick, überweise, poste, besuche, lösche, ändere, buche ...) and a target: an IBAN, e-mail address, URL, 'der Nutzer', 'mir/mein' or 'ich sollte'. TODO comments behind '#', '//' or '*' and quoted test data stay unmatched.",
+      "adaptation": "DE upper-case 'TODO:' at a line start, after a sentence end or as a quoted YAML/dict value, followed by a du-imperative (sag, schick, überweise, poste, besuche, lösche, ändere, buche ...) and a target: an IBAN, e-mail address, URL, 'der Nutzer', 'mir/mein', 'ich sollte' or 'dass ich'. TODO comments behind '#', '//' or '*' and quoted test data stay unmatched.",
       "pattern": "(?:^|\\n|\\\\n|[.!?%)>|]|:[ \\t]*[\\\"'“‘])[ \\t]*(?-i:TODO)\\s*:\\s*(?:bitte\\s+)?(?:sag|sage|erzähl|schreib|schreibe|schick|schicke|sende|überweise|ueberweise|leite|poste|lade|besuche|lösche|loesche|ändere|aendere|buche|reserviere|erstelle|teile|hol|hole|gib|empfiehl|füge|fuege|entferne|setze)\\b(?:[^\\n]|\\n[ \\t]+){0,200}?(?:\\bder\\s+nutzer\\b|\\bdes\\s+nutzers\\b|\\bdem\\s+nutzer\\b|\\bmir\\b|\\bmein\\w*\\b|\\bich\\s+(?:sollte|soll|muss)\\b|\\bdass\\s+ich\\b|\\bwww\\.|https?://|[\\w.+-]+@[\\w-]+\\.\\w|\\b[A-Z]{2}\\d{2}[A-Z0-9]{10,30}\\b|\\bdas\\s+konto\\b|\\bdie\\s+(?:website|webseite|seite)\\b)",
       "required_literals_any": [
         "todo"
