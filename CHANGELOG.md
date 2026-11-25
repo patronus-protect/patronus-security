@@ -15,7 +15,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   endpoint through `PATRONUS_WOLF_TRITON_URL`. Worker startup verifies model readiness and
   real logits; malformed or unavailable remote inference fails the scan instead of silently
   switching to local CPU. The IONOS worker image excludes Wolf model weights and requires
-  the remote URL; library users can still run Wolf locally with their own assets.
+  the remote URL; library users can still run Wolf locally with their own assets. Remote
+  workers register Wolf from its tokenizer metadata without requiring a local ONNX graph.
 - Ark dedicated dynamic PII L3 can run its pinned GLiNER small v2.5 graph on
   the same private L4 Triton service through `PATRONUS_GLINER_TRITON_URL`.
   IONOS workers retain span preparation and decoding but no GLiNER model weights.
