@@ -103,6 +103,7 @@ impl LazyOnnxTextClassifier {
         max_len: usize,
         model_sha: Option<String>,
     ) -> Result<Option<Self>, Box<dyn std::error::Error>> {
+        let model_name = model_name.into();
         let dir = dir.as_ref();
         let tokenizer_file = dir.join(tokenizer_path);
         let compact_tokenizer_file = tokenizer_file.with_extension("mmbpe");
@@ -114,14 +115,16 @@ impl LazyOnnxTextClassifier {
             .iter()
             .map(|candidate| dir.join(candidate))
             .any(|candidate| candidate.exists());
-        if !has_model {
+        let remote_wolf = model_name == crate::assets::WOLF_PIPELINE_MODEL
+            && std::env::var("PATRONUS_WOLF_TRITON_URL").is_ok_and(|url| !url.is_empty());
+        if !has_model && !remote_wolf {
             return Ok(None);
         }
 
         Ok(Some(LazyOnnxTextClassifier {
             dir: dir.to_path_buf(),
             class_names,
-            model_name: model_name.into(),
+            model_name,
             model_sha,
             onnx_candidates: onnx_candidates
                 .iter()
@@ -467,6 +470,60 @@ mod tests {
     use super::{l3_ttl_from_value, LazyOnnxTextClassifier};
     use crate::{ExecutionBackend, OnnxRuntimeOptions};
     use std::time::Duration;
+
+    #[test]
+    fn remote_wolf_registration_accepts_metadata_without_a_local_graph() {
+        let dir = fake_lazy_onnx_dir("remote-wolf-registration");
+        std::fs::remove_file(dir.join("onnx/model.onnx")).unwrap();
+
+        if std::env::var_os("PATRONUS_TEST_REMOTE_WOLF_REGISTRATION").is_some() {
+            assert!(LazyOnnxTextClassifier::from_dir_with_paths(
+                &dir,
+                vec!["benign".into(), "attack".into()],
+                crate::assets::WOLF_PIPELINE_MODEL,
+                &["onnx/model.onnx"],
+                "tokenizer.json",
+                256,
+            )
+            .unwrap()
+            .is_some());
+            assert!(LazyOnnxTextClassifier::from_dir_with_paths(
+                &dir,
+                vec!["benign".into(), "attack".into()],
+                "another-l3-model",
+                &["onnx/model.onnx"],
+                "tokenizer.json",
+                256,
+            )
+            .unwrap()
+            .is_none());
+            std::fs::remove_dir_all(dir).unwrap();
+            return;
+        }
+
+        assert!(LazyOnnxTextClassifier::from_dir_with_paths(
+            &dir,
+            vec!["benign".into(), "attack".into()],
+            crate::assets::WOLF_PIPELINE_MODEL,
+            &["onnx/model.onnx"],
+            "tokenizer.json",
+            256,
+        )
+        .unwrap()
+        .is_none());
+        std::fs::remove_dir_all(dir).unwrap();
+
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .env("PATRONUS_WOLF_TRITON_URL", "http://wolf-worker.test")
+            .env("PATRONUS_TEST_REMOTE_WOLF_REGISTRATION", "1")
+            .args([
+                "--exact",
+                "ml::onnx::tests::remote_wolf_registration_accepts_metadata_without_a_local_graph",
+            ])
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
 
     #[test]
     fn l3_ttl_supports_resident_sessions_and_preserves_fallbacks() {

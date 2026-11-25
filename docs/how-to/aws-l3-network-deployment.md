@@ -24,11 +24,15 @@ Set the remote origin on worker processes only:
 ```sh
 PATRONUS_UNIFIED_TRITON_URL=http://<triton-wireguard-address>:8090
 PATRONUS_UNIFIED_TRITON_TIMEOUT_MS=1000
+PATRONUS_WOLF_TRITON_URL=http://<triton-wireguard-address>:8090
+PATRONUS_GLINER_TRITON_URL=http://<triton-wireguard-address>:8090
 ```
 
 The URL must be an HTTP(S) origin without credentials, a path, query, or
-fragment. Unsetting it and restarting a worker restores local Unified inference.
-Keep local model assets available for validation and rollback.
+fragment. The IONOS worker image contains Wolf and GLiNER tokenizer metadata
+but no L3 model weights. Its Compose deployment requires both remote URLs. Workers attach to
+the preconfigured `ark-l3-egress` bridge; its firewall permits only TCP 8090 to
+the GPU WireGuard address and rejects other forwarded traffic.
 
 ## Validation
 
@@ -44,7 +48,7 @@ each promoted property receives its own L3 result and L2 arbitration context.
 
 ## Rollback
 
-Remove the worker image and remote-URL overrides, then recreate workers
-incrementally and wait for readiness. Remove the dedicated egress network and
-WireGuard configuration only after no worker depends on the remote service.
-Preserve unrelated deployment changes made after the rollout.
+Restore the previous worker image and configuration incrementally if the new
+Triton route fails. The previous image contains local Wolf weights; the new
+image cannot use local Wolf. Keep the egress bridge and WireGuard route until
+no worker depends on the remote service.

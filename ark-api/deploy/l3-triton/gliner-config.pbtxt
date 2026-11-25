@@ -1,0 +1,5 @@
+name: "gliner_small_6cfcbd93d7fc6f5e1658f80afa38f73891b91693_fp16"
+platform: "onnxruntime_onnx"
+max_batch_size: 0
+version_policy { specific { versions: [1] } }
+instance_group [{ count: 1 kind: KIND_GPU gpus: [0] }]

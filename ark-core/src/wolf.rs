@@ -7,6 +7,8 @@ mod assets;
 mod inference;
 mod models;
 mod published;
+#[cfg(feature = "wolf-triton")]
+mod remote;
 #[cfg(test)]
 mod tests;
 mod windows;
@@ -131,8 +133,14 @@ struct WolfSession {
     execution_provider: String,
 }
 
+enum WolfBackend {
+    Local(Arc<WolfSession>),
+    #[cfg(feature = "wolf-triton")]
+    Triton(remote::RemoteWolf),
+}
+
 pub struct WolfRunner {
-    session: Arc<WolfSession>,
+    backend: WolfBackend,
     tokenizer: Arc<MmbertPairTokenizer>,
     manifest: WolfManifest,
     threshold: f64,
@@ -160,9 +168,21 @@ impl WolfRunner {
         let bundle_dir = config.dir(None)?;
         let published = Published::read(&bundle_dir)?;
         let windows = options.resolve(published.window_tokens, published.overlap_tokens)?;
+        #[cfg(feature = "wolf-triton")]
+        let remote_configured =
+            std::env::var("PATRONUS_WOLF_TRITON_URL").is_ok_and(|value| !value.is_empty());
+        #[cfg(not(feature = "wolf-triton"))]
+        let remote_configured = false;
+        #[cfg(feature = "wolf-triton")]
+        let manifest = if remote_configured {
+            assets::remote_asset_manifest_at(&bundle_dir, config.model, config.precision)?
+        } else {
+            asset_manifest_at(&bundle_dir, config.model, config.precision)?
+        };
+        #[cfg(not(feature = "wolf-triton"))]
         let manifest = asset_manifest_at(&bundle_dir, config.model, config.precision)?;
         let optional_integrity = !manifest.model.blake3.is_empty();
-        let model = if optional_integrity {
+        let model = if optional_integrity && !remote_configured {
             verified_file(&bundle_dir, &manifest.model)?
         } else {
             bundle_dir.join(&manifest.model.path)
@@ -175,38 +195,53 @@ impl WolfRunner {
         let tokenizer = crate::ml::tokenizer_store::global_tokenizer_store()
             .load_mmbert(&tokenizer_path)
             .map_err(asset)?;
-        // Preserve Ark's process-wide environment policy. Wolf alone owns a
-        // session pool so its configured thread budget is honored even when
-        // the host already initialized a global pool.
-        crate::onnx::warmup_runtime();
-        let key = format!("{}|{:?}|{:?}", model.display(), backend, runtime_options);
-        let session = crate::shared_models::shared(&key, || {
-            let (builder, execution_provider) = crate::onnx::configured_session_builder(
-                backend,
-                Some(&bundle_dir),
-                runtime_options,
+        #[cfg(feature = "wolf-triton")]
+        let remote = remote::RemoteWolf::from_env(config, &manifest, windows)?;
+        let local_backend = || -> Result<_, ScanError> {
+            // Preserve Ark's process-wide environment policy for local Wolf.
+            crate::onnx::warmup_runtime();
+            let key = format!("{}|{:?}|{:?}", model.display(), backend, runtime_options);
+            let session = crate::shared_models::shared(&key, || {
+                let (builder, execution_provider) = crate::onnx::configured_session_builder(
+                    backend,
+                    Some(&bundle_dir),
+                    runtime_options,
+                )
+                .map_err(inference)?;
+                let builder = builder.with_independent_thread_pool().map_err(inference)?;
+                Ok::<_, ScanError>(WolfSession {
+                    session: std::sync::Mutex::new(
+                        crate::onnx::commit_session(builder, &model).map_err(inference)?,
+                    ),
+                    execution_provider,
+                })
+            })?;
+            let fixed_width = inference::validate_session(
+                &*session
+                    .session
+                    .lock()
+                    .map_err(|_| inference("Wolf session poisoned"))?,
+                &bundle_dir,
+                windows,
+                &manifest,
+            )?;
+            let execution_provider = session.execution_provider.clone();
+            Ok((WolfBackend::Local(session), fixed_width, execution_provider))
+        };
+        #[cfg(feature = "wolf-triton")]
+        let (backend, fixed_width, execution_provider) = if let Some(remote) = remote {
+            (
+                WolfBackend::Triton(remote),
+                Some(256),
+                "Triton/TensorRT".to_string(),
             )
-            .map_err(inference)?;
-            let builder = builder.with_independent_thread_pool().map_err(inference)?;
-            Ok::<_, ScanError>(WolfSession {
-                session: std::sync::Mutex::new(
-                    crate::onnx::commit_session(builder, &model).map_err(inference)?,
-                ),
-                execution_provider,
-            })
-        })?;
-        let fixed_width = inference::validate_session(
-            &*session
-                .session
-                .lock()
-                .map_err(|_| inference("Wolf session poisoned"))?,
-            &bundle_dir,
-            windows,
-            &manifest,
-        )?;
-        let execution_provider = session.execution_provider.clone();
+        } else {
+            local_backend()?
+        };
+        #[cfg(not(feature = "wolf-triton"))]
+        let (backend, fixed_width, execution_provider) = local_backend()?;
         let mut runner = Self {
-            session,
+            backend,
             tokenizer,
             manifest,
             threshold: config.threshold.unwrap_or(published.threshold),
