@@ -1071,7 +1071,13 @@
         "doesn't",
         "doesn’t"
       ],
-      "required_pattern": "important[\\s\\\\]+message|(?:gave|given|sent|asked)[\\s\\\\]+you"
+      "required_literals_any": [
+        "important message",
+        "gave you",
+        "given you",
+        "sent you",
+        "asked you"
+      ]
     },
     {
       "id": "ark.injection.indirect.user_message_block_de",
@@ -1093,7 +1099,10 @@
         "keine",
         "keinen"
       ],
-      "required_pattern": "wichtige[\\s\\\\]+nachricht|ich[\\s\\\\]+dir"
+      "required_literals_any": [
+        "wichtige nachricht",
+        "ich dir"
+      ]
     },
     {
       "id": "ark.injection.indirect.todo_directive_en",
