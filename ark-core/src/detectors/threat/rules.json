@@ -675,6 +675,66 @@
       }
     },
     {
+      "id": "ark.threat.ua_sudoers_grant",
+      "class_name": "unsafe_action",
+      "family": "privilege_widening",
+      "upstream_groups": [],
+      "pattern": "(?P<grant>(?-u:\\b)nopasswd\\s{0,4}:\\s{0,4}all(?-u:\\b))[^\\n|>]{0,20}?(?P<write>>>|\\|\\s{0,4}(?:sudo\\s{1,4})?tee\\s{1,4}(?:-a\\s{1,4})?)\\s{0,4}(?P<target>/etc/sudoers(?:\\.d/[a-z0-9._-]{1,40})?)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_trace_wipe",
+      "class_name": "unsafe_action",
+      "family": "destructive_request",
+      "upstream_groups": [],
+      "pattern": "(?P<logs>(?:(?-u:\\b)truncate\\s{1,4}-s\\s{0,4}0\\s{1,4}|(?-u:\\b)rm\\s{1,4}-[a-z]{1,4}\\s{1,4}|(?-u:\\b)shred\\s{1,4}(?:-[a-z]{1,4}\\s{1,4}){0,3})/var/log/[a-z0-9._/-]{1,120})[^\\n]{0,300}?(?P<history>(?:(?-u:\\b)history\\s{1,4}-c(?-u:\\b)|(?-u:\\b)shred\\s{1,4}(?:-[a-z]{1,4}\\s{1,4}){0,3}[a-z0-9~._/-]{0,80}_history(?-u:\\b)|(?-u:\\b)unset\\s{1,4}histfile(?-u:\\b)))|(?P<history_first>(?:(?-u:\\b)history\\s{1,4}-c(?-u:\\b)|(?-u:\\b)shred\\s{1,4}(?:-[a-z]{1,4}\\s{1,4}){0,3}[a-z0-9~._/-]{0,80}_history(?-u:\\b)|(?-u:\\b)unset\\s{1,4}histfile(?-u:\\b)))[^\\n]{0,300}?(?P<logs_after>(?:(?-u:\\b)truncate\\s{1,4}-s\\s{0,4}0\\s{1,4}|(?-u:\\b)rm\\s{1,4}-[a-z]{1,4}\\s{1,4}|(?-u:\\b)shred\\s{1,4}(?:-[a-z]{1,4}\\s{1,4}){0,3})/var/log/[a-z0-9._/-]{1,120})",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_remote_script_ip",
+      "class_name": "unsafe_action",
+      "family": "fetch_and_run",
+      "upstream_groups": [],
+      "pattern": "(?P<fetch>(?-u:\\b)(?:curl|wget|download|iwr|invoke-webrequest)(?-u:\\b))(?:[^\\n]|\\n[ \\t]{0,8}(?:args|url|source)\\s{0,2}:){0,120}?(?P<url>https?://[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}(?::[0-9]{1,5})?/[a-z0-9._/-]{0,200}?\\.(?:sh|bash|ps1)(?-u:\\b))",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_prod_destructive_sql",
+      "class_name": "unsafe_action",
+      "family": "destructive_request",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)(?:drop\\s{1,4}(?:table|schema|database)|truncate(?:\\s{1,4}table)?|delete\\s{1,4}from)(?-u:\\b))\\s{1,4}(?:if\\s{1,4}exists\\s{1,4})?[\\x22`]?(?P<target>(?-u:\\b)(?:prod|production|live)(?:_[a-z0-9]{1,20})?[\\x22`]?\\.[\\x22`]?[a-z_][a-z0-9_]{0,63})",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.ua_home_dir_delete",
+      "class_name": "unsafe_action",
+      "family": "destructive_request",
+      "upstream_groups": [],
+      "pattern": "(?P<action>(?-u:\\b)rmtree\\s{0,2}\\(|(?-u:\\b)rm\\s{1,4}-[a-z]{0,3}r[a-z]{0,3}\\s{1,4}(?:--\\s{1,4})?|(?-u:\\b)remove-item\\s{1,4}-recurse\\s{1,4}(?:-force\\s{1,4})?)\\s{0,2}['\\x22]?(?P<target>/home/[a-z_][a-z0-9._-]{0,31}|/users/[a-z0-9._-]{1,32}|~|\\$home)/?['\\x22]?(?:[\\s,);&|]|$)",
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false
+      }
+    },
+    {
       "id": "ark.threat.tp_sensitive_file_param",
       "class_name": "tool_poisoning",
       "family": "sensitive_file_param",
