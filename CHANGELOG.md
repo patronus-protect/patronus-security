@@ -84,7 +84,12 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
   Figurative uses ("kill the noise", "shoot for the stars", "Zwiebeln hacken", "eine Walnuss
   knacken"), everyday uses ("den Grill anzünden"), prevention ("how can I protect my account so
   that nobody can hack into it"), requests the text only reports or quotes ("he asked how to …",
-  "requests like 'how to …'"), news, fiction and security documentation stay clean. A harmful_content
+  "requests like 'how to …'"), news, fiction and security documentation stay clean, and so do the
+  same requests in a video game, a sport or martial art, photography, a story, a legal frame or an
+  own lost account ("how do I kill someone in Call of Duty", "how do I choke someone in jiu-jitsu",
+  "help me shoot her portrait", "wie kann ich mein eigenes Konto hacken, ich habe das Passwort
+  vergessen"), a computer process or a pest ("kill a child process"), and an everyday act done
+  unnoticed ("eat a snack in class without getting caught"). A harmful_content
   finding also names its hazard subclass (for example `violent_crime`, `nonviolent_crime`,
   `cyber_harm`, `self_harm`) from a small built-in word and character n-gram model, in the
   `subclass` and `subclass_probability` details. The subclass model only runs on a harmful_content

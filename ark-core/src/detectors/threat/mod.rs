@@ -1031,7 +1031,11 @@ fn points_rule_holds(rule_id: &str, text: &str, start: usize, end: usize) -> boo
         }
         id if id.starts_with("ark.threat.ac_") => !removed_diff_line(text, start),
         "ark.threat.ex_code_snippet_sink" => code_snippet_holds(text, start, end),
-        id if id.starts_with("ark.threat.hc_") => !reported_request(text, start),
+        id if id.starts_with("ark.threat.hc_") => {
+            !reported_request(text, start)
+                && !benign_request_context(text, start, end)
+                && (id != "ark.threat.hc_evasion" || evasion_names_a_crime(text, start, end))
+        }
         _ => true,
     }
 }
@@ -1124,6 +1128,103 @@ fn code_snippet_holds(text: &str, start: usize, end: usize) -> bool {
             .iter()
             .any(|word| clause_lower.contains(word) || block_lower.contains(word))
         && SOURCES.iter().any(|source| block_lower.contains(source))
+}
+
+/// The byte offset of the sentence end at or after `from`, at most 160 bytes on.
+fn sentence_end(text: &str, from: usize) -> usize {
+    let mut limit = (from + 160).min(text.len());
+    while !text.is_char_boundary(limit) {
+        limit -= 1;
+    }
+    text[from..limit]
+        .find(['.', '!', '?', '\n'])
+        .map_or(limit, |offset| from + offset)
+}
+
+/// A harmful content request inside a video game, a sport, photography,
+/// fiction, an own lost access, a legal frame, a computer process, a pest or a
+/// defensive aim, named in the request's sentence or the next, is no request
+/// for harm.
+fn benign_request_context(text: &str, start: usize, end: usize) -> bool {
+    static CONTEXT: OnceLock<Regex> = OnceLock::new();
+    let context = CONTEXT.get_or_init(|| {
+        Regex::new(concat!(
+            "(?i)",
+            r"\b(?:",
+            r#"video ?games?|computer ?games?|board ?games?|in-?game|gaming|gameplay|"#,
+            r#"playthrough|multiplayer|npcs?|minecraft|fortnite|skyrim|gta|grand theft auto|"#,
+            r#"call of duty|among us|red dead|witcher|the sims|sims \d|watch dogs|hitman|"#,
+            r#"payday|counter-?strike|cs:?go|valorant|overwatch|pubg|apex legends|"#,
+            r#"assassin'?s creed|elden ring|dark souls|roblox|pok[eé]mon|zelda|mario kart|"#,
+            r#"chess|checkers|poker|monopoly|paintball|airsoft|laser tag|d&d|"#,
+            r#"dungeons (?:&|and) dragons|tabletop|larp|cluedo|"#,
+            r#"(?:in|for) (?:my|a|the|our|this) (?:\w+ )?(?:novel|story|screenplay|book|script|murder mystery|thriller|play|tv show|show|series|episode)|"#,
+            r#"characters?|fanfic\w*|jiu-?jitsu|bjj|judo|wrestling|mma|boxing|karate|sparring|"#,
+            r#"self[- ]defen[cs]e|martial arts|photography|photographer|portraits?|camera|lens|"#,
+            r#"photoshoot|low light|legally|lawfully|ethically|legitimately|"#,
+            r#"locked (?:myself |the keys |my keys )?(?:out|inside|in)|lost access|"#,
+            r#"forgot (?:my |the )?password|prescribed|with (?:a|my) prescription|verschrieben|leftover|no longer need|weeds|weeding|"#,
+            r#"pests?|insects?|cockroach\w*|mosquito\w*|aphids|fleas|feelings|legal|"#,
+            r#"rechtmäßig\w*|(?:my|our) own|eigene[mnrs]?|"#,
+            r#"(?:child|zombie|background|linux|unix|running) process(?:es)?|processes|linux|"#,
+            r#"unix|terminal|pid|bomb (?:shelters?|cocktails?|shots?|drinks?)|"#,
+            r#"fallout shelters?|bath bombs?|photo ?bomb\w*|water ?guns?|nerf|squirt guns?|"#,
+            r#"dead (?:pet|bird|fish|hamster|animal)|forgot\w*|vergessen|inherited|geerbt|"#,
+            r#"paperwork|anti-?money|compliance|aml|"#,
+            r#"protect(?:ion|ing)? (?:my|our|your|against|from)|prevent\w*|schütz\w*|"#,
+            r#"verhinder\w*|"#,
+            r#"(?:in|im|beim) (?:baseball|basketball|football|soccer|hockey|fußball|handball|volleyball|rugby)|"#,
+            r#"minutes|hours|prozess\w*|tv shows?|tv series|netflix|episodes?|"#,
+            r#"(?:computer|video|brett|karten)?spiel\w*|schach|"#,
+            r#"(?:in|für) (?:meine[mnr]?|eine[mnr]?|de[mnr]|die) (?:\w+ )?(?:krimi|roman|geschichte|drehbuch|film|serie|buch)|"#,
+            r#"figur(?:en)?|selbstverteidigung|kampfsport|ausgesperrt|unkraut|schädling\w*|"#,
+            r#"fotograf\w*|kamera"#,
+            r")\b",
+        ))
+        .unwrap()
+    });
+    let mut from = start.saturating_sub(150);
+    while !text.is_char_boundary(from) {
+        from += 1;
+    }
+    from = text[from..start]
+        .rfind(['.', '!', '?', '\n'])
+        .map_or(from, |offset| from + offset + 1);
+    let first_end = sentence_end(text, end);
+    let to = sentence_end(text, (first_end + 1).min(text.len()));
+    context.is_match(&text[from..to])
+}
+
+/// An evasion request names a crime in its sentence: "without getting caught"
+/// around an everyday act is no harmful request. "get away with" names its
+/// act and stands on its own.
+fn evasion_names_a_crime(text: &str, start: usize, end: usize) -> bool {
+    static CRIME: OnceLock<Regex> = OnceLock::new();
+    let crime = CRIME.get_or_init(|| {
+        Regex::new(concat!(
+            "(?i)get away with|",
+            r"\b(?:",
+            r#"strangl\w*|suffocat\w*|chok\w*|stab\w*|shoot\w*|tortur\w*|mug\w*|drown\w*|"#,
+            r#"run over|blackmail\w*|extort\w*|burn\w* down|evade|evasion|money|cash|till|"#,
+            r#"register|wallets?|purses?|drugs?|weed|marijuana|cocaine|meth|heroin|pills|"#,
+            r#"weapons?|guns?|knife|knives|bombs?|explosives?|dump\w*|pollut\w*|contaminat\w*|"#,
+            r#"toxic|waste|poach\w*|graffiti|vandal\w*|brib\w*|tax(?:es)?|drunk|underage|"#,
+            r#"steal\w*|stole\w*|theft|shoplift\w*|fraud\w*|fake|forg\w*|counterfeit|body|"#,
+            r#"corpse|poison\w*|kill\w*|murder\w*|hurt\w*|beat\w*|abus\w*|rap(?:e|ing)|"#,
+            r#"assault\w*|sell\w*|deal\w*|smuggl\w*|traffick\w*|organs|prostitut\w*|porn\w*|"#,
+            r#"nudes?|naked|candid|spy\w*|stalk\w*|hack\w*|break(?:ing)? into|trespass\w*|"#,
+            r#"arson|crime\w*|criminal|illegal\w*|launder\w*|embezzl\w*|kidnap\w*|rob\w*|"#,
+            r#"fight\w*|\w*geld|\w*kasse|\w*drogen|gras|kokain|\w*waffen?|pistole|messer|"#,
+            r#"\w*bomben?|\w*müll|altöl|\w*gift\w*|entsorg\w*|\w*steuer\w*|betrunken|"#,
+            r#"minderjährig\w*|stiehlt|stehl\w*|klau\w*|gestohlen|\w*diebstahl|\w*betrug|"#,
+            r#"betrüg\w*|\w*fälsch\w*|leiche|töt\w*|schlag\w*|verletz\w*|verkauf\w*|"#,
+            r#"schmuggel\w*|nackt\w*|\w*porno\w*|einbr\w*|hack\w*|luft|verschmutz\w*|"#,
+            r#"schwarz\w*|illegal\w*|straftat\w*|\w*kämpf\w*|\w*kampf"#,
+            r")\b",
+        ))
+        .unwrap()
+    });
+    crime.is_match(&text[start..sentence_end(text, end)])
 }
 
 /// A harmful content request the text reports or quotes ("he asked how to
