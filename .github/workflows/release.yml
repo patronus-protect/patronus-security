@@ -261,18 +261,14 @@ jobs:
   # Core is a separate PyPI project; its trusted publisher is this workflow with `release`.
   publish-core-python:
     name: Publish Core Python package
+    # PyPI trusts core-python.yml for patronus-ark-core, and only as a started workflow: a job here
+    # got 403 (0.1.18). Start it on this tag with publish; it rebuilds, tests and uploads.
     needs: [core-python, publish-crate]
     runs-on: ubuntu-latest
     if: inputs.channel == 'production'
-    environment: release
     permissions:
-      id-token: write
+      actions: write
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: core-python-*
-          path: dist
-          merge-multiple: true
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          skip-existing: true  # a repeated run publishes only what is missing
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run core-python.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f publish=true
