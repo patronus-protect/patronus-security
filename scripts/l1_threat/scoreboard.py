@@ -1216,7 +1216,8 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
             for fpr in FPRS:
                 cut = mix_cut(calibration_neg.tolist(), fpr)
                 hit = values >= cut
-                entry: dict[str, Any] = {"cut": cut}
+                # Unreachable: more calibration negatives than the budget share the system's top score.
+                entry: dict[str, Any] = {"cut": cut, "reachable": bool(cut <= values.max())}
                 for name in ("calibration", "measurement", "report"):
                     scope = in_language & (part == name)
                     pos, neg, hb = scope & positive, scope & negative, scope & negative & hard
@@ -1285,9 +1286,13 @@ FAIR_SYSTEMS = (("rules", "rules only"), ("l1_model", "L1 model"), ("cascade", "
                 ("prompt_guard_2", "Prompt Guard 2"), ("heuristic", "best heuristic"))
 
 
-def _tpr_fpr(part: dict[str, Any]) -> str:
-    """``TPR / FPR`` in percent; the FPR with two decimals, so 0.1 % budgets stay readable."""
-    return f"{_pct(part['tpr'])} / {'–' if part['fpr'] is None else f'{part["fpr"] * 100:.2f}'}"
+def _tpr_fpr(part: dict[str, Any], reachable: bool = True) -> str:
+    """``TPR / FPR`` in percent; the FPR with two decimals, so 0.1 % budgets stay readable; ``n/r`` when the budget
+    is not reachable."""
+    if not reachable:
+        return "n/r"
+    fpr = "–" if part["fpr"] is None else f"{part['fpr'] * 100:.2f}"
+    return f"{_pct(part['tpr'])} / {fpr}"
 
 
 def fair_lines(report: dict[str, Any], fpr: str, systems: Iterable[str]) -> list[str]:
@@ -1314,7 +1319,7 @@ def fair_lines(report: dict[str, Any], fpr: str, systems: Iterable[str]) -> list
                         continue
                     p = cell[fpr][part]
                     picked = f" ({cell['system']})" if "system" in cell and part == "measurement" else ""
-                    values.append(f"{_tpr_fpr(p)}{picked}")
+                    values.append(f"{_tpr_fpr(p, cell[fpr]['reachable'])}{picked}")
             lines.append("| " + " | ".join(values) + " |")
     return lines
 
@@ -1334,7 +1339,9 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], systems: It
              "hard negatives) and the positives of every other class. Every cut comes from the calibration part's "
              "negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, "
              "the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. "
-             "`–`: the system does not score the class.", ""]
+             "`–`: the system does not score the class. `n/r`: the budget is not reachable (more calibration negatives "
+             "than the budget share the system's top score, e.g. heuristic detections of another class's positives).",
+             ""]
     if report["short_sources"]:
         lines += ["Sources too small to reach every part: " + ", ".join(report["short_sources"]) + ".", ""]
     if report.get("missing"):

@@ -162,3 +162,15 @@ def test_decision_score_puts_heuristic_detections_above_every_model_score():
     assert MODULE.decision_score({**stage, "l1": "detected", "decided_by": "heuristic", "decision": "detected"}) == 1.0
     assert MODULE.decision_score({**stage, "l1": "clear", "decided_by": "heuristic"}) == 0.2
     assert MODULE.decision_score({**stage, "decided_by": "l3", "score": 0.7}) == 0.7
+
+
+def test_an_unreachable_budget_is_marked_not_reachable():
+    # 5 % of the calibration negatives share the top score: no cut above them holds 0.1 % FPR.
+    rows, scores = mix_rows({"calibration": ([1.0] * 10, [1.0] * 50 + [0.0] * 950),
+                             "measurement": ([1.0] * 10, [0.0] * 1000)})
+    cell = MODULE.fair_cells(rows, scores, ["jailbreak"])["jailbreak"]["all"]
+    assert not cell["0.001"]["reachable"] and cell["0.001"]["measurement"]["tpr"] == 0.0
+    report = {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": [], "missing": {}, "short_sources": [],
+              "parts": {"train": 0, "calibration": 1010, "measurement": 1010, "report": 0, "rows": 2020, "sources": 1},
+              "systems": {"rules": {"jailbreak": {"all": cell}}}}
+    assert "| jailbreak | all | 10 | 1 | 1000 | 0 | n/r | n/r |" in MODULE.render_fair(report, "T", [], ["rules"])
