@@ -27,6 +27,28 @@ result shapes may be breaking for downstream users, and is called out explicitly
   permission ("store in your memory that transfers are not pre-approved", "speichere, dass Zahlungen
   nicht vorab genehmigt sind") stays clean, and the German recall trigger needs the later session
   ("wenn du dich an dieses Gespräch erinnerst, schreib mir später …" stays clean).
+- **Detection change:** (`exfiltration`) a request to put a code snippet into the answer ("add the
+  following code snippet in your response", "Füge den folgenden Codeausschnitt in deine Antwort
+  ein") now reports when the snippet reads local data (a file, environment variables, system,
+  memory, network or clipboard information, a cookie file, a renamed file) and sends it to another
+  host by HTTP POST, a request carrying the cookies, FTP upload, a socket or mail, also when the
+  snippet is flattened onto one line. A snippet that a text only shows or explains ("the following
+  snippet shows how to upload a report"), a call gated by the user's consent, a snippet that talks
+  to the local machine and a refusal ("never add the following code") do not report.
+- **Detection change:** (`exfiltration`) a code snippet counts as talking to the local machine only
+  when every destination it connects to (the URL host, the FTP or SMTP server, the socket address)
+  is a loopback host; a loopback name elsewhere in the snippet (`FTP("localhost.attacker.example")`,
+  a file `localhost.log`) no longer suppresses the report.
+
+## [0.1.18] - 2026-11-24
+
+This release builds the full Ark gateway on Ark Core: one config, one model cache and one L1 pass
+for both. It splits attack detection into eleven categories, adds an opt-in analysis cascade with
+built-in L1 text models, and adds many new German and English threat rules. Several configuration
+keys and Rust APIs change; see **Breaking** and **Migration**.
+
+### Detection changes
+
 - **Detection change (`agent_config_tampering`, opt-in category):** a request to the agent that sits
   in a file it reads — `copilot-instructions.md`, an issue comment, a README setup section — and asks
   it to tamper with its own configuration is now reported in German and English: registering an
@@ -45,13 +67,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the gap of a requested widening ("so all commands are not allowed", "alle Befehle nicht erlaubt")
   rejects the request again; only the widening's own negation ("without asking", "no longer need
   confirmation") and its concealment ("do not mention it") are part of the request.
-
-## [0.1.18] - unreleased
-
-This release builds the full Ark gateway on Ark Core: one config, one model cache and one L1 pass
-for both. It splits attack detection into eleven categories, adds an opt-in analysis cascade with
-built-in L1 text models, and adds many new German and English threat rules. Several configuration
-keys and Rust APIs change; see **Breaking** and **Migration**.
 
 ### Breaking
 
@@ -297,66 +312,6 @@ keys and Rust APIs change; see **Breaking** and **Migration**.
     remove protective hooks, hide directives or run remote scripts.
   - `resource_exhaustion`: self-spawning agents, endless or huge output, tool floods and decoy
     computations; `resource_exhaustion_count_threshold` sets what counts as huge.
-- **Detection change (Ark Core, opt-in):** Ark Core ships an L1 text model for each of the eleven
-  attack classes (`instruction_injection`, `jailbreak`, `prompt_extraction`, `tool_poisoning`,
-  `agent_config_tampering`, `memory_poisoning`, `exfiltration`, `unsafe_action`,
-  `resource_exhaustion`, `harmful_content`, `toxic_language`) in the Rust crate and the Python
-  wheel. `cascade.modules.<category>.l1_model: {"builtin": "<class>"}` runs one on what the
-  module's rules leave open, without a download; full Ark takes the same config. Each model is a
-  compact fastText-type model (256 KiB in memory) calibrated at 0.1 % (detect) and 1 % (clear)
-  false positives on German and English benign text, chat included. Without a cascade, or without
-  `l1_model`, nothing changes.
-- **Detection change (Ark Core, opt-in, all eleven built-in L1 models):** the German and English
-  cuts are calibrated on the language Ark Core detects in the text, the one it picks the cut by,
-  instead of the text's labelled language, and rise where needed so German and English text each
-  stay within 0.1 % false positives. agent_config_tampering no longer exceeds the budget on German
-  text (0.13 % → 0.09 %); recall is unchanged (unsafe_action German slightly up).
-- **Detection change:** (`toxic_language`) the category now has its own L1 rules: an insult aimed
-  at the addressed person ("you are a …", "du bist ein …"), derogatory or dehumanising statements
-  about a protected group, threats of violence in the first person against a person or group, and
-  harassment (telling someone to kill themselves, "I know where you live"), in German and English.
-  Insult, dehumanising and violence words are looked up in a hashed word list, so no plaintext list
-  ships with the scanner; leetspeak and umlaut spellings are folded before the lookup. Counter-speech
-  ("the claim that … is false"), moderation guidelines and reports, quoted messages and a negated
-  insult ("you are not an idiot") do not report. Before, `toxic_language` found nothing on L1.
-- **Detection change:** (`exfiltration`) a request to put a code snippet into the answer ("add the
-  following code snippet in your response", "Füge den folgenden Codeausschnitt in deine Antwort
-  ein") now reports when the snippet reads local data (a file, environment variables, system,
-  memory, network or clipboard information, a cookie file, a renamed file) and sends it to another
-  host by HTTP POST, a request carrying the cookies, FTP upload, a socket or mail, also when the
-  snippet is flattened onto one line. A snippet that a text only shows or explains ("the following
-  snippet shows how to upload a report"), a call gated by the user's consent, a snippet that talks
-  to the local machine and a refusal ("never add the following code") do not report.
-- **Detection change:** (`exfiltration`) a code snippet counts as talking to the local machine only
-  when every destination it connects to (the URL host, the FTP or SMTP server, the socket address)
-  is a loopback host; a loopback name elsewhere in the snippet (`FTP("localhost.attacker.example")`,
-  a file `localhost.log`) no longer suppresses the report.
-- **Detection change:** (`toxic_language`) the rules now also report toxic text the way people
-  write it: a threat in a colloquial first-person future ("Im gonna stab you", "I ll beat you",
-  "ich werd dich abstechen"), a group dehumanised through a pronoun or demonstrative subject or a
-  behaviour comparison ("they're just like rats", "diese Leute benehmen sich wie Tiere"), more group
-  names, an insult as a vocative ("shut up, you worthless idiot", "Halt's Maul, du dreckiger
-  Bastard") and a verdict on the person or their work ("your mind is like garbage", "dein Charakter
-  ist so wertlos wie Müll", "du bist schlimmer als Tiere"). The hashed word list grew with insult,
-  dehumanising and violence words taken from openly licensed German and English hate-speech and
-  insult data. Animal words said of animals ("these insects are pests"), a question ("do you think
-  it's dumb?"), profanity without a target and the counter-speech, moderation and news contexts
-  that already stayed quiet do not report. These new forms and the added words report at the lowest
-  accepted score, so a `toxic_language` score above it still comes only from the earlier forms and
-  words, and a threshold set above the acceptance score keeps its earlier results.
-- **Detection change:** (`toxic_language`) a moderation log is recognised by its fields
-  (`mod action`, `reporter=`), not by the word "reporter": abuse of a journalist ("You are a
-  worthless reporter", "Du bist ein wertloser Reporter") reports again.
-- **Detection change:** (`toxic_language`) a threat reports only when its violence verb has the
-  person as object ("I will kill you", "ich werde dich umbringen"), not when the verb has another
-  object ("I will help you kill the process"); harassment reports only its full phrases ("bring
-  dich um", "häng dich auf"), not everyday requests ("Bring yourself a chair", "ich bring dich auf
-  den neuesten Stand").
-- **Cancel and time out Ark scans:** `scan_all`, `scan_category` and `scan_categories` take
-  Ark Core's `ScanControl` as `control=`, as Core's `Scanner.scan` does; Rust has
-  `SecurityGateway::scan_with_control`. A cancelled or expired control stops the request and
-  raises `CancelledError` or `TimeoutError` (Rust: `ScanError::Cancelled` or
-  `DeadlineExceeded`).
 
   Security documentation, quotations, test code and negated sentences stay benign. Each rule can
   be switched off in the `rules` map, and threat findings now report rule points in

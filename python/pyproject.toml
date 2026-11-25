@@ -4,11 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "patronus-ark"
-version = "0.1.17"
+version = "0.1.18"
 description = "Python bindings for Patronus Ark's hybrid Rust security scanners."
 readme = "../rust/README.md"
 requires-python = ">=3.11"
-dependencies = ["patronus-ark-core==0.1.17"]
+dependencies = ["patronus-ark-core==0.1.18"]
 keywords = ["security", "prompt-injection", "dlp", "pii"]
 license = "GPL-3.0-only"
 license-files = ["LICENSE", "LICENSE-COMMERCIAL.md", "NOTICE"]
