@@ -35,7 +35,8 @@ those steps.
 2. **Build artifacts** — `PyO3/maturin-action` builds `abi3-py311` wheels for Linux x86_64,
    macOS ARM64 and x86_64, and Windows x86_64, plus a source distribution. Every wheel is installed and
    smoke-tested; the source distribution must rebuild into a wheel. The Core Python package is
-   built and tested by `core-python.yml`, which the Release workflow calls.
+   built and tested by `core-python.yml`, which the Release workflow calls; after the crates,
+   the Release workflow starts `core-python.yml` on the tag with `publish`, which uploads it.
 3. **Publish** — choose one workflow channel:
    - `build` only stores the artifacts;
    - `testpypi` uploads the Python artifacts to TestPyPI;
@@ -89,9 +90,11 @@ it) keeps moving while the release is prepared.
 10. Enable a GitHub Security Advisory draft channel for coordinated disclosure (per
    [`SECURITY.md`](../security.md)).
 
-TestPyPI and PyPI publishing use trusted publishing. Configure the GitHub environments
-`testpypi` and `release` as trusted publishers for `.github/workflows/release.yml`, on both PyPI
-projects (`patronus-ark` and `patronus-ark-core`). crates.io
+TestPyPI and PyPI publishing use trusted publishing with the GitHub environments `testpypi`
+and `release`: `patronus-ark` trusts `.github/workflows/release.yml`, `patronus-ark-core` trusts
+`.github/workflows/core-python.yml`. PyPI accepts only the workflow that was started, not one it
+calls, which is why the Release workflow starts `core-python.yml` instead of uploading Core
+itself. crates.io
 publishing uses the `CARGO_REGISTRY_TOKEN` secret in the `release` environment.
 
 For a local macOS check before dispatching the workflow:

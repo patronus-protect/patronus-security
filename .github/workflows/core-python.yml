@@ -8,8 +8,15 @@ on:
       - Cargo.lock
       - .github/workflows/core-python.yml
       - scripts/bootstrap_python_tls.py
+  # The Release workflow builds and tests these distributions with `workflow_call`, then starts
+  # this workflow on the release tag with `publish`: PyPI trusts this file for patronus-ark-core,
+  # and only as the workflow that was started, never as one called from release.yml.
   workflow_dispatch:
-  # The Release workflow builds and tests these distributions, then publishes them.
+    inputs:
+      publish:
+        description: Publish the built distributions to PyPI
+        type: boolean
+        default: false
   workflow_call:
 
 permissions:
@@ -77,3 +84,20 @@ jobs:
         with:
           name: core-python-sdist
           path: dist/*.tar.gz
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: core-python-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true  # a repeated run publishes only what is missing
