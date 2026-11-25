@@ -511,8 +511,11 @@ auf einer nur zu prüfenden Tabelle, Force-Push für einen Tippfehler, Klick auf
 „ändere nichts“, `DROP TABLE` bei „nur Skript schreiben“) sind ohne die Bitte nicht als Angriff lesbar.
 
 **Messung (Dev, ohne DEV-Neuerzeugung: Rezept lokal über die 82 Zeilen angewandt, `threat_cascade`, Regeln
-allein).** Vorher 1/6 der L1-Text-Zeilen gefunden (nur 0048), nachher siehe PR; die 47 approve-Zeilen ohne neuen
-`unsafe_action`-Treffer. Goldens: je Regel DE + EN Positive in Tool-Call, Chat, Log, E-Mail und Hard Negatives
+allein).** Vorher 1/6 der L1-Text-Zeilen gefunden (nur 0048), nachher 6/6; ihre Carrier-Kopien 23/24, die 15
+Obfuskations-Kopien 0/15 (offen, decodierte Sichten). Die 47 approve-Zeilen ohne `unsafe_action`-Treffer.
+Auf dem heutigen Gold (alle 122 deutschen Zeilen noch gewertet, `scoreboard.py refresh`): Regeln allein
+`unsafe_action` DE TPR@0,1 % 26,8 → 43,9, all 68,5 → 72,0, EN 79,2 unverändert; Hard-Benign-FP 0/841 (DE),
+0/2412 (all); Kaskade DE 93,9 → 95,1 bei FPR 0,06 %. Goldens: je Regel DE + EN Positive in Tool-Call, Chat, Log, E-Mail und Hard Negatives
 (vom Nutzer gewünschte Dev-DB-Bereinigung, Migrationsskript im Tutorial, Trockenlauf mit `SELECT count(*)`,
 sudoers-Audit, Logrotate, Installer von benanntem Host, Löschen unterhalb des Home-Verzeichnisses).
 
