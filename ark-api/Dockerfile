@@ -8,7 +8,7 @@ ARG L3_PRECISION=fp16
 FROM rust:1.98-trixie AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential ca-certificates cmake pkg-config protobuf-compiler libssl-dev wget \
+    build-essential ca-certificates cmake pkg-config protobuf-compiler libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -23,35 +23,16 @@ COPY ark-coordinator ./ark-coordinator
 
 RUN cargo build --locked --release -p ark-api --bins
 
-# ---- asset warmup -----------------------------------------------------------
-# Bakes model assets into the image so the runtime container never needs
-# network access or `pipeline.download: missing` to serve requests.
-FROM builder AS assets
+# ---- assets -----------------------------------------------------------------
+# Reuse the immutable, public production bundle instead of redownloading every
+# L1/L2 model during each build. Remote L3 keeps only its local tokenizers.
+FROM ghcr.io/patronus-protect/ark-api@sha256:65cf4a8b7a48842431d6ef0a6a8d11696fddad5c0683b6d73754ba6318ddf4b7 AS published-assets
 
-ARG L3_PRECISION
-ENV PATRONUS_L3_PRECISION=${L3_PRECISION} \
-    PATRONUS_L3_TTL_SECS=-1
-
-COPY ark-api/config.build.yaml /etc/ark-api/config.yaml
-RUN mkdir -p /data/models /data/cache \
-    && /src/target/release/ark-api --config /etc/ark-api/config.yaml --warmup-only
-
-# Remote L3 inference still tokenizes on the Worker. Fetch only the small,
-# revision-pinned metadata files it loads; no L3 graph is requested or baked.
-RUN wolf_dir=/data/models/wolf/wolf-defender-small \
-    && wolf_url=https://huggingface.co/patronus-studio/wolf-defender-prompt-injection-small/resolve/e3749b44a0f85268347cdfb6818f4ef39e8ff203 \
-    && mkdir -p "${wolf_dir}" \
-    && for file in config.json tokenizer.json tokenizer_config.json POOLING.json; do \
-         wget --https-only --quiet --timeout=120 --tries=3 -O "${wolf_dir}/${file}" "${wolf_url}/${file}"; \
-       done \
-    && printf '%s' e3749b44a0f85268347cdfb6818f4ef39e8ff203 > "${wolf_dir}/.patronus-revision" \
-    && gliner_dir=/data/models/dynamic_pii/gliner_small_v2_5 \
-    && gliner_url=https://huggingface.co/patronus-studio/gliner_small-v2.5-edge/resolve/6cfcbd93d7fc6f5e1658f80afa38f73891b91693 \
-    && mkdir -p "${gliner_dir}" \
-    && for file in gliner_config.json gliner_onnx_config.json quantization_manifest.json special_tokens_map.json spm.model tokenizer.json tokenizer_config.json; do \
-         wget --https-only --quiet --timeout=120 --tries=3 -O "${gliner_dir}/${file}" "${gliner_url}/${file}"; \
-       done \
-    && printf '%s' 6cfcbd93d7fc6f5e1658f80afa38f73891b91693 > "${gliner_dir}/.patronus-revision"
+FROM published-assets AS assets
+USER root
+RUN rm -rf /data/models/wolf/wolf-defender-small/onnx \
+           /data/models/dynamic_pii/gliner_small_v2_5/onnx \
+           /data/models/dynamic_pii/gliner_small_v2_5/model_int4_embeddings_int8.onnx*
 
 # ---- runtime -----------------------------------------------------------------
 FROM debian:trixie-slim AS runtime
