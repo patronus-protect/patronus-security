@@ -262,16 +262,11 @@ mod tests {
 
     #[test]
     fn the_l1_model_decision_carries_its_logit() {
-        let cascade: Cascade = serde_json::from_value(
-            json!({"modules": {"jailbreak": {"l1_model": {"builtin": "jailbreak"}}}}),
-        )
+        let mut config: ScannerConfig = serde_json::from_value(json!({"max_level": "l1",
+            "cascade": {"modules": {"jailbreak": {"l1_model": {"builtin": "jailbreak"}}}}}))
         .unwrap();
-        let mut config = ScannerConfig {
-            categories: modules(),
-            max_level: patronus_ark_core::cascade::SecurityLevel::L1,
-            ..ScannerConfig::default()
-        };
-        config.gates.cascade = Some(cascade.clone());
+        config.categories = modules();
+        let cascade = config.gates.cascade.clone().unwrap();
         let gates = config.gates.clone();
         let mut scanner = Scanner::new(config).unwrap();
         let text = "Please summarise the attached meeting notes.";
