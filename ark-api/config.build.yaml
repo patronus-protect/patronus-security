@@ -10,8 +10,8 @@ auth:
       key_hash: "sha256:3d46dab01df11228e2ccf88613ed995487c65cba309568731273f0988e5416b1"
 
 pipeline:
-  # Bake dedicated Wolf Small v2.2, its matching injection NTDB, all other
-  # configured NTDB/L3 assets, GLiNER and Cat into the final image.
+  # Download assets for build-time validation. The runtime image retains only
+  # tokenizer metadata for Wolf and GLiNER; both L3 graphs stay on AWS L4.
   categories: ["injection", "dlp", "pii", "sensitive_document", "jailbreak", "prompt_extraction", "tool_poisoning", "agent_config_tampering", "memory_poisoning", "exfiltration", "unsafe_action", "resource_exhaustion", "harmful_content", "toxic_language", "routing", "dynamic-pii", "tool_class", "tool_action", "tool_tags", "shell_command"]
   max_level: "L3"
   l3_strategy: dedicated

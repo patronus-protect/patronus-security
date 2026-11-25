@@ -16,6 +16,7 @@ test-util = []
 # for targets without a prebuilt such as x86_64-apple-darwin.
 ort-download = ["ort?/download-binaries", "ort?/copy-dylibs"]
 wolf = ["dep:ort", "dep:half", "dep:blake3", "dep:fs2"]
+wolf-triton = ["wolf", "dep:ureq"]
 download = ["wolf", "dep:ureq", "dep:home"]
 onnx-coreml = ["wolf", "ort/coreml"]
 onnx-cuda = ["wolf", "ort/cuda"]

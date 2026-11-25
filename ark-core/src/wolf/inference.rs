@@ -130,9 +130,23 @@ impl WolfRunner {
             .fixed_width
             .unwrap_or_else(|| batch.iter().map(|t| t.len() + 2).max().unwrap());
         let chunks: Vec<_> = batch.iter().map(Vec::as_slice).collect();
+        #[cfg(feature = "wolf-triton")]
+        if let super::WolfBackend::Triton(remote) = &self.backend {
+            return remote.infer_batch(
+                batch,
+                width,
+                &self.tokenizer,
+                self.manifest.pad_id,
+                control,
+            );
+        }
         // Runners of one graph share its session; one batch runs at a time.
-        let mut session = self
-            .session
+        let local = match &self.backend {
+            super::WolfBackend::Local(local) => local,
+            #[cfg(feature = "wolf-triton")]
+            super::WolfBackend::Triton(_) => unreachable!("Triton returned above"),
+        };
+        let mut session = local
             .session
             .lock()
             .map_err(|_| inference("Wolf session poisoned"))?;

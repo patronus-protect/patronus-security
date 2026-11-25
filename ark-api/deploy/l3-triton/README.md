@@ -1,5 +1,47 @@
 # Unified L3 on an NVIDIA GPU
 
+## Dedicated Wolf Small alongside Lion
+
+Ark's dedicated Injection L3 uses Wolf Small, not the Unified Lion adapter below.
+The pinned Wolf Small revision `e3749b44a0f85268347cdfb6818f4ef39e8ff203`
+has a separate TensorRT plan and Triton model name
+`wolf_defender_small_e3749b44a0f85268347cdfb6818f4ef39e8ff203_fp16_256`.
+On the GPU host, `prepare_wolf.sh` builds it in `wolf-models/` without changing
+the live Lion repository. Run `verify_wolf.py` against a test Triton endpoint
+before copying the verified model into the live `models/` repository. Set
+`TRITON_VERIFY_URL` to the private test endpoint and `LION_VERIFY_URL` to the
+private live endpoint when running `verify_wolf.py`. After a
+controlled Triton restart, verify that **both** model names report ready.
+
+Set `PATRONUS_WOLF_TRITON_URL=http://<triton-wireguard-address>:8090` on Ark
+workers to send dedicated Wolf logits over WireGuard. The IONOS image contains
+only Wolf tokenizer and configuration metadata, never the Wolf ONNX graph or
+TensorRT weights. The Worker retains local tokenization, document windows,
+thresholds and verdict assembly. The remote
+response must name the pinned model and version 1 and contain finite FP32
+`logits` with shape `[batch, 2]`; an invalid or unavailable response fails the
+scan instead of falling back to CPU. The IONOS Compose deployment requires the
+URL and its image cannot run Wolf locally. The library still supports local Wolf
+when used outside this deployment.
+`PATRONUS_WOLF_TRITON_TIMEOUT_MS` defaults to 1000 ms. Keep the Triton endpoint
+private because the HTTP service has no application authentication.
+
+## Dynamic PII GLiNER on the same L4
+
+The dedicated dynamic PII L3 model is the pinned GLiNER small v2.5 edge export
+`6cfcbd93d7fc6f5e1658f80afa38f73891b91693`. Run `prepare_gliner.sh` on
+the GPU host to stage its FP16 graph in `gliner-models/`. It runs through
+Triton's ONNX Runtime CUDA backend. Verify its logits and entity spans against
+the pinned ONNX source before adding it to the live model repository. The
+Worker keeps only GLiNER tokenizer/configuration files for text preparation
+and span decoding; the image excludes its ONNX graph.
+
+Set `PATRONUS_GLINER_TRITON_URL=http://<triton-wireguard-address>:8090` on the
+Worker. Startup performs real dynamic PII warmup inference on Triton. Remote
+responses must identify the pinned model and version 1 and return finite FP32
+logits of the expected shape. There is no local CPU fallback in the IONOS image.
+`PATRONUS_GLINER_TRITON_TIMEOUT_MS` defaults to 3000 ms.
+
 Lion Warden uses the same pinned revision and seven heads already configured by
 Ark: `30ea449339d1075a31fcffa9199ebee4f2cfaf9a`. The remote adapter changes model
 execution while local L1/L2, Unified scheduling, head decoding, caches,

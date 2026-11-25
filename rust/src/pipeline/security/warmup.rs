@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use crate::{
     assets,
+    gliner_onnx_engine::GlinerEngine,
     ml::{
         dynamic_pii::DynamicPiiRuntime,
         ntdb_executor::{manifest::PackageManifest, NtdbExecutor, NtdbPackageSpec},
@@ -411,22 +412,47 @@ impl SecurityGateway {
                         SecurityCategory::Injection,
                         wolf.model.spec().id,
                     );
-                    patronus_ark_core::warmup::prepare_wolf_assets_with_progress(
-                        &wolf,
-                        &self.core_warmup_options(download),
-                        report
-                            .as_ref()
-                            .map(|report| report as &(dyn Fn(usize, usize) + Send + Sync)),
-                    )
-                    .map_err(|error| {
-                        if download {
-                            error.to_string()
-                        } else {
-                            format!("missing injection dedicated L3 assets; downloads disabled: {error}")
-                        }
-                    })?;
+                    if std::env::var("PATRONUS_WOLF_TRITON_URL")
+                        .is_ok_and(|value| !value.is_empty())
+                    {
+                        // A remote Worker has only tokenizer metadata, not ONNX weights.
+                        // Validate the pinned Triton model with a real inference now.
+                        patronus_ark_core::wolf::WolfRunner::new(
+                            &wolf,
+                            execution.backend(),
+                            execution.onnx_runtime_options(),
+                        )?;
+                    } else {
+                        patronus_ark_core::warmup::prepare_wolf_assets_with_progress(
+                            &wolf,
+                            &self.core_warmup_options(download),
+                            report
+                                .as_ref()
+                                .map(|report| report as &(dyn Fn(usize, usize) + Send + Sync)),
+                        )
+                        .map_err(|error| {
+                            if download {
+                                error.to_string()
+                            } else {
+                                format!("missing injection dedicated L3 assets; downloads disabled: {error}")
+                            }
+                        })?;
+                    }
                 } else if let Some(asset) = assets::dedicated_l3_asset(*category) {
-                    asset.prepare(&base_dir, download_policy(download), allow_download, None)?;
+                    if *category == SecurityCategory::DynamicPii
+                        && std::env::var("PATRONUS_GLINER_TRITON_URL")
+                            .is_ok_and(|value| !value.is_empty())
+                    {
+                        // Tokenization stays on the Worker; inference weights live on L4.
+                        GlinerEngine::validate_path(asset.spec.cache_dir(&base_dir))?;
+                    } else {
+                        asset.prepare(
+                            &base_dir,
+                            download_policy(download),
+                            allow_download,
+                            None,
+                        )?;
+                    }
                 }
             }
         }

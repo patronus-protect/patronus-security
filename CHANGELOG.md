@@ -11,6 +11,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Ark dedicated Wolf Small L3 can use the pinned FP16 TensorRT model on a private Triton
+  endpoint through `PATRONUS_WOLF_TRITON_URL`. Worker startup verifies model readiness and
+  real logits; malformed or unavailable remote inference fails the scan instead of silently
+  switching to local CPU. The IONOS worker image excludes Wolf model weights and requires
+  the remote URL; library users can still run Wolf locally with their own assets.
+- Ark dedicated dynamic PII L3 can run its pinned GLiNER small v2.5 graph on
+  the same private L4 Triton service through `PATRONUS_GLINER_TRITON_URL`.
+  IONOS workers retain span preparation and decoding but no GLiNER model weights.
 - Ark gateway and HTTP API: optional server-side `l3_categories` limits which configured
   categories prepare and run L3. When unset, every configured category remains eligible;
   excluded categories retain their L1 and NTDB L2 analysis where available. The Cube worker

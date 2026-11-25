@@ -34,7 +34,10 @@ ENV PATRONUS_L3_PRECISION=${L3_PRECISION} \
 
 COPY ark-api/config.build.yaml /etc/ark-api/config.yaml
 RUN mkdir -p /data/models /data/cache \
-    && /src/target/release/ark-api --config /etc/ark-api/config.yaml --warmup-only
+    && /src/target/release/ark-api --config /etc/ark-api/config.yaml --warmup-only \
+    && rm -rf /data/models/wolf/wolf-defender-small/onnx \
+              /data/models/dynamic_pii/gliner_small_v2_5/onnx \
+              /data/models/dynamic_pii/gliner_small_v2_5/model_int4_embeddings_int8.onnx*
 
 # ---- runtime -----------------------------------------------------------------
 FROM debian:trixie-slim AS runtime
