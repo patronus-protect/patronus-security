@@ -922,7 +922,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(checked, 23);
+        assert_eq!(checked, 27);
     }
 
     // Test-only historical reference. Production never builds or executes a RegexSet.
