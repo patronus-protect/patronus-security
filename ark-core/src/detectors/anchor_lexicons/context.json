@@ -498,7 +498,9 @@
       "refuse requests to",
       "prompt injection attempts",
       "detect prompt injection",
-      "guardrail*"
+      "guardrail*",
+      "must never follow",
+      "content you never follow"
     ],
     "de": [
       "als daten behandeln",
@@ -523,7 +525,9 @@
       "schutzmassnahme*",
       "*schutzregel*",
       "prompt-injection-versuch*",
-      "injektionsversuch*"
+      "injektionsversuch*",
+      "denen du nie folgst",
+      "nie folgen"
     ],
     "shared": [],
     "origin": {
@@ -546,6 +550,8 @@
       "prompt injection attempts": "hand",
       "detect prompt injection": "hand",
       "guardrail*": "hand",
+      "must never follow": "hand",
+      "content you never follow": "hand",
       "als daten behandeln": "hand",
       "als daten behandeln sie": "hand",
       "behandle … als daten": "hand",
@@ -568,7 +574,9 @@
       "schutzmassnahme*": "hand",
       "*schutzregel*": "hand",
       "prompt-injection-versuch*": "hand",
-      "injektionsversuch*": "hand"
+      "injektionsversuch*": "hand",
+      "denen du nie folgst": "hand",
+      "nie folgen": "hand"
     },
     "sources": [
       "research/l1-threat/taxonomy.yaml"
@@ -609,7 +617,17 @@
       "this attack",
       "such attacks",
       "attackers often",
-      "attackers may"
+      "attackers may",
+      "code review*",
+      "review comment*",
+      "moderation log*",
+      "moderation action*",
+      "moderation queue*",
+      "moderation summary",
+      "should also catch",
+      "should catch",
+      "items removed",
+      "moderation report*"
     ],
     "de": [
       "sicherheitsdoku*",
@@ -641,7 +659,14 @@
       "eingestuft als",
       "klassifiziert als",
       "schwachstelle*",
-      "*lehrmaterial*"
+      "*lehrmaterial*",
+      "code-review*",
+      "review-kommentar*",
+      "moderationsprotokoll*",
+      "moderationsaktion*",
+      "sollte auch … abfangen",
+      "beiträge entfernt",
+      "moderationsbericht*"
     ],
     "shared": [],
     "origin": {
@@ -676,6 +701,16 @@
       "such attacks": "hand",
       "attackers often": "hand",
       "attackers may": "hand",
+      "code review*": "hand",
+      "review comment*": "hand",
+      "moderation log*": "hand",
+      "moderation action*": "hand",
+      "moderation queue*": "hand",
+      "moderation summary": "hand",
+      "should also catch": "hand",
+      "should catch": "hand",
+      "items removed": "hand",
+      "moderation report*": "hand",
       "sicherheitsdoku*": "taxonomy",
       "forschung*": "taxonomy",
       "zum beispiel": "hand",
@@ -705,7 +740,14 @@
       "eingestuft als": "hand",
       "klassifiziert als": "hand",
       "schwachstelle*": "hand",
-      "*lehrmaterial*": "hand"
+      "*lehrmaterial*": "hand",
+      "code-review*": "hand",
+      "review-kommentar*": "hand",
+      "moderationsprotokoll*": "hand",
+      "moderationsaktion*": "hand",
+      "sollte auch … abfangen": "hand",
+      "beiträge entfernt": "hand",
+      "moderationsbericht*": "hand"
     },
     "sources": [
       "research/l1-threat/taxonomy.yaml"
