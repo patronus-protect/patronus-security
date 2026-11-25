@@ -1365,8 +1365,10 @@ FAIR_FILES = {
     "cascade.md": ("Threat scoreboard: cascade", ("rules", "l1_model", "cascade"),
                    ["The cascade of `research/l1-threat/scoreboard/cascade-config.json` (the L1 heuristic, then the "
                     "built-in L1 model of every class, then L3 Wolf where the config names it), each cut from the "
-                    "calibration part on the cascade's L1 score. `L1 model`: the cascade up to L1 (heuristic, then "
-                    "model).", UPPER_BOUND]),
+                    "calibration part on its answer (a heuristic detection is final at Core's acceptance; where the "
+                    "L1 model decides, its logit). `L1 model`: the cascade up to L1 (heuristic, then model); without "
+                    "Wolf in the config the cascade column is not measured, the L1 model column is the cascade.",
+                    UPPER_BOUND]),
     "builtin-models.md": ("Built-in L1 models in Ark Core", ("rules", "l1_model", "prompt_guard_2", "heuristic"),
                           ["The eleven fastText-type L1 models are compiled into `patronus-ark-core` "
                            "(`ark-core/models/l1/<class>.ftpack`) and run only for the modules a cascade names "
