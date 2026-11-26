@@ -831,6 +831,8 @@ def test_refresh_renders_the_fair_files_of_head_with_the_commit(mix_split, tmp_p
     assert f"{MODULE.RENDERED_FROM} `{first[:12]}` on the mix." in text
     assert "## At 0.1% FPR (decisive)" in text and "report TPR / FPR" in text
     assert "| exfiltration | all | 10 | 1 |" in text and "100.0 / 0.00 (atr)" in text
+    confusion = (tree / MODULE.SCOREBOARD_DIR / MODULE.CONFUSION_FILE).read_text()
+    assert "## rules: measurement part of the mix" in confusion and "## rules: report sets" in confusion
     # Without a calibrated cascade config only the rules are predicted, with the L1 build.
     assert built == [(first, False)]
     out = capsys.readouterr().out
@@ -993,3 +995,41 @@ def test_compare_holds_the_benign_fpr_budget_per_class_and_language():
         "budget 0.1%)" in MODULE.verdict_lines("dev", list(inherited.values()), numbers=False)
     raised = {c["name"]: c for c in MODULE.compare(report(2), report(3))}
     assert not raised["benign fpr harmful_content de"]["ok"] and not raised["benign fpr harmful_content de"]["inherited"]
+
+
+def test_confusion_counts_flags_per_true_label_on_measurement_and_report_rows():
+    def row(row_id, classes):
+        return {"id": row_id, "classes": classes}
+
+    def answer(row_id, *detected):
+        return {"id": row_id, "cascade": {cls: {"l1": "detected", "l1_score": 1.0, "decision": "detected",
+                                                "decided_by": "heuristic"} for cls in detected}}
+
+    rows = [
+        MODULE.MixRow(row("a", ["instruction_injection"]), "s", "measurement"),
+        MODULE.MixRow(row("b", ["instruction_injection", "exfiltration"]), "s", "measurement"),
+        MODULE.MixRow(row("c", []), "s", "measurement"),
+        MODULE.MixRow(row("d", ["instruction_injection"]), "s", "calibration"),
+        MODULE.MixRow(row("e", ["jailbreak"]), "r", "report"),
+    ]
+    predictions = {
+        "a": answer("a", "instruction_injection", "memory_poisoning"),
+        "b": answer("b", "instruction_injection", "exfiltration"),
+        "c": answer("c"),
+        "d": answer("d", "memory_poisoning"),
+        "e": answer("e", "jailbreak"),
+    }
+    classes = ("instruction_injection", "jailbreak", "memory_poisoning", "exfiltration")
+    table = MODULE.confusion(rows, predictions, classes)
+    injection = table["measurement"]["instruction_injection"]
+    # The calibration row is not counted; the two-class row counts under both labels.
+    assert injection["rows"] == 2
+    assert injection["flags"] == {"instruction_injection": 2, "jailbreak": 0, "memory_poisoning": 1, "exfiltration": 1}
+    assert table["measurement"]["exfiltration"]["flags"]["exfiltration"] == 1
+    assert table["measurement"]["benign"] == {"rows": 1, "flags": dict.fromkeys(classes, 0)}
+    assert table["report"]["jailbreak"]["flags"]["jailbreak"] == 1
+    lines = MODULE.confusion_lines(table["measurement"])
+    assert lines[2] == "| instruction_injection (2) | 100.0 | 0.0 | 50.0 | 50.0 |"
+    assert lines[-1] == "| benign (1) | 0.0 | 0.0 | 0.0 | 0.0 |"
+    text = MODULE.render_confusion({"rules": table})
+    assert "## rules: measurement part of the mix" in text and "## rules: report sets" in text
