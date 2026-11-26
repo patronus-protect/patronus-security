@@ -1050,6 +1050,97 @@
       ]
     },
     {
+      "id": "ark.injection.indirect.user_message_block_en",
+      "canonical_id": "ark.injection.override.replacement_directive",
+      "upstream_id": "ark-composition:indirect.user_message_block",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.20",
+      "description": "A block inside third-party content that poses as a message from the user to the model and puts its own task before the user's task",
+      "adaptation": "EN clause-initial 'important message from me, <name>, to you, <model name or assistant>', 'before you can solve the task (that) I gave you' or 'after you do that, you can solve the task I gave you'; YAML line continuations (a backslash before the line break) count as whitespace, also in the prefilter. A ticket asking the human reader to do something first ('before you can start on this ticket'), a quoted mention and a negated clause stay unmatched.",
+      "pattern": "(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*(?:this[\\s\\\\]+is[\\s\\\\]+)?(?:an?[\\s\\\\]+)?(?:very[\\s\\\\]+)?important[\\s\\\\]+message[\\s\\\\]+from[\\s\\\\]+me\\b[^.!?\\n]{0,60}?\\bto[\\s\\\\]+you[\\s\\\\]*,[\\s\\\\]*(?:gpt(?:-?\\d(?:\\.\\d)?o?)?|chatgpt|claude|gemini|llama(?:-?\\d)?|mistral|copilot|(?:the[\\s\\\\]+)?(?:ai|assistant|ai[\\s\\\\]+assistant|ai[\\s\\\\]+agent|agent|model|language[\\s\\\\]+model|llm))\\b|(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*(?:but[\\s\\\\]+|and[\\s\\\\]+|so[\\s\\\\]+)?before[\\s\\\\]+you[\\s\\\\]+(?:can[\\s\\\\]+)?(?:solve|complete|finish|do|answer|handle|work[\\s\\\\]+on|continue[\\s\\\\]+with)[\\s\\\\]+(?:the|my)[\\s\\\\]+(?:original[\\s\\\\]+|first[\\s\\\\]+|actual[\\s\\\\]+)?(?:task|request|question|instructions?)[\\s\\\\]+(?:that[\\s\\\\]+|which[\\s\\\\]+)?(?:i|the[\\s\\\\]+user)[\\s\\\\]+(?:gave|have[\\s\\\\]+given|sent|asked)[\\s\\\\]+you\\b|(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*after[\\s\\\\]+you[\\s\\\\]+(?:do|did|have[\\s\\\\]+done|finish)[\\s\\\\]+(?:that|this)[\\s\\\\]*,[\\s\\\\]*you[\\s\\\\]+can[\\s\\\\]+(?:solve|complete|finish|do|answer|handle|work[\\s\\\\]+on|continue[\\s\\\\]+with)[\\s\\\\]+(?:the|my)[\\s\\\\]+(?:original[\\s\\\\]+|first[\\s\\\\]+|actual[\\s\\\\]+)?(?:task|request|question|instructions?)[\\s\\\\]+(?:that[\\s\\\\]+|which[\\s\\\\]+)?(?:i|the[\\s\\\\]+user)[\\s\\\\]+(?:gave|have[\\s\\\\]+given|sent|asked)[\\s\\\\]+you\\b",
+      "excluded_match_words": [
+        "not",
+        "never",
+        "don't",
+        "don’t",
+        "dont",
+        "doesn't",
+        "doesn’t"
+      ],
+      "required_literals_any": [
+        "important message",
+        "gave you",
+        "given you",
+        "sent you",
+        "asked you"
+      ]
+    },
+    {
+      "id": "ark.injection.indirect.user_message_block_de",
+      "canonical_id": "ark.injection.override.replacement_directive",
+      "upstream_id": "ark-composition:indirect.user_message_block_de",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.20",
+      "description": "German: a block inside third-party content that poses as a message from the user to the model and puts its own task before the user's task",
+      "adaptation": "DE clause-initial 'wichtige Nachricht von mir, <Name>, an dich, <Modellname oder Assistent>', 'bevor du die Aufgabe ..., die ich dir gegeben/gestellt habe' or 'nachdem du das erledigt hast, kannst du die Aufgabe ..., die ich dir gegeben habe'. A ticket asking the human reader to do something first, a quoted mention and a negated clause stay unmatched.",
+      "pattern": "(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*(?:dies[\\s\\\\]+ist[\\s\\\\]+|das[\\s\\\\]+ist[\\s\\\\]+|hier[\\s\\\\]+ist[\\s\\\\]+)?(?:eine[\\s\\\\]+)?(?:sehr[\\s\\\\]+)?wichtige[\\s\\\\]+nachricht[\\s\\\\]+von[\\s\\\\]+mir\\b[^.!?\\n]{0,60}?\\ban[\\s\\\\]+dich[\\s\\\\]*,[\\s\\\\]*(?:gpt(?:-?\\d(?:\\.\\d)?o?)?|chatgpt|claude|gemini|llama(?:-?\\d)?|mistral|copilot|(?:die[\\s\\\\]+|den[\\s\\\\]+)?(?:ki|assistent(?:in)?|ki-assistent(?:in)?|ki-agent(?:in)?|agent(?:in)?|modell|sprachmodell|llm))\\b|(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*(?:aber[\\s\\\\]+|und[\\s\\\\]+)?bevor[\\s\\\\]+du[\\s\\\\]+(?:die|meine)[\\s\\\\]+(?:ursprüngliche[\\s\\\\]+|erste[\\s\\\\]+|eigentliche[\\s\\\\]+)?(?:aufgabe|anfrage|frage)\\b[^.!?\\n]{0,30}?,?[\\s\\\\]*die[\\s\\\\]+ich[\\s\\\\]+dir\\b[^.!?\\n]{0,40}?\\b(?:gegeben|gestellt|geschickt|aufgetragen)[\\s\\\\]+habe|(?:^|[.!?;:>\\n|]|\\\\n)[\\s\\\\]*nachdem[\\s\\\\]+du[\\s\\\\]+(?:das|dies)[\\s\\\\]+(?:erledigt|getan|gemacht)[\\s\\\\]+hast[\\s\\\\]*,[\\s\\\\]*kannst[\\s\\\\]+du[\\s\\\\]+(?:die|meine)[\\s\\\\]+(?:ursprüngliche[\\s\\\\]+|erste[\\s\\\\]+|eigentliche[\\s\\\\]+)?(?:aufgabe|anfrage|frage)\\b[^.!?\\n]{0,30}?,?[\\s\\\\]*die[\\s\\\\]+ich[\\s\\\\]+dir\\b[^.!?\\n]{0,40}?\\b(?:gegeben|gestellt|geschickt|aufgetragen)[\\s\\\\]+habe",
+      "excluded_match_words": [
+        "nicht",
+        "nie",
+        "niemals",
+        "keine",
+        "keinen"
+      ],
+      "required_literals_any": [
+        "wichtige nachricht",
+        "ich dir"
+      ]
+    },
+    {
+      "id": "ark.injection.indirect.todo_directive_en",
+      "canonical_id": "ark.injection.override.replacement_directive",
+      "upstream_id": "ark-composition:indirect.todo_directive",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.20",
+      "description": "A TODO line outside a code comment that hands the agent an action with a foreign target (an account, an address, a link, the user's data, 'say that I should ...')",
+      "adaptation": "EN upper-case 'TODO:' at a line start, after a sentence end or as a quoted YAML/dict value, followed by an action verb (send, transfer, say, post, invite, visit, delete, change, make, get ...) and within the same line or its indented continuation a target: an IBAN, e-mail address, URL, 'the user', 'me/my' or 'I should'. TODO comments on a line that starts with '#', '//', '/*' or '*' or carries an inline ' #' or ' //' comment before the TODO (also after sentence punctuation), task lists without a foreign target and quoted test data stay unmatched.",
+      "pattern": "(?:^|\\n|\\\\n|[.!?%)>|]|:[ \\t]*[\\\"'“‘])[ \\t]*(?P<directive>(?-i:TODO))\\s*:\\s*(?:please\\s+)?(?:say|tell|send|transfer|forward|e-?mail|post|invite|visit|delete|change|modify|update|make|create|get|book|reserve|share|concatenate|pay|give|recommend|add|remove|reset)\\b(?:[^\\n]|\\n[ \\t]+){0,200}?(?:\\bthe\\s+user\\b|\\bme\\b|\\bmy\\b|\\bi\\s+should\\b|\\bwww\\.|https?://|[\\w.+-]+@[\\w-]+\\.\\w|\\b[A-Z]{2}\\d{2}[A-Z0-9]{10,30}\\b|\\bthe\\s+(?:account|website|link)\\b)",
+      "required_literals_any": [
+        "todo"
+      ],
+      "excluded_comment_lines": true
+    },
+    {
+      "id": "ark.injection.indirect.todo_directive_de",
+      "canonical_id": "ark.injection.override.replacement_directive",
+      "upstream_id": "ark-composition:indirect.todo_directive_de",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "evidence_tier": "audited_high_precision",
+      "source": "ark-source-derived",
+      "source_revision": "0.1.20",
+      "description": "German: a TODO line outside a code comment that hands the agent an action with a foreign target",
+      "adaptation": "DE upper-case 'TODO:' at a line start, after a sentence end or as a quoted YAML/dict value, followed by a du-imperative (sag, schick, überweise, poste, besuche, lösche, ändere, buche ...) and a target: an IBAN, e-mail address, URL, 'der Nutzer', 'mir/mein', 'ich sollte' or 'dass ich'. TODO comments on a line that starts with '#', '//', '/*' or '*' or carries an inline ' #' or ' //' comment before the TODO (also after sentence punctuation) and quoted test data stay unmatched.",
+      "pattern": "(?:^|\\n|\\\\n|[.!?%)>|]|:[ \\t]*[\\\"'“‘])[ \\t]*(?P<directive>(?-i:TODO))\\s*:\\s*(?:bitte\\s+)?(?:sag|sage|erzähl|schreib|schreibe|schick|schicke|sende|überweise|ueberweise|leite|poste|lade|besuche|lösche|loesche|ändere|aendere|buche|reserviere|erstelle|teile|hol|hole|gib|empfiehl|füge|fuege|entferne|setze)\\b(?:[^\\n]|\\n[ \\t]+){0,200}?(?:\\bder\\s+nutzer\\b|\\bdes\\s+nutzers\\b|\\bdem\\s+nutzer\\b|\\bmir\\b|\\bmein\\w*\\b|\\bich\\s+(?:sollte|soll|muss)\\b|\\bdass\\s+ich\\b|\\bwww\\.|https?://|[\\w.+-]+@[\\w-]+\\.\\w|\\b[A-Z]{2}\\d{2}[A-Z0-9]{10,30}\\b|\\bdas\\s+konto\\b|\\bdie\\s+(?:website|webseite|seite)\\b)",
+      "required_literals_any": [
+        "todo"
+      ],
+      "excluded_comment_lines": true
+    },
+    {
       "id": "ark.injection.leak.verbatim_above_en",
       "canonical_id": "ark.injection.leak.system_prompt_extraction",
       "upstream_id": "ark-composition:leak.verbatim_above_en",

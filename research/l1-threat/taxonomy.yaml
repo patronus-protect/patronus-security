@@ -276,6 +276,10 @@ classes:
       # ark.injection.indirect.{response_directive,reply_insertion,code_insertion}_en and
       # {response_directive,code_insertion}_de; they report under ark.injection.override.replacement_directive (the
       # scorer 0.1.7 has no weight for a new canonical id), so they need no entry of their own here.
+      # T32: a block in a tool output posing as a message from the user to the model ('important message from me,
+      # <name>, to you, <model>', 'before you can solve the task that I gave you') and a TODO line outside a code comment
+      # with an action and a foreign target are ark.injection.indirect.{user_message_block,todo_directive}_{en,de}, under
+      # the same canonical id.
       baseline_coverage: {atr: partial, pipelock: partial, prompt_guard_2: partial}
       gap: Agent-addressed action requests in benign-looking foreign content (esp. German) are rarely covered;
         reply directives without a clause start (spliced into a word) or without 'your reply/answer' ('Can you reply in

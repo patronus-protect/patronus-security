@@ -838,6 +838,11 @@ Seit T16 (Anweisungen an das antwortende Modell in fremdem Inhalt: Antwort umfor
 Antwort einfügen; fünf Regeln, `categories/injection.md` §14) findet B0 bei BIPIA 164 von 188 Injektionen, weiter
 ohne Fund auf den 47 sauberen E-Mails und ohne neuen Benign-Treffer im Dev-Pool; die 50 Exfiltrationen bleiben offen.
 
+Seit T32 (Block, der sich in einer Tool-Ausgabe als Nachricht des Nutzers an das Modell ausgibt, und `TODO:`-Zeilen mit
+Aktion und fremdem Ziel außerhalb von Code-Kommentaren; vier Regeln, `categories/injection.md` §15) findet B0 bei
+AgentDojo 117 von 136 Injektionen (vorher 41), weiter ohne Fund auf den 132 sauberen Tool-Ausgaben und ohne neuen
+Benign-Treffer im Dev-Pool; BIPIA und Klassen-Templates unverändert.
+
 **RedCode und Agent-SafetyBench (T18, 2026-11-18).** Zwei weitere `train_dev`-Rezepte (`generation: 16`), beide nur
 EN und nur `unsafe_action` (Familie `unsafe_code`):
 - **RedCode** (Code MIT, Datensatz CC-BY-4.0 laut `dataset/LICENSE`; Commit `664e4793`, 187 Dateien mit SHA-256),
