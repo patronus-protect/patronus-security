@@ -740,6 +740,7 @@ tasks:
   # rows now sits in its calibration and measurement parts and its model numbers are not valid. No retraining:
   # the evaluation is cleaned instead. Rules-only numbers are unaffected (rules are not trained).
   - id: E10b
+    status: done
     title: "Clean evaluation without retraining: training data of the shipped L1 models stays as it is; the mix loses its train part, every row any shipped model was trained on is removed from calibration and measurement, and the cascade, Prompt Guard 2, ProtectAI v2 and the best heuristic are measured on the clean parts"
     type: eval-infra
     deps: [E10, E11]

@@ -66,9 +66,10 @@ Latency is gated by the runner's own A/B step (``latency.py``). Exit 0 = pass, 1
 
 ``mix`` and ``fair`` are the fair measurement (``mix.py``): ``mix`` freezes one broad mix (the gated dev sets, PII
 and DLP texts and the own DE/EN trigger-word hard negatives) and its row-wise split, stratified by source, into
-train, calibration and measurement; ``fair`` scores rules only (the L1 score curve), the L1 model and the cascade
-(``decision_score``: their answer with the L1 model's logit), Prompt Guard 2 22M and the best heuristic baseline
-(picked on the calibration part) on the same rows. For a class, the negatives are the benign rows and the positives of every other class. Every cut comes from
+calibration and measurement, without any row a built-in L1 model was trained on (``trained_keys``, matched by
+SHA-256 text key; the models are not retrained); ``fair`` scores rules only (the L1 score curve), the L1 model and
+the cascade (``decision_score``: their answer with the L1 model's logit), Prompt Guard 2 22M and 86M, ProtectAI v2
+and the best heuristic baseline (picked on the calibration part) on the same rows. For a class, the negatives are the benign rows and the positives of every other class. Every cut comes from
 the calibration part's negatives only, per class and language, at 0.1 % (decisive) and 1 % FPR; TPR, FPR and
 hard-negative FPR come from the measurement part and, at the same cut, from the report sets, which stay outside
 the mix; each cell names the sources behind its measured positives.
@@ -1118,7 +1119,7 @@ def calibrate(pairs: list[tuple[dict[str, Any], dict[str, Any], str]], base: dic
 
 
 class MixRow(NamedTuple):
-    """A row of the mix (``part``: train, calibration or measurement) or of a report set (``part``: report)."""
+    """A row of the mix (``part``: calibration or measurement) or of a report set (``part``: report)."""
 
     row: dict[str, Any]
     source: str
@@ -1147,8 +1148,25 @@ def mix_files() -> dict[str, bytes]:
             CORPORA.READY: f"{CORPORA.PRESIDIO._sha256(manifest)}  manifest.json\n".encode("utf-8")}
 
 
+def trained_keys(dev: Path, labels: Path = HARMFUL_SUBCLASS.LABELS_PATH) -> dict[str, frozenset[str]]:
+    """Built-in L1 model -> ``MIX.text_sha`` keys of the rows it was trained on. None of them recorded its rows, so
+    each training script's split is redone on ``dev``: the eleven fastText-type models trained on the train side of
+    ``ablation.split_rows`` over ``MIX.FASTTEXT_TRAIN_SETS`` (a class's positives and the benign rows), the
+    harmful_content subclass model on every labelled harmful_content positive (``harmful_subclass.training_rows``)."""
+    ablation = sys.modules.get("_ark_l1_threat_ablation") or _load_file("_ark_l1_threat_ablation",
+                                                                         HERE / "ablation.py")
+    rows = [row for entry in split_sets(dev) if f"{entry.path.parent.name}/{entry.set_id}" in MIX.FASTTEXT_TRAIN_SETS
+            for row in BASELINES.read_rows(entry.path)]
+    train, _ = ablation.split_rows(rows)
+    out = {cls: frozenset(MIX.text_sha(row) for row, _ in ablation.labelled(train, cls)) for cls in CLASSES}
+    out["harmful_subclass"] = frozenset(MIX.text_sha({"text": text}) for text, _, _ in
+                                        HARMFUL_SUBCLASS.training_rows(dev, HARMFUL_SUBCLASS.load(labels)))
+    return out
+
+
 def build_mix(dev: Path, out: Path, force: bool = False) -> dict[str, Any]:
-    """Freeze the extra sets under ``out/mix`` and the row-wise split of the whole mix in ``out/parts.json``."""
+    """Freeze the extra sets under ``out/mix`` and the row-wise split of the whole mix in ``out/parts.json``, without
+    the training rows of the built-in L1 models (``trained_keys``)."""
     files, target = mix_files(), out / MIX.MIX_DIR
     if (target / "manifest.json").is_file() and (target / "manifest.json").read_bytes() != files["manifest.json"] \
             and not force:
@@ -1156,7 +1174,7 @@ def build_mix(dev: Path, out: Path, force: bool = False) -> dict[str, Any]:
     CORPORA.BENIGN_CODE._write(target, files)
     sets, _ = mix_sets(dev, out)
     sources = {entry.set_id: list(BASELINES.read_rows(entry.path)) for entry in sets}
-    document = MIX.parts_document(sources, {entry.set_id: entry.sha256 for entry in sets})
+    document = MIX.parts_document(sources, {entry.set_id: entry.sha256 for entry in sets}, trained_keys(dev))
     MIX.freeze_parts(out / MIX.PARTS_FILE, document, force)
     return document
 
@@ -1170,7 +1188,9 @@ def load_parts(mix_root: Path, sets: list[SetFile]) -> dict[str, Any]:
 
 
 def mix_rows(sets: list[SetFile], report_sets: list[SetFile], parts: dict[str, str]) -> list[MixRow]:
-    rows = [MixRow(row, entry.set_id, parts[row["id"]]) for entry in sets for row in BASELINES.read_rows(entry.path)]
+    """The rows of the mix with a part (training rows of a built-in model have none) and every report-set row."""
+    rows = [MixRow(row, entry.set_id, parts[row["id"]]) for entry in sets for row in BASELINES.read_rows(entry.path)
+            if row["id"] in parts]
     return rows + [MixRow(row, entry.set_id, "report") for entry in report_sets for row in BASELINES.read_rows(entry.path)]
 
 
@@ -1283,29 +1303,33 @@ def best_of(candidates: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 
 FAIR_SYSTEMS = (("rules", "rules only"), ("l1_model", "L1 model"), ("cascade", "cascade"),
-                ("prompt_guard_2", "Prompt Guard 2"), ("heuristic", "best heuristic"))
+                ("prompt_guard_2_22m", "Prompt Guard 2 22M"), ("prompt_guard_2_86m", "Prompt Guard 2 86M"),
+                ("protectai_v2", "ProtectAI v2"), ("heuristic", "best heuristic"))
+# Why a cell has no number: the system was not measured, does not score the class, or cannot reach the budget.
+NOT_RUN, NO_CLASS, NO_BUDGET = "n/r: not run", "n/r: class", "n/r: budget"
 
 
 def _tpr_fpr(part: dict[str, Any], reachable: bool = True) -> str:
-    """``TPR / FPR`` in percent; the FPR with two decimals, so 0.1 % budgets stay readable; ``n/r`` when the budget
-    is not reachable."""
+    """``TPR / FPR`` in percent; the FPR with two decimals, so 0.1 % budgets stay readable; ``NO_BUDGET`` when the
+    budget is not reachable."""
     if not reachable:
-        return "n/r"
+        return NO_BUDGET
     fpr = "–" if part["fpr"] is None else f"{part['fpr'] * 100:.2f}"
     return f"{_pct(part['tpr'])} / {fpr}"
 
 
-def fair_lines(report: dict[str, Any], fpr: str, systems: Iterable[str]) -> list[str]:
+def fair_lines(report: dict[str, Any], fpr: str) -> list[str]:
     """Markdown table at one FPR level: per class and language the measured rows, the sources behind the positives
-    and, per system, TPR / FPR on the measurement part and TPR / FPR on the report sets at the same cut."""
+    and, per system of ``FAIR_SYSTEMS``, TPR / FPR on the measurement part and TPR / FPR on the report sets at the
+    same cut (``NOT_RUN``, ``NO_CLASS`` or ``NO_BUDGET`` instead of a number)."""
     names = dict(FAIR_SYSTEMS)
-    systems = [s for s in systems if s in report["systems"]]
+    systems = list(names)
     header = ["class", "lang", "pos", "sources", "neg", "hard neg"]
     header += [f"{names[s]} TPR / FPR" for s in systems] + [f"{names[s]} report TPR / FPR" for s in systems]
     lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
     for cls in CLASSES:
         for language in LANGUAGES:
-            cells = {s: report["systems"][s].get(cls, {}).get(language) for s in systems}
+            cells = {s: report["systems"][s].get(cls, {}).get(language) for s in systems if s in report["systems"]}
             first = next((c for c in cells.values() if c is not None), None)
             if first is None or not first[fpr]["measurement"]["pos"]:
                 continue
@@ -1313,9 +1337,9 @@ def fair_lines(report: dict[str, Any], fpr: str, systems: Iterable[str]) -> list
             values = [cls, language, str(m["pos"]), str(first["sources"]), str(m["neg"]), str(m["hard"])]
             for part in ("measurement", "report"):
                 for s in systems:
-                    cell = cells[s]
-                    if cell is None:
-                        values.append("–")
+                    cell = cells.get(s, NOT_RUN)
+                    if cell is NOT_RUN or cell is None:
+                        values.append(NOT_RUN if cell is NOT_RUN else NO_CLASS)
                         continue
                     p = cell[fpr][part]
                     picked = f" ({cell['system']})" if "system" in cell and part == "measurement" else ""
@@ -1324,23 +1348,31 @@ def fair_lines(report: dict[str, Any], fpr: str, systems: Iterable[str]) -> list
     return lines
 
 
-def render_fair(report: dict[str, Any], title: str, lead: list[str], systems: Iterable[str],
-                source: str | None = None, inputs: str | None = None) -> str:
+def render_fair(report: dict[str, Any], title: str, lead: list[str], source: str | None = None,
+                inputs: str | None = None) -> str:
     """A fair-measurement report: one table per FPR level (0.1 % first, the decisive one)."""
-    systems = list(systems)
     counts = report["parts"]
+    excluded = report["excluded"]
     lines = [f"# {title}", "", "Generated by `scripts/l1_threat/scoreboard.py fair`; do not edit by hand.", "",
              *([source, ""] if source else []), *inputs_lines(inputs), *lead,
              f"Mix: {counts['rows']} rows from {counts['sources']} sources, dealt row-wise and stratified by source "
-             f"(seed `{report['seed']}`, split `{report['parts_hash']}`): train {counts['train']}, calibration "
-             f"{counts['calibration']}, measurement {counts['measurement']}; report sets outside the mix: "
+             f"(seed `{report['seed']}`, split `{report['parts_hash']}`): calibration {counts['calibration']}, "
+             f"measurement {counts['measurement']}; report sets outside the mix: "
              f"{', '.join(report['report_sets'])} ({counts['report']} rows).", "",
+             "No training row is measured: the built-in L1 models keep their training data, and every mix row whose "
+             "SHA-256 text key is among the training rows of a built-in model ("
+             + ", ".join(f"{model} {n}" for model, n in report["trained"]["models"].items())
+             + f" keys, {report['trained']['keys']} in all) is left out of both parts: "
+             f"{sum(excluded.values())} rows excluded"
+             + (" (" + ", ".join(f"{source} {n}" for source, n in excluded.items()) + ")" if excluded else "")
+             + ".", "",
              "For a class, the negatives are the benign rows (benign pool, hard benigns, PII and DLP texts, trigger-word "
              "hard negatives) and the positives of every other class. Every cut comes from the calibration part's "
              "negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, "
-             "the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. "
-             "`–`: the system does not score the class. `n/r`: the budget is not reachable (more calibration negatives "
-             "than the budget share the system's top score, e.g. heuristic detections of another class's positives).",
+             f"the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. "
+             f"`{NOT_RUN}`: the system was not measured (reason under Not measured). `{NO_CLASS}`: the system does not "
+             f"score the class. `{NO_BUDGET}`: the budget is not reachable (more calibration negatives than the budget "
+             "share the system's top score, e.g. heuristic detections of another class's positives).",
              ""]
     if report["short_sources"]:
         lines += ["Sources too small to reach every part: " + ", ".join(report["short_sources"]) + ".", ""]
@@ -1348,37 +1380,36 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], systems: It
         lines += ["Not measured: " + "; ".join(f"{k} ({v})" for k, v in sorted(report["missing"].items())) + ".", ""]
     for fpr in GATE_FPRS[::-1]:
         lines += [f"## At {_fpr_label(fpr)} FPR" + (" (decisive)" if fpr == "0.001" else ""), "",
-                  *fair_lines(report, fpr, systems), ""]
+                  *fair_lines(report, fpr), ""]
     return "\n".join(lines)
 
 
-UPPER_BOUND = ("**Upper bound:** the eleven built-in L1 models were trained before this mix existed, on the train half of a "
-               "split inside the same dev sets; part of the mix's calibration and measurement rows were their training "
-               "rows, so the `L1 model` and `cascade` columns are upper bounds until the models are retrained on the "
-               "mix's train part.")
+FAIR_SYSTEMS_LEAD = ("Rules only: Core's L1 heuristic score per class (the L1 score curve, no model). L1 model and "
+                     "cascade: the cascade of `research/l1-threat/scoreboard/cascade-config.json` (the L1 heuristic, "
+                     "then the built-in L1 model of every class, then L3 Wolf where the config names it), cut on its "
+                     "answer (a heuristic detection is final at Core's acceptance; where the L1 model decides, its "
+                     "logit); `L1 model` is the cascade up to L1. Prompt Guard 2 (22M, 86M), ProtectAI v2 and the "
+                     "heuristic baselines (`scripts/l1_threat/run_baselines.py`) from their cached predictions; the best "
+                     "heuristic is picked per class and language on the calibration part and named in brackets.")
 FAIR_FILES = {
-    "baseline.md": ("Threat scoreboard: baseline", ("rules", "prompt_guard_2", "heuristic"),
-                    ["Rules only: Core's L1 heuristic score per class (the L1 score curve, no model). Prompt Guard 2 "
-                     "22M and the heuristic baselines (`scripts/l1_threat/run_baselines.py`) from their cached "
-                     "predictions; the best heuristic is picked per class and language on the calibration part and "
-                     "named in brackets."]),
-    "cascade.md": ("Threat scoreboard: cascade", ("rules", "l1_model", "cascade"),
-                   ["The cascade of `research/l1-threat/scoreboard/cascade-config.json` (the L1 heuristic, then the "
-                    "built-in L1 model of every class, then L3 Wolf where the config names it), each cut from the "
-                    "calibration part on its answer (a heuristic detection is final at Core's acceptance; where the "
-                    "L1 model decides, its logit). `L1 model`: the cascade up to L1 (heuristic, then model); without "
-                    "Wolf in the config the cascade column is not measured, the L1 model column is the cascade.",
-                    UPPER_BOUND]),
-    "builtin-models.md": ("Built-in L1 models in Ark Core", ("rules", "l1_model", "prompt_guard_2", "heuristic"),
+    "baseline.md": ("Threat scoreboard: baseline",
+                    ["Every system on the same rows; this report reads the rules-only column against the baselines.",
+                     FAIR_SYSTEMS_LEAD]),
+    "cascade.md": ("Threat scoreboard: cascade",
+                   ["Every system on the same rows; this report reads the L1 model and cascade columns. Without Wolf "
+                    "in the config the cascade column is not measured, the L1 model column is the cascade.",
+                    FAIR_SYSTEMS_LEAD]),
+    "builtin-models.md": ("Built-in L1 models in Ark Core",
                           ["The eleven fastText-type L1 models are compiled into `patronus-ark-core` "
                            "(`ark-core/models/l1/<class>.ftpack`) and run only for the modules a cascade names "
                            "(`cascade.modules.<category>.l1_model: {\"builtin\": \"<class>\"}`); the parity tests "
                            "(`ark-core/tests/text_model_parity.rs`, `scripts/tests/test_l1_threat_category_model.py`) "
                            "pin the packed values. Their shipped cuts are replaced here by the cut from the "
-                           "calibration part.", UPPER_BOUND]),
-    "fasttext-all-classes.md": ("fastText-type L1 models for all eleven classes", ("rules", "l1_model"),
-                                ["Every class's fastText-type model (the built-in models) next to the rules alone, on "
-                                 "the same rows and at the same FPR.", UPPER_BOUND]),
+                           "calibration part.", FAIR_SYSTEMS_LEAD]),
+    "fasttext-all-classes.md": ("fastText-type L1 models for all eleven classes",
+                                ["Every class's fastText-type model (the built-in models, `L1 model`) next to the "
+                                 "rules alone and the baselines, on the same rows and at the same FPR.",
+                                 FAIR_SYSTEMS_LEAD]),
 }
 
 
@@ -1386,8 +1417,8 @@ def write_fair_files(report: dict[str, Any], directory: Path, source: str | None
                      inputs: str | None = None) -> list[str]:
     """Render ``FAIR_FILES`` into ``directory``; the names of the files whose numbers changed."""
     written = []
-    for name, (title, systems, lead) in FAIR_FILES.items():
-        text = render_fair(report, title, [line for item in lead for line in (item, "")], systems, source, inputs)
+    for name, (title, lead) in FAIR_FILES.items():
+        text = render_fair(report, title, [line for item in lead for line in (item, "")], source, inputs)
         if write_rendered(directory / name, text):
             written.append(name)
     return written
@@ -1396,7 +1427,8 @@ def write_fair_files(report: dict[str, Any], directory: Path, source: str | None
 def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baseline_cache: Path | None) -> dict[str, Any]:
     """Every system on the same mix rows: ``predictions`` maps ``rules``, ``l1_model`` and ``cascade`` to Core
     prediction directories (the cascade's L1 score of ``l1_model`` and ``cascade``); the baselines come from the
-    cache (Prompt Guard 2 22M, and per class and language the heuristic picked on the calibration part)."""
+    cache (the reference models of ``BASELINES.REFERENCE_MODELS``, and per class and language the heuristic picked on
+    the calibration part). ``missing`` names every system without numbers and why."""
     sets, report_sets = mix_sets(dev, mix_root)
     document = load_parts(mix_root, sets)
     parts = document["parts"]
@@ -1413,20 +1445,23 @@ def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baselin
         systems[name] = fair_cells(rows, core_scores(everything, found, name == "rules"),
                                    CLASSES)
     heuristics = {}
-    if baseline_cache is not None:
-        for baseline_id in BASELINES.baseline_ids(BASELINES.entity_map.load()):
-            cached = cached_scores(everything, baseline_cache, baseline_id)
-            if cached is None:
-                missing[baseline_id] = "not cached for every set of the mix"
-            elif baseline_id == "prompt_guard_2_22m":
-                systems["prompt_guard_2"] = fair_cells(rows, cached[0], cached[1])
-            elif baseline_id not in BASELINES.REFERENCE_MODELS:
-                heuristics[baseline_id] = fair_cells(rows, cached[0], cached[1])
+    for baseline_id in BASELINES.baseline_ids(BASELINES.entity_map.load()):
+        cached = None if baseline_cache is None else cached_scores(everything, baseline_cache, baseline_id)
+        if cached is None:
+            missing[baseline_id] = ("no baseline cache" if baseline_cache is None
+                                    else "not cached for every set of the mix and the report sets")
+        elif baseline_id in BASELINES.REFERENCE_MODELS:
+            systems[baseline_id] = fair_cells(rows, cached[0], cached[1])
+        else:
+            heuristics[baseline_id] = fair_cells(rows, cached[0], cached[1])
     if heuristics:
         systems["heuristic"] = best_of(heuristics)
+    else:
+        missing["heuristic"] = "no heuristic baseline measured"
     counted = Counter(r.part for r in rows)
     return {"seed": MIX.SEED, "parts_hash": hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()[:12],
             "report_sets": [s.set_id for s in report_sets], "short_sources": document["short_sources"],
+            "excluded": document["excluded"], "trained": document["trained"],
             "systems": systems, "missing": missing,
             "parts": {**{p: counted[p] for p in (*MIX.PARTS, "report")}, "rows": sum(counted[p] for p in MIX.PARTS),
                       "sources": len(sets)}}
@@ -1720,7 +1755,7 @@ def main(argv: list[str] | None = None) -> int:
     fa.add_argument("--mix", type=Path, required=True, help="mix root written by `mix`")
     fa.add_argument("--predictions", action="append", default=[], metavar="SYSTEM=DIR",
                     help="Core predictions of the dev split and the mix: rules=DIR, l1_model=DIR, cascade=DIR")
-    fa.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache (Prompt Guard 2, heuristics)")
+    fa.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache (reference models, heuristics)")
     fa.add_argument("--output", type=Path, required=True, help="fair report (JSON)")
     fa.add_argument("--scoreboard", type=Path, help=f"also render {', '.join(FAIR_FILES)} into this directory")
     rf = commands.add_parser("refresh", help="re-render the fair scoreboard reports in a checkout of main")

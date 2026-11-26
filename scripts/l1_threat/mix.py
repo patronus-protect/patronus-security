@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""The broad measurement mix and its frozen row-wise split into train, calibration and measurement.
+"""The broad measurement mix and its frozen row-wise split into calibration and measurement.
 
-Every L1 model, the cascade and every baseline are trained, calibrated and measured on one mix: the gated
-dev sets (the benign pool incl. the hard benigns; for a class, the positives of every other class count as
-negatives), PII and DLP texts (the checked-in L1 goldens of the PII and DLP programmes,
-``python/patronus_ark/benchmark_data/{pii,dlp}_l1.jsonl``, German and English rows with a text) and
-trigger-word hard negatives in the NotInject style from the own DE/EN generator below (benign requests,
-mails, docs, code and logs that carry the words attacks use: ignore, system prompt, jailbreak, bypass,
-password, delete …). NotInject, XSTest and OR-Bench-Hard stay holdout-only; report sets stay outside the mix.
+The L1 models, the cascade and every baseline are calibrated and measured on one mix: the gated dev sets (the
+benign pool incl. the hard benigns; for a class, the positives of every other class count as negatives), PII and
+DLP texts (the checked-in L1 goldens of the PII and DLP programmes,
+``python/patronus_ark/benchmark_data/{pii,dlp}_l1.jsonl``, German and English rows with a text) and trigger-word
+hard negatives in the NotInject style from the own DE/EN generator below (benign requests, mails, docs, code and
+logs that carry the words attacks use: ignore, system prompt, jailbreak, bypass, password, delete …). NotInject,
+XSTest and OR-Bench-Hard stay holdout-only; report sets stay outside the mix.
 
-The extra sets are a frozen directory like a generated one (``manifest.json`` + ``.ready``; ``scoreboard.py
-mix --out DIR`` writes ``DIR/mix``). The split is row-wise and stratified by source (the set id): per source the
-rows are grouped by normalized text (``text_key``), the groups ordered by stratum (language, classes) and a seeded
-SHA-256 of the text, and dealt in the pattern ``PATTERN`` (3 train : 1 calibration : 1 measurement) from a seeded
-offset; a text already dealt in an earlier source keeps its part. So identical texts never sit in two parts, every
-source with at least ``len(PATTERN)`` new texts has rows in all three parts (a smaller one is named in
-``short_sources``), every stratum is spread in proportion and no row is in two parts. The assignment is a pure
-function of the seed and the rows; ``parts.json`` freezes it with the set hashes it was dealt from.
+The mix has no train part: the built-in L1 models keep the training rows they were trained on, and every mix row
+whose SHA-256 text key (``text_sha``) is among them is excluded from both parts (``excluded`` counts them per
+source). The extra sets are a frozen directory like a generated one (``manifest.json`` + ``.ready``;
+``scoreboard.py mix --out DIR`` writes ``DIR/mix``). The split is row-wise and stratified by source (the set id):
+per source the remaining rows are grouped by normalized text (``text_key``), the groups ordered by stratum
+(language, classes) and a seeded SHA-256 of the text, and dealt in the pattern ``PATTERN`` (1 calibration : 1
+measurement) from a seeded offset; a text already dealt in an earlier source keeps its part. So identical texts
+never sit in two parts, every source with at least ``len(PATTERN)`` new texts has rows in both parts (a smaller one
+is named in ``short_sources``), every stratum is spread in proportion and no row is in two parts. The assignment is
+a pure function of the seed, the rows and the excluded keys; ``parts.json`` freezes it with the set hashes it was
+dealt from and the fingerprint of the excluded keys.
 """
 
 from __future__ import annotations
@@ -33,9 +36,9 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[2]
 
 SEED = "ark-l1-threat-e10-mix-v1"
-PARTS = ("train", "calibration", "measurement")
-PATTERN = ("train", "train", "train", "calibration", "measurement")
-PARTS_SCHEMA = "ark-l1-threat-mix-parts-v1"
+PARTS = ("calibration", "measurement")
+PATTERN = PARTS
+PARTS_SCHEMA = "ark-l1-threat-mix-parts-v2"
 PARTS_FILE = "parts.json"
 MIX_DIR = "mix"
 TRIGGER_SET = "trigger_negatives"
@@ -46,6 +49,19 @@ LANGUAGES = ("de", "en")
 TRIGGER_ROWS = 300
 TRIGGER_LABEL = "trigger-word hard negative (benign)"
 OTHER_LABEL = "PII or DLP text (benign for every threat class)"
+# The sets (directory/set id of the dev split) the eleven built-in fastText-type L1 models were trained on: the train
+# side of ``ablation.split_rows`` over these rows (``ablation.py calibrate --rows train_dev --rows generated --rows
+# translated``). The models recorded no training rows, so their split is redone on these sets.
+FASTTEXT_TRAIN_SETS = frozenset({
+    "generated/agent_scenarios", "generated/carrier_insertion", "generated/class_templates",
+    "generated/exfil_lookalikes", "generated/obfuscation_slices",
+    "train_dev/agent_safetybench", "train_dev/agentdojo", "train_dev/approve_or_deny_de", "train_dev/bipia",
+    "train_dev/cyberseceval_multilingual", "train_dev/dolly_15k", "train_dev/dynahate", "train_dev/germanquad",
+    "train_dev/massive_de", "train_dev/massive_en", "train_dev/mosscap", "train_dev/nemotron_safety_v3",
+    "train_dev/redcode", "train_dev/simple_safety_tests", "train_dev/spml", "train_dev/wildguardmix",
+    "train_dev/wildjailbreak", "train_dev/xl_safetybench", "train_dev/xsafety_de",
+    "translated/runner_translations_de",
+})
 
 # Benign texts with trigger words, per carrier; ``{t}`` is a topic. Own wording, no dataset text.
 TRIGGER_TEMPLATES: dict[str, dict[str, tuple[str, ...]]] = {
@@ -187,16 +203,27 @@ def text_key(row: dict[str, Any]) -> str:
     return " ".join(str(row.get("text") or "").split()).casefold() or f"\x00{row['id']}"
 
 
-def assign_parts(sources: dict[str, Iterable[dict[str, Any]]], seed: str = SEED) -> dict[str, str]:
-    """Row id -> part, dealt per source by text group (see the module docstring). A row id in two sources is an
-    error: no row may land in two parts. A source with fewer new texts than ``PATTERN`` cannot reach every part;
-    ``short_sources`` names it."""
+def text_sha(row: dict[str, Any]) -> str:
+    """The SHA-256 of ``text_key``: the key a training row is matched by."""
+    return hashlib.sha256(text_key(row).encode("utf-8")).hexdigest()
+
+
+def assign_parts(sources: dict[str, Iterable[dict[str, Any]]], seed: str = SEED,
+                 trained: frozenset[str] = frozenset()) -> dict[str, str]:
+    """Row id -> part, dealt per source by text group (see the module docstring); a row whose ``text_sha`` is in
+    ``trained`` gets no part. A row id in two sources is an error: no row may land in two parts. A source with fewer
+    new texts than ``PATTERN`` cannot reach every part; ``short_sources`` names it."""
     parts: dict[str, str] = {}
     text_parts: dict[str, str] = {}
+    seen: set[str] = set()
     for source, rows in sorted(sources.items()):
         groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
-            groups[text_key(row)].append(row)
+            if row["id"] in seen:
+                raise ValueError(f"row {row['id']} appears twice in the mix")
+            seen.add(row["id"])
+            if text_sha(row) not in trained:
+                groups[text_key(row)].append(row)
         offset = int(_digest(seed, source), 16) % len(PATTERN)
         ordered = sorted(groups.items(), key=lambda item: (min(map(_stratum, item[1])), _digest(seed, item[0])))
         index = 0
@@ -205,32 +232,41 @@ def assign_parts(sources: dict[str, Iterable[dict[str, Any]]], seed: str = SEED)
                 text_parts[key] = PATTERN[(index + offset) % len(PATTERN)]
                 index += 1
             for row in group:
-                if row["id"] in parts:
-                    raise ValueError(f"row {row['id']} appears twice in the mix")
                 parts[row["id"]] = text_parts[key]
     return parts
 
 
 def part_counts(sources: dict[str, Iterable[dict[str, Any]]], parts: dict[str, str]) -> dict[str, dict[str, int]]:
-    counts: dict[str, dict[str, int]] = defaultdict(lambda: {part: 0 for part in PARTS})
+    """Rows per source and part; excluded rows (no part) are not counted."""
+    counts = {source: {part: 0 for part in PARTS} for source in sorted(sources)}
     for source, rows in sources.items():
         for row in rows:
-            counts[source][parts[row["id"]]] += 1
-    return {source: counts[source] for source in sorted(counts)}
+            if row["id"] in parts:
+                counts[source][parts[row["id"]]] += 1
+    return counts
 
 
 def parts_document(sources: dict[str, Iterable[dict[str, Any]]], set_hashes: dict[str, str],
-                   seed: str = SEED) -> dict[str, Any]:
-    """The frozen split: seed, pattern, the set hashes it was dealt from, counts per source and part, and the parts."""
+                   trained: dict[str, frozenset[str]] | None = None, seed: str = SEED) -> dict[str, Any]:
+    """The frozen split: seed, pattern, the set hashes it was dealt from, the training keys of each built-in model
+    (``trained``: model -> ``text_sha`` keys; their count and a fingerprint of their union), the rows excluded as
+    training rows per source, counts per source and part, and the parts."""
     sources = {source: list(rows) for source, rows in sources.items()}
-    parts = assign_parts(sources, seed)
+    trained = trained or {}
+    union = frozenset().union(*trained.values())
+    parts = assign_parts(sources, seed, union)
     counts = part_counts(sources, parts)
+    excluded = {source: sum(row["id"] not in parts for row in rows) for source, rows in sorted(sources.items())}
+    fingerprint = hashlib.sha256("\n".join(sorted(union)).encode("utf-8")).hexdigest()[:16]
     return {"schema": PARTS_SCHEMA, "seed": seed, "pattern": list(PATTERN), "sets": dict(sorted(set_hashes.items())),
+            "trained": {"models": {model: len(keys) for model, keys in sorted(trained.items())},
+                        "keys": len(union), "fingerprint": fingerprint},
+            "excluded": {source: n for source, n in excluded.items() if n},
             "counts": counts, "short_sources": short_sources(counts), "parts": dict(sorted(parts.items()))}
 
 
 def short_sources(counts: dict[str, dict[str, int]]) -> list[str]:
-    """The sources without a row in some part (fewer new texts than ``PATTERN``)."""
+    """The sources without a row in some part (fewer new texts than ``PATTERN`` after the exclusion)."""
     return sorted(source for source, by_part in counts.items() if not all(by_part.values()))
 
 

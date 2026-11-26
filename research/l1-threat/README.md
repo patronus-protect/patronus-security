@@ -619,9 +619,28 @@ Heuristik (auf dem Kalibrier-Teil gewählt) auf denselben Zeilen; jeder Schnitt 
 Kalibrier-Teils (je Klasse und Sprache, 0,1 % entscheidend, 1 % daneben), TPR/FPR nur aus dem Mess-Teil, dazu als
 Pflichtspalte TPR/FPR auf den Report-Sätzen (außerhalb des Mixes) am selben Schnitt und die Zahl der Quellen hinter
 den Positiven. Die alten Zahlen in `baseline.md`, `cascade.md`, `builtin-models.md` und `fasttext-all-classes.md`
-sind ersetzt. Offen: die eingebauten L1-Modelle sind noch auf der alten Teilung innerhalb derselben Sätze
-trainiert, ihre Spalten sind darum als Obergrenze gekennzeichnet, bis sie auf dem Train-Teil des Mixes neu trainiert
-sind; die Wolf-Stufe (L3) fehlt in der Kaskaden-Spalte, solange auf dem Host kein Wolf-Edge-fp32-Bundle vorbereitet ist.
+sind ersetzt.
+
+**Bereinigte Auswertung ohne Neutraining (E10b, Owner 2026-11-26).** Trainingsdaten bleiben fest und gehören nie
+zu einer Auswertung: kein Modell wird neu trainiert, kein Trainingssatz ändert sich. Der Mix hat keinen Train-Teil
+mehr; er wird im Verhältnis 1 : 1 in Kalibrierung und Messung geteilt (gleicher Seed, Schema
+`ark-l1-threat-mix-parts-v2`). Vor dem Austeilen fliegt jede Zeile, auf der ein ausgeliefertes L1-Modell trainiert
+wurde, aus beiden Teilen (Abgleich über den SHA-256-Textschlüssel, `scoreboard.trained_keys`). Kein Modell hat
+seine Trainingszeilen aufgezeichnet; nachgebildet wird darum die Teilung seines Trainingsskripts: die elf
+fastText-Modelle (S12/S13) trainierten auf der Train-Seite von `ablation.split_rows` über `train_dev`, `generated`
+und `translated` in der Satzliste von S13 (`mix.FASTTEXT_TRAIN_SETS`; je Klasse ihre Positiven und die
+Benign-Zeilen), das harmful_content-Subklassenmodell (HC03) auf jeder gelabelten Positiven
+(`labels/harmful_subclass.jsonl`). Die Teilung läuft auf dem aktuellen `DEV`; Zeilen, die erst nach S13 in diese
+Sätze kamen, fallen dabei mit der Hash-Hälfte heraus, als würden sie trainiert (lieber zu viel als zu wenig
+ausgeschlossen); später hinzugekommene Sätze (E11) zählen nur, wo ihr Text einer Trainingszeile gleicht. Die
+Berichte nennen die ausgeschlossenen Zeilen je Quelle; `scripts/tests/test_l1_threat_mix.py` wird rot, sobald eine
+Trainingszeile in Kalibrierung oder Messung liegt (synthetisch und, mit `ARK_L1_DEV_DATA`, auf dem echten
+Dev-Split). Gemessen werden Regeln allein, L1-Modell, Kaskade, Prompt Guard 2 22M und 86M, ProtectAI v2 und die
+beste Heuristik; jede Zelle trägt eine Zahl oder `n/r` mit Grund (nicht gemessen, Klasse nicht bewertet, Budget
+nicht erreichbar). Der Obergrenzen-Hinweis entfällt. Offen: Prompt Guard 2 22M (noch ohne `xl_safetybench`, `xsafety_de` und
+ein Teil der Report-Sätze), 86M und ProtectAI v2 sind nicht für
+alle Sätze des Mixes gecacht (Owner-Befehl oben); die Wolf-Stufe (L3) fehlt in der Kaskaden-Spalte, solange auf dem
+Host kein Wolf-Edge-fp32-Bundle vorbereitet ist.
 
 **Kaskade statt vollem Stack (Owner 2026-11-19, ersetzt die L1+L2-Messung aus E07).** Gemessen wird ark-core
 allein, und die Ebenen sind eine Kaskade: L1-Heuristik → L1-Modell → L3 (Wolf Defender für `injection`, mit

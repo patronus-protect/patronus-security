@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -40,9 +41,9 @@ def test_split_is_stratified_within_a_source():
     parts = MIX.assign_parts(sources)
     for stratum in (rows("s", 500), rows("s", 100, ["jailbreak"]), rows("s", 50, ["jailbreak"], "de")):
         share = Counter(parts[r["id"]] for r in stratum)
-        assert share["train"] == pytest.approx(0.6 * len(stratum), abs=1)
-        assert share["calibration"] == pytest.approx(0.2 * len(stratum), abs=1)
-        assert share["measurement"] == pytest.approx(0.2 * len(stratum), abs=1)
+        assert set(share) == {"calibration", "measurement"}
+        assert share["calibration"] == pytest.approx(0.5 * len(stratum), abs=1)
+        assert share["measurement"] == pytest.approx(0.5 * len(stratum), abs=1)
 
 
 def test_split_is_seeded_and_independent_of_row_order():
@@ -53,7 +54,7 @@ def test_split_is_seeded_and_independent_of_row_order():
 
 
 def test_split_names_a_too_small_source_and_refuses_a_row_in_two_sources():
-    document = MIX.parts_document({"tiny": rows("tiny", 2), "full": rows("full", 5)}, {})
+    document = MIX.parts_document({"tiny": rows("tiny", 1), "full": rows("full", 5)}, {})
     assert document["short_sources"] == ["tiny"]
     with pytest.raises(ValueError, match="twice"):
         MIX.assign_parts({"a": rows("a", 5), "b": rows("a", 5)})
@@ -146,11 +147,11 @@ def mix_rows(scores_by_part):
 def test_cut_comes_only_from_the_calibration_part():
     calibration = ([0.9] * 10, [0.1 * (i % 10) for i in range(1000)])
     rows, scores = mix_rows({"calibration": calibration, "measurement": ([0.95] * 10, [0.2] * 1000),
-                             "train": ([1.0], [0.99] * 500), "report": ([0.95], [0.5] * 10)})
+                             "report": ([0.95], [0.5] * 10)})
     cell = MODULE.fair_cells(rows, scores, ["jailbreak"])["jailbreak"]["all"]["0.001"]
-    # Measurement and train negatives score far higher than the calibration ones: they move nothing.
+    # Measurement and report negatives score far higher than the calibration ones: they move nothing.
     noisy, noisy_scores = mix_rows({"calibration": calibration, "measurement": ([0.95] * 10, [0.95] * 1000),
-                                    "train": ([1.0], [1.0] * 500), "report": ([0.95], [0.97] * 10)})
+                                    "report": ([0.95], [0.97] * 10)})
     moved = MODULE.fair_cells(noisy, noisy_scores, ["jailbreak"])["jailbreak"]["all"]["0.001"]
     assert cell["cut"] == moved["cut"] == MODULE.mix_cut(calibration[1], 0.001)
     assert cell["measurement"]["fpr"] == 0.0 and moved["measurement"]["fpr"] == 1.0
@@ -178,11 +179,14 @@ def test_fair_report_renders_the_decisive_level_first():
     rows, scores = mix_rows({"calibration": ([0.9] * 10, [0.0] * 1000), "measurement": ([0.9] * 10, [0.0] * 1000),
                              "report": ([0.9] * 2, [0.0] * 5)})
     report = {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": ["r"], "missing": {"cascade": "why"}, "short_sources": [],
-              "parts": {"train": 0, "calibration": 1010, "measurement": 1010, "report": 7, "rows": 2020, "sources": 1},
+              "excluded": {}, "trained": {"models": {}, "keys": 0},
+              "parts": {"calibration": 1010, "measurement": 1010, "report": 7, "rows": 2020, "sources": 1},
               "systems": {"rules": MODULE.fair_cells(rows, scores, ["jailbreak"])}}
-    text = MODULE.render_fair(report, "T", [], ["rules", "cascade"])
+    text = MODULE.render_fair(report, "T", [])
     assert text.index("At 0.1% FPR (decisive)") < text.index("At 1% FPR")
-    assert "| jailbreak | all | 10 | 1 | 1000 | 0 | 100.0 / 0.00 | 100.0 / 0.00 |" in text
+    not_run = " | ".join([MODULE.NOT_RUN] * 6)
+    assert f"| jailbreak | all | 10 | 1 | 1000 | 0 | 100.0 / 0.00 | {not_run} | 100.0 / 0.00 | {not_run} |" in text
+    assert "train" not in text.split("Mix:")[1].split("\n")[0]
     assert "Not measured: cascade (why)." in text
 
 
@@ -203,6 +207,72 @@ def test_an_unreachable_budget_is_marked_not_reachable():
     cell = MODULE.fair_cells(rows, scores, ["jailbreak"])["jailbreak"]["all"]
     assert not cell["0.001"]["reachable"] and cell["0.001"]["measurement"]["tpr"] == 0.0
     report = {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": [], "missing": {}, "short_sources": [],
-              "parts": {"train": 0, "calibration": 1010, "measurement": 1010, "report": 0, "rows": 2020, "sources": 1},
+              "excluded": {}, "trained": {"models": {}, "keys": 0},
+              "parts": {"calibration": 1010, "measurement": 1010, "report": 0, "rows": 2020, "sources": 1},
               "systems": {"rules": {"jailbreak": {"all": cell}}}}
-    assert "| jailbreak | all | 10 | 1 | 1000 | 0 | n/r | n/r |" in MODULE.render_fair(report, "T", [], ["rules"])
+    budget = MODULE.NO_BUDGET
+    assert f"| jailbreak | all | 10 | 1 | 1000 | 0 | {budget} |" in MODULE.render_fair(report, "T", [])
+
+
+def test_training_rows_are_left_out_of_both_parts_and_counted_per_source():
+    sources = {"a": rows("a", 40), "b": rows("b", 20, ["jailbreak"])}
+    trained = {"jailbreak": frozenset(MIX.text_sha(r) for r in sources["b"][:5]),
+               "other": frozenset(MIX.text_sha({"text": r["text"].upper()}) for r in sources["a"][:3])}
+    document = MIX.parts_document(sources, {}, trained)
+    left_out = {r["id"] for r in sources["b"][:5] + sources["a"][:3]}
+    assert left_out.isdisjoint(document["parts"]) and len(document["parts"]) == 60 - len(left_out)
+    assert document["excluded"] == {"a": 3, "b": 5}
+    assert document["trained"]["models"] == {"jailbreak": 5, "other": 3} and document["trained"]["keys"] == 8
+    assert document["counts"]["b"] == {"calibration": 8, "measurement": 7} or \
+        document["counts"]["b"] == {"calibration": 7, "measurement": 8}
+    # The exclusion is part of the frozen split: other training rows give another document.
+    assert MIX.parts_document(sources, {}, {"jailbreak": trained["jailbreak"]}) != document
+
+
+def freeze_dev(directory, by_set):
+    """A frozen corpus directory of ``directory`` with ``by_set``: set id -> rows."""
+    from test_l1_threat_scoreboard import freeze  # noqa: PLC0415
+
+    freeze(directory, [r for set_rows in by_set.values() for r in set_rows])
+
+
+def assert_no_training_row_is_measured(dev, mix_root):
+    document = MODULE.build_mix(dev, mix_root)
+    trained = MODULE.trained_keys(dev)
+    keys = frozenset().union(*trained.values())
+    sets, _ = MODULE.mix_sets(dev, mix_root)
+    measured = [r for entry in sets for r in MODULE.BASELINES.read_rows(entry.path) if r["id"] in document["parts"]]
+    assert measured and not [r["id"] for r in measured if MIX.text_sha(r) in keys]
+    assert set(document["parts"].values()) <= {"calibration", "measurement"}
+    assert sum(document["excluded"].values()) == sum(
+        MIX.text_sha(r) in keys for entry in sets for r in MODULE.BASELINES.read_rows(entry.path))
+    return document, trained
+
+
+def test_no_training_row_of_a_shipped_model_is_in_calibration_or_measurement(tmp_path, monkeypatch):
+    def tagged(source, count, classes=(), **extra):
+        return [{**r, "dataset": source, "reported_classes": [], **extra} for r in rows(source, count, classes)]
+
+    train_dev = {"dolly_15k": tagged("dolly_15k", 60), "spml": tagged("spml", 40, ["instruction_injection"]),
+                 "nemotron_safety_v3": tagged("nemotron_safety_v3", 10, ["harmful_content"]),
+                 "unseen_new_set": tagged("unseen_new_set", 30)}
+    # A copy of a training text in a set no model trained on is excluded too (matched by text, not by id).
+    for copy, original in zip(train_dev["unseen_new_set"], train_dev["dolly_15k"][:10]):
+        copy["text"] = original["text"]
+    freeze_dev(tmp_path / "dev" / "train_dev", train_dev)
+    freeze_dev(tmp_path / "dev" / "generated", {"class_templates": [
+        {**r, "generator": "class_templates", "template_family": f"family{i % 4}"}
+        for i, r in enumerate(tagged("class_templates", 40, ["tool_poisoning"]))]})
+    labelled = {r["id"]: "violent_crimes" for r in train_dev["nemotron_safety_v3"][:4]}
+    monkeypatch.setattr(MODULE.HARMFUL_SUBCLASS, "load", lambda path=None: labelled)
+    document, trained = assert_no_training_row_is_measured(tmp_path / "dev", tmp_path / "mix")
+    assert trained["harmful_subclass"] == {MIX.text_sha(r) for r in train_dev["nemotron_safety_v3"][:4]}
+    assert trained["instruction_injection"] and trained["tool_poisoning"]
+    assert {"dolly_15k", "spml", "class_templates"} <= set(document["excluded"])
+    copied = sum(MIX.text_sha(r) in trained["instruction_injection"] for r in train_dev["dolly_15k"][:10])
+    assert copied and document["excluded"]["unseen_new_set"] == copied
+
+
+@pytest.mark.skipif(not os.environ.get("ARK_L1_DEV_DATA"), reason="needs the dev split (ARK_L1_DEV_DATA)")
+def test_no_training_row_of_a_shipped_model_is_measured_on_the_dev_split(tmp_path):
+    assert_no_training_row_is_measured(Path(os.environ["ARK_L1_DEV_DATA"]), tmp_path / "mix")
