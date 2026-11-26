@@ -75,7 +75,11 @@ der drei trägergebundenen Klassen mehr (Golden-Fälle `threat_l1-class-border-*
 Messung: [`scoreboard/confusion.md`](scoreboard/confusion.md) (Zeilen: wahre Labels, Spalten: Meldequote je
 Klasse am Detect-Schnitt; Regeln allein und L1-Modelle der Kaskaden-Konfiguration; Mess-Teil des Mixes und
 Report-Sets; `scoreboard.py refresh` schreibt sie neu). Die Spalten `tool_poisoning`,
-`agent_config_tampering` und `memory_poisoning` liegen außerhalb der Diagonale überall bei 0,0 %.
+`agent_config_tampering` und `memory_poisoning` liegen außerhalb der Diagonale bei 0,0 % (einzig
+`memory_poisoning` auf `exfiltration`-Zeilen 5,4 %, erlaubtes Paar); vor dem Prefilter (Basis `b5d88ab4`, gleiche
+Zeilen und Schnitte) meldeten die drei Modelle 2,6–5,3 % der Benign-Zeilen, 21–55 % der Positiven der anderen
+Agenten-Klassen und auf den Report-Sets bis 16,0 % (`memory_poisoning`) der `instruction_injection`-Zeilen;
+ihr Recall bleibt bei 100 %.
 Offene Ausnahmen (L1-Modelle, Stand T34, Mess-Teil / Report-Sets):
 - `exfiltration` auf `instruction_injection`-Zeilen 6,9 % / 30,1 %, `unsafe_action` 3,2 % / 19,7 %,
   `prompt_extraction` 20,0 % / 65,7 %: erlaubte Nachbarn, aber die Zeilen tragen (ohne Multi-Label-Gold)
