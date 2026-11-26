@@ -909,6 +909,29 @@ Auf den nativen Zeilen findet ARK heute (B0) getrennt von den Vorlagen (83 von 8
 Exec 0 von 152, RedCode-Gen 3 von 141, Agent-SafetyBench 4 von 59, ohne Fund auf den 52 Hard Negatives und den übrigen
 Dev-Benign-Zeilen (§17 von `categories/unsafe_action.md`) → **T21**.
 
+**Registrierte Sätze mit Rezept (E11, 2026-11-26).** `generation: 25` schreibt die Rezepte der registrierten,
+bisher offenen Sätze; Lizenz je Satz am gepinnten Commit geprüft, Gold-Stichprobe in `scoreboard/gold-notes.md`:
+- `train_dev`: **neuralchemy** (Apache-2.0; nur eigene Zeilen, ohne die HackAPrompt- und HarmBench-Kopien,
+  Code-Ausführungs-Payloads und Kontrollprompts; Injection, Jailbreak und Prompt-Extraktion nach Kategorie),
+  **GenTel-Bench** (Apache-2.0; Goal Hijacking mit Override → Injection, kurze Leak-Anfragen → Prompt-Extraktion,
+  Jailbreak-Templates → Jailbreak; die Jailbreak-Datei, Templates × dieselben Fragen, bleibt draußen),
+  **PolyGuardPrompts** (CC-BY-4.0; EN und der maschinell übersetzte DE-Teil; Gewalt, Betrug, Cyberangriff →
+  harmful_content, Hassrede mit Cue → toxic_language; gegen WildGuardMix dedupliziert), **SaTML CTF** (MIT; die
+  Nutzer-Turns der 50 erfolgreichen Chats mit Secret-Cue).
+- `report`: **deepset prompt-injections** (Apache-2.0; Sprache je Zeile über `language_cues`), **InjecAgent** (MIT),
+  **GermEval 2021** (ohne Lizenz; Toxizitätslabel deckt Kritik und Beschwerden, 48 % Fehler in der Stichprobe).
+- `dropped` (neuer Registry-Zustand mit Grund, nie geholt): Tensor Trust (gleiches Repo wie der Holdout-Satz),
+  Nemotron IPI (nicht veröffentlicht), AI Safety Brazil (keine Prompts, Portugiesisch), GermEval 2019
+  (enthält die GermEval-2018-Testtweets des Holdouts, ohne Lizenz), GermEval 2025 (GPL-3.0), GerMS-AT
+  (CC-BY-NC-4.0), HackAPrompt (gated; die Kopien in neuralchemy fielen in der Stichprobe durch).
+
+Dev-Zuwachs: instruction_injection EN +1.643 (6 Quellen), jailbreak EN +770 (4), prompt_extraction EN +73 (5;
+Mosscap bleibt 15.000 von 15.143), harmful_content DE +145 / EN +148 (je 3), toxic_language DE +16 / EN +28 (je 3).
+Nativ deutsche Positive bringt keiner der Sätze; die offenen nativen DE-Quellen scheitern an Lizenz oder
+Holdout-Überlappung. Die Agentenklassen bekommen native EN-Zeilen nur in der Report-Spalte (InjecAgent). DEV friert
+der Owner nach dem Merge neu ein (`bash ~/ark-threat/owner_freeze.sh`: `prepare_corpora.py --dev-out … --holdout-out …
+--force`, danach die Generatoren); der Holdout verliert dabei Zeilen, die neue Dev-Zeilen duplizieren.
+
 ### H01: Hard-Negative-Bank über alle Klassen
 
 Goldens `threat_l1-hard-bank-*` (`generate_l1_goldens.py`, `HARD_BANK_CASES`): 1 100 Hard Negatives, je

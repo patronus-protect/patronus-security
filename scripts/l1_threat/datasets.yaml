@@ -251,7 +251,9 @@ datasets:
   - id: neuralchemy
     commercial: true
     # Core configuration (train, validation and test; leakage-free by group upstream). Upstream mixes its own prompts with
-    # rows taken from other sets; the HarmBench rows (source harmbench, harmbench_benign) leave: HarmBench is a holdout set.
+    # rows taken from other sets; the HarmBench rows (source harmbench, harmbench_benign) leave because HarmBench is a
+    # holdout set, the HackAPrompt rows because they failed the dev spot-check (garbled target-phrase fragments without a
+    # readable instruction, 4 of 13 injection rows doubtful).
     source: https://huggingface.co/datasets/neuralchemy/Prompt-injection-dataset
     revision: 7d70432dfcf47a821612cbf9d34e9d9e3ad20e75
     files:
@@ -264,18 +266,35 @@ datasets:
     labels:
       - field: category
         equals: &neuralchemy_extraction [prompt_extraction, system_extraction, prompt_leak]
-        and: &neuralchemy_attack [{field: label, equals: "1"}, {field: source, equals: &neuralchemy_sources [neuralchemy_v1, hackaprompt, wildguard_judgecomp, original]}]
+        and: &neuralchemy_attack
+          - {field: label, equals: "1"}
+          - {field: source, equals: &neuralchemy_sources [neuralchemy_v1, wildguard_judgecomp, original]}
+          - {field: text, not_matches: &neuralchemy_script '[\u0590-\u06ff\u0900-\u097f\u0e00-\u0e7f\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]'}
         label: "label = 1, category prompt_extraction, system_extraction or prompt_leak"
       - field: category
         equals: &neuralchemy_jailbreak [jailbreak, persona_replacement, crescendo, many_shot]
         and: *neuralchemy_attack
         label: "label = 1, category jailbreak, persona_replacement, crescendo or many_shot"
       - field: category
-        excludes: [prompt_extraction, system_extraction, prompt_leak, jailbreak, persona_replacement, crescendo, many_shot]
+        equals: &neuralchemy_injection [direct_injection, instruction_override, prompt_injection, indirect_injection, rag_poisoning,
+                                        system_manipulation, agent_manipulation, token_smuggling, payload_injection,
+                                        encoding_obfuscation, multi_turn, response_manipulation]
         and: *neuralchemy_attack
-        label: "label = 1, any other category"
-      - {field: label, equals: "0", and: [{field: source, equals: *neuralchemy_sources}], label: "label = 0"}
-      - {field: source, equals: [harmbench, harmbench_benign], label: "source harmbench or harmbench_benign"}
+        label: "label = 1, category of an instruction override"
+      # adversarial, encoding and code_execution are mostly code-execution payloads, control holds harmless prompts,
+      # training_extraction, model_fingerprinting, token_injection, context_confusion, output_manipulation, chain_of_thought
+      # and edge_case carry no override of their own.
+      - field: category
+        excludes: [prompt_extraction, system_extraction, prompt_leak, jailbreak, persona_replacement, crescendo, many_shot,
+                   direct_injection, instruction_override, prompt_injection, indirect_injection, rag_poisoning,
+                   system_manipulation, agent_manipulation, token_smuggling, payload_injection, encoding_obfuscation,
+                   multi_turn, response_manipulation]
+        and: [{field: label, equals: "1"}]
+        label: "label = 1, other category"
+      - {field: label, equals: "0", and: [{field: source, equals: *neuralchemy_sources}, {field: text, not_matches: *neuralchemy_script}], label: "label = 0"}
+      # Translated attacks in Hebrew, Arabic, Hindi, Thai, Japanese, Chinese or Korean: neither German nor English.
+      - {field: text, matches: *neuralchemy_script, label: "text in a non-Latin script"}
+      - {field: source, equals: [harmbench, harmbench_benign, hackaprompt], label: "source harmbench, harmbench_benign or hackaprompt"}
   - id: spml
     commercial: true
     source: https://huggingface.co/datasets/reshabhs/SPML_Chatbot_Prompt_Injection
@@ -307,9 +326,26 @@ datasets:
     format: parquet
     text: text
     language: en
+    # Both files also wrap attacks in persona jailbreak templates (Developer Mode, LiveGPT, NECO, Leo): a goal hijacking
+    # row is an injection only with an override of the earlier task in it, and a prompt leaking row an extraction only
+    # as a short plain request (30 rows); the long ones ask the template's persona about leak defences (dev spot-check).
     labels:
-      - {field: domain, equals: promptleaking, and: [{field: label, equals: "1"}], label: "prompt leaking attack (label = 1)"}
-      - {field: domain, excludes: [promptleaking, safe], and: [{field: label, equals: "1"}], label: "goal hijacking attack (label = 1)"}
+      - field: text
+        matches: &gentel_short '\A[\s\S]{1,299}\Z'
+        and: [{field: domain, equals: promptleaking}, {field: label, equals: "1"}]
+        label: "prompt leaking attack, plain request"
+      - field: text
+        matches: &gentel_override '(?i)\b(?:ignor\w*|disregard\w*|bypass\w*|overlook\w*|omit\w*|forget\w*|skip\w*|set(?:ting)? aside|neglect\w*|dismiss\w*)\b[^.?!]{0,30}\b(?:previous|prior|former|earlier|past|above|preceding|initial|original|any)\b'
+        and: [{field: domain, excludes: [promptleaking, safe]}, {field: label, equals: "1"}]
+        label: "goal hijacking attack with an override of the earlier task"
+      - field: text
+        not_matches: *gentel_short
+        and: [{field: domain, equals: promptleaking}, {field: label, equals: "1"}]
+        label: "attack inside a jailbreak template"
+      - field: text
+        not_matches: *gentel_override
+        and: [{field: domain, excludes: [promptleaking, safe]}, {field: label, equals: "1"}]
+        label: "attack inside a jailbreak template"
       - {field: label, equals: "0", label: "label = 0"}
   - id: polyguardprompts
     commercial: true
@@ -337,6 +373,16 @@ datasets:
       - {field: prompt_harm_label, equals: unharmful, label: "prompt_harm_label = unharmful"}
       # Matches every row; it only decides for the rows without a prompt harm label (442), which leave as out of scope.
       - {label: "any row (prompt_harm_label missing)"}
+    keep:
+      - label: "prompt_harm_label = harmful, subcategory toxic_language_hate_speech"
+        reason: >-
+          the hate speech subcategory also holds gaslighting and manipulation prompts without an insult or a hateful
+          target, and the German part holds a few refusals of the translation model in place of the prompt; a row stays
+          only with a hate, insult, slur, stereotype or harassment cue and without a refusal opening
+        pattern: &polyguard_toxic '\A(?!\s*(?:es tut mir leid|i''m sorry|ich kann (?:diese|dieser|ihnen|dir)))[\s\S]*?\b(?:hate|hateful|slurs?|insult\w*|derogator\w*|demean\w*|belittl\w*|stereotyp\w*|offensive|racis\w*|sexis\w*|homophob\w*|transphob\w*|discriminat\w*|dehumaniz\w*|bull(?:y|ies|ying)|harass\w*|troll\w*|hass\w*|beleidig\w*|abfällig\w*|abwertend\w*|herabwürdig\w*|rassis\w*|sexistisch\w*|homophob\w*|diskriminier\w*|mobb\w*|beschimpf\w*|hetz\w*|schimpf\w*|vorurteil\w*)'
+      - label: "prompt_harm_label = harmful, subcategory violence, fraud or cyberattack"
+        reason: the German part holds a few refusals of the translation model in place of the prompt
+        pattern: '\A(?!\s*(?:es tut mir leid|i''m sorry|ich kann (?:diese|dieser|ihnen|dir)))'
     dedup_against: [wildguardmix]
   - id: nemotron_safety_v3
     commercial: true
@@ -1391,9 +1437,9 @@ datasets:
   - id: hackaprompt
     commercial: unknown
     dropped: >-
-      quality and access: the Hugging Face set is gated (terms to accept, an unauthenticated fetch gets 401), its
-      competition payloads aim at one target phrase, and about 2,000 of its prompts already reach the dev set through
-      neuralchemy (source hackaprompt)
+      quality and access: the Hugging Face set is gated (terms to accept, an unauthenticated fetch gets 401), and its
+      competition payloads aim at one target phrase; the HackAPrompt rows that neuralchemy copies failed the dev
+      spot-check (garbled fragments without a readable instruction) and are left out there too
   - id: injecagent
     commercial: true
     # The attacker instructions of both attack kinds (direct harm, data stealing); reported only (templated).

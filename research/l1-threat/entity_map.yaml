@@ -592,9 +592,11 @@ datasets:
     labels:
       - {label: "label = 1, category prompt_extraction, system_extraction or prompt_leak", classes: [prompt_extraction]}
       - {label: "label = 1, category jailbreak, persona_replacement, crescendo or many_shot", classes: [jailbreak]}
-      - {label: "label = 1, any other category", classes: [instruction_injection]}
+      - {label: "label = 1, category of an instruction override", classes: [instruction_injection]}
+      - {label: "label = 1, other category", out_of_scope: "code-execution payloads, harmless control prompts or no override of their own"}
+      - {label: "text in a non-Latin script", out_of_scope: "neither German nor English"}
       - {label: "label = 0", benign: true}
-      - {label: "source harmbench or harmbench_benign", out_of_scope: "rows taken from HarmBench, a holdout set"}
+      - {label: "source harmbench, harmbench_benign or hackaprompt", out_of_scope: "rows taken from HarmBench (a holdout set) or HackAPrompt (garbled target-phrase fragments)"}
   - id: spml
     name: SPML chatbot prompt injection
     source: hf:reshabhs/SPML_Chatbot_Prompt_Injection
@@ -613,8 +615,9 @@ datasets:
     split: train_dev
     family: neutral
     labels:
-      - {label: "goal hijacking attack (label = 1)", classes: [instruction_injection]}
-      - {label: "prompt leaking attack (label = 1)", classes: [prompt_extraction]}
+      - {label: "goal hijacking attack with an override of the earlier task", classes: [instruction_injection]}
+      - {label: "prompt leaking attack, plain request", classes: [prompt_extraction]}
+      - {label: "attack inside a jailbreak template", classes: [jailbreak]}
       - {label: "label = 0", benign: true}
   - id: polyguardprompts
     name: PolyGuardPrompts

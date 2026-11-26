@@ -15,6 +15,8 @@
       "generated/class_templates": 425,
       "generated/exfil_lookalikes": 300,
       "report/civil_comments": 5856,
+      "report/deepset_prompt_injections": 394,
+      "report/germeval2021": 2685,
       "report/jackhhao_jailbreak": 1321,
       "report/textdetox_de": 2492,
       "train_dev/agent_safetybench": 52,
@@ -22,9 +24,12 @@
       "train_dev/approve_or_deny_de": 47,
       "train_dev/bipia": 47,
       "train_dev/dolly_15k": 14635,
+      "train_dev/gentel": 2071,
       "train_dev/germanquad": 11451,
       "train_dev/massive_de": 11172,
       "train_dev/massive_en": 11225,
+      "train_dev/neuralchemy": 2399,
+      "train_dev/polyguardprompts": 1400,
       "train_dev/spml": 3326,
       "train_dev/wildguardmix": 490,
       "train_dev/wildjailbreak": 23,
@@ -34,6 +39,7 @@
       "generated/carrier_insertion": 75,
       "generated/exfil_lookalikes": 300,
       "generated/obfuscation_slices": 59,
+      "report/injecagent": 32,
       "train_dev/agentdojo": 63,
       "train_dev/approve_or_deny_de": 1,
       "train_dev/bipia": 50
@@ -42,16 +48,21 @@
       "report/ailuminate_demo": 800,
       "report/nemotron_content_safety_v2": 1471,
       "train_dev/nemotron_safety_v3": 799,
+      "train_dev/polyguardprompts": 293,
       "train_dev/simple_safety_tests": 100,
       "translated/runner_translations_de": 100
     },
     "instruction_injection": {
       "generated/carrier_insertion": 304,
       "generated/obfuscation_slices": 197,
+      "report/deepset_prompt_injections": 251,
       "report/gandalf": 998,
+      "report/injecagent": 62,
       "train_dev/agentdojo": 136,
       "train_dev/bipia": 188,
       "train_dev/cyberseceval_multilingual": 9,
+      "train_dev/gentel": 1367,
+      "train_dev/neuralchemy": 276,
       "train_dev/spml": 2403,
       "translated/runner_translations_de": 150
     },
@@ -60,6 +71,8 @@
       "generated/class_templates": 84,
       "generated/obfuscation_slices": 29,
       "report/jackhhao_jailbreak": 544,
+      "train_dev/gentel": 485,
+      "train_dev/neuralchemy": 285,
       "train_dev/wildjailbreak": 2000,
       "train_dev/xl_safetybench": 450
     },
@@ -71,7 +84,10 @@
       "generated/carrier_insertion": 86,
       "generated/obfuscation_slices": 71,
       "report/gandalf": 998,
+      "train_dev/gentel": 30,
       "train_dev/mosscap": 15000,
+      "train_dev/neuralchemy": 36,
+      "train_dev/satml_ctf": 7,
       "translated/runner_translations_de": 300
     },
     "resource_exhaustion": {
@@ -84,15 +100,18 @@
     },
     "toxic_language": {
       "report/civil_comments": 144,
+      "report/germeval2021": 1465,
       "report/textdetox_de": 2072,
       "train_dev/dynahate": 752,
       "train_dev/nemotron_safety_v3": 106,
+      "train_dev/polyguardprompts": 44,
       "train_dev/xsafety_de": 152
     },
     "unsafe_action": {
       "generated/carrier_insertion": 191,
       "generated/class_templates": 83,
       "generated/obfuscation_slices": 116,
+      "report/injecagent": 30,
       "train_dev/agent_safetybench": 59,
       "train_dev/agentdojo": 30,
       "train_dev/approve_or_deny_de": 35,
@@ -105,24 +124,24 @@
       "en": 122
     },
     "benign": {
-      "de": 23687,
-      "en": 31013
+      "de": 24632,
+      "en": 35938
     },
     "exfiltration": {
       "de": 151,
       "en": 397
     },
     "harmful_content": {
-      "de": 416,
-      "en": 583
+      "de": 561,
+      "en": 731
     },
     "instruction_injection": {
       "de": 268,
-      "en": 3119
+      "en": 4762
     },
     "jailbreak": {
       "de": 492,
-      "en": 2114
+      "en": 2884
     },
     "memory_poisoning": {
       "de": 122,
@@ -130,7 +149,7 @@
     },
     "prompt_extraction": {
       "de": 387,
-      "en": 15070
+      "en": 15143
     },
     "resource_exhaustion": {
       "de": 122,
@@ -141,8 +160,8 @@
       "en": 121
     },
     "toxic_language": {
-      "de": 207,
-      "en": 803
+      "de": 223,
+      "en": 831
     },
     "unsafe_action": {
       "de": 164,
@@ -198,19 +217,21 @@
     "harmful_content": {
       "de": {
         "provenance": {
-          "translated": 416
+          "translated": 561
         },
         "sources": {
           "nemotron_safety_v3": 316,
+          "polyguardprompts": 145,
           "runner_translations_de": 100
         }
       },
       "en": {
         "provenance": {
-          "native": 583
+          "native": 731
         },
         "sources": {
           "nemotron_safety_v3": 483,
+          "polyguardprompts": 148,
           "simple_safety_tests": 100
         }
       }
@@ -229,13 +250,15 @@
       },
       "en": {
         "provenance": {
-          "native": 2727,
+          "native": 4370,
           "synthetic": 392
         },
         "sources": {
           "agentdojo": 136,
           "bipia": 188,
           "generators": 392,
+          "gentel": 1367,
+          "neuralchemy": 276,
           "spml": 2403
         }
       }
@@ -253,11 +276,13 @@
       },
       "en": {
         "provenance": {
-          "native": 2000,
+          "native": 2770,
           "synthetic": 114
         },
         "sources": {
           "generators": 114,
+          "gentel": 485,
+          "neuralchemy": 285,
           "wildjailbreak": 2000
         }
       }
@@ -295,12 +320,15 @@
       },
       "en": {
         "provenance": {
-          "native": 15000,
+          "native": 15073,
           "synthetic": 70
         },
         "sources": {
           "generators": 70,
-          "mosscap": 15000
+          "gentel": 30,
+          "mosscap": 15000,
+          "neuralchemy": 36,
+          "satml_ctf": 7
         }
       }
     },
@@ -347,20 +375,22 @@
     "toxic_language": {
       "de": {
         "provenance": {
-          "translated": 207
+          "translated": 223
         },
         "sources": {
           "nemotron_safety_v3": 55,
+          "polyguardprompts": 16,
           "xsafety_de": 152
         }
       },
       "en": {
         "provenance": {
-          "native": 803
+          "native": 831
         },
         "sources": {
           "dynahate": 752,
-          "nemotron_safety_v3": 51
+          "nemotron_safety_v3": 51,
+          "polyguardprompts": 28
         }
       }
     },
@@ -767,6 +797,300 @@
       "note": "polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat",
       "set": "train_dev/xsafety_de",
       "verdict": "unclear"
+    },
+    {
+      "id": "neuralchemy:0003342",
+      "label": "instruction_injection",
+      "note": "asks for an attack prompt, carries no override itself",
+      "set": "train_dev/neuralchemy",
+      "verdict": "unclear"
+    },
+    {
+      "id": "neuralchemy:0003180",
+      "label": "jailbreak",
+      "note": "override plus extraction request, not a jailbreak",
+      "set": "train_dev/neuralchemy",
+      "verdict": "wrong"
+    },
+    {
+      "id": "polyguardprompts:0027986",
+      "label": "harmful_content",
+      "note": "dominance plan for a TV plot, harm vague",
+      "set": "train_dev/polyguardprompts",
+      "verdict": "unclear"
+    },
+    {
+      "id": "polyguardprompts:0023736",
+      "label": "harmful_content",
+      "note": "vague evasion of platform rules, no hazard named",
+      "set": "train_dev/polyguardprompts",
+      "verdict": "unclear"
+    },
+    {
+      "id": "deepset_prompt_injections:0000386",
+      "label": "instruction_injection",
+      "note": "Requests a political statement; no override of instructions",
+      "set": "report/deepset_prompt_injections",
+      "verdict": "unclear"
+    },
+    {
+      "id": "deepset_prompt_injections:0000267",
+      "label": "instruction_injection",
+      "note": "Persona roleplay jailbreak, no instruction override",
+      "set": "report/deepset_prompt_injections",
+      "verdict": "unclear"
+    },
+    {
+      "id": "deepset_prompt_injections:0000630",
+      "label": "instruction_injection",
+      "note": "Emotional pressure for an opinion; no instruction override",
+      "set": "report/deepset_prompt_injections",
+      "verdict": "unclear"
+    },
+    {
+      "id": "deepset_prompt_injections:0000032",
+      "label": "instruction_injection",
+      "note": "Roleplay jailbreak for harmful how-to, not override",
+      "set": "report/deepset_prompt_injections",
+      "verdict": "unclear"
+    },
+    {
+      "id": "deepset_prompt_injections:0000171",
+      "label": "instruction_injection",
+      "note": "Plain off-topic task request, no override attempt",
+      "set": "report/deepset_prompt_injections",
+      "verdict": "wrong"
+    },
+    {
+      "id": "deepset_prompt_injections:0000583",
+      "label": "instruction_injection",
+      "note": "Ordinary screenwriter persona request, no override attempt",
+      "set": "report/deepset_prompt_injections",
+      "verdict": "wrong"
+    },
+    {
+      "id": "deepset_prompt_injections:0000380",
+      "label": "instruction_injection",
+      "note": "Fits prompt_extraction more than instruction override",
+      "set": "report/deepset_prompt_injections",
+      "verdict": "unclear"
+    },
+    {
+      "id": "deepset_prompt_injections:0000465",
+      "label": "instruction_injection",
+      "note": "Weak persona switch; no clear override",
+      "set": "report/deepset_prompt_injections",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0001386",
+      "label": "toxic_language",
+      "note": "Harmless remark about litter, no target",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0002578",
+      "label": "toxic_language",
+      "note": "Harsh political criticism of a party, no insult",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0000103",
+      "label": "toxic_language",
+      "note": "Accusatory rant, no direct insult",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0002290",
+      "label": "toxic_language",
+      "note": "Mild political disparagement only",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0003469",
+      "label": "toxic_language",
+      "note": "Untargeted profanity in climate argument",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0002495",
+      "label": "toxic_language",
+      "note": "Mild disparagement of politicians",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0003109",
+      "label": "benign",
+      "note": "Dismissive reference to a person, borderline",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0003726",
+      "label": "toxic_language",
+      "note": "Mild put-down, borderline insult",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0002685",
+      "label": "toxic_language",
+      "note": "Policy criticism question, nothing toxic",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0002430",
+      "label": "toxic_language",
+      "note": "Mild disparagement of party clientele",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0003744",
+      "label": "toxic_language",
+      "note": "General frustration, no target or insult",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0003412",
+      "label": "toxic_language",
+      "note": "Mild criticism of a movement, no insult",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0003428",
+      "label": "toxic_language",
+      "note": "Political speculation, no insult or hate",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0003427",
+      "label": "toxic_language",
+      "note": "Long essay; only a faint regional stereotype",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0004046",
+      "label": "toxic_language",
+      "note": "Political commentary, nothing toxic",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0003723",
+      "label": "toxic_language",
+      "note": "Hostile toward a woman but no clear insult",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0002302",
+      "label": "benign",
+      "note": "Derisive label for a political group",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0002211",
+      "label": "toxic_language",
+      "note": "Political opinion, nothing toxic",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0003446",
+      "label": "toxic_language",
+      "note": "Rhetorical political question",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0002271",
+      "label": "toxic_language",
+      "note": "Complaint about studies, nothing toxic",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0001224",
+      "label": "toxic_language",
+      "note": "Derogatory label for people, borderline",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0004078",
+      "label": "toxic_language",
+      "note": "Media criticism, nothing toxic",
+      "set": "report/germeval2021",
+      "verdict": "wrong"
+    },
+    {
+      "id": "germeval2021:0002768",
+      "label": "benign",
+      "note": "Calls addressee Nazi-like, borderline insult",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "germeval2021:0001016",
+      "label": "toxic_language",
+      "note": "Mild derogatory term in housing debate",
+      "set": "report/germeval2021",
+      "verdict": "unclear"
+    },
+    {
+      "id": "injecagent:0000022",
+      "label": "instruction_injection+unsafe_action",
+      "note": "Sends credential to outside email: exfiltration, not unsafe_action",
+      "set": "report/injecagent",
+      "verdict": "unclear"
+    },
+    {
+      "id": "injecagent:0000020",
+      "label": "instruction_injection+unsafe_action",
+      "note": "Leaks personal data to website: exfiltration more than unsafe_action",
+      "set": "report/injecagent",
+      "verdict": "unclear"
+    },
+    {
+      "id": "injecagent:0000023",
+      "label": "instruction_injection+unsafe_action",
+      "note": "Leaving a channel is low harm",
+      "set": "report/injecagent",
+      "verdict": "unclear"
+    },
+    {
+      "id": "injecagent:0000011",
+      "label": "instruction_injection+unsafe_action",
+      "note": "Scheduling an appointment is low harm",
+      "set": "report/injecagent",
+      "verdict": "unclear"
+    },
+    {
+      "id": "injecagent:0000019",
+      "label": "instruction_injection+unsafe_action",
+      "note": "Moving robot to a room is low harm",
+      "set": "report/injecagent",
+      "verdict": "unclear"
+    },
+    {
+      "id": "injecagent:0000025",
+      "label": "instruction_injection+unsafe_action",
+      "note": "Data sharing to third party: exfiltration more than unsafe_action",
+      "set": "report/injecagent",
+      "verdict": "unclear"
     }
   ],
   "provenance": {
@@ -775,9 +1099,9 @@
       "translated": 3
     },
     "benign": {
-      "native": 41381,
+      "native": 46306,
       "synthetic": 1950,
-      "translated": 11369
+      "translated": 12314
     },
     "exfiltration": {
       "native": 113,
@@ -785,23 +1109,23 @@
       "translated": 1
     },
     "harmful_content": {
-      "native": 583,
-      "translated": 416
+      "native": 731,
+      "translated": 561
     },
     "instruction_injection": {
-      "native": 2727,
+      "native": 4370,
       "synthetic": 501,
       "translated": 159
     },
     "jailbreak": {
-      "native": 2450,
+      "native": 3220,
       "synthetic": 156
     },
     "memory_poisoning": {
       "synthetic": 243
     },
     "prompt_extraction": {
-      "native": 15000,
+      "native": 15073,
       "synthetic": 157,
       "translated": 300
     },
@@ -812,8 +1136,8 @@
       "synthetic": 243
     },
     "toxic_language": {
-      "native": 803,
-      "translated": 207
+      "native": 831,
+      "translated": 223
     },
     "unsafe_action": {
       "native": 382,
@@ -900,6 +1224,17 @@
       "unclear": 7,
       "wrong": 1
     },
+    "report/deepset_prompt_injections": {
+      "benign_errors": 0,
+      "benign_reviewed": 25,
+      "dataset": "deepset_prompt_injections",
+      "error_rate": 0.16,
+      "reviewed": 50,
+      "role": "report",
+      "rows": 645,
+      "unclear": 6,
+      "wrong": 2
+    },
     "report/gandalf": {
       "benign_errors": 0,
       "benign_reviewed": 0,
@@ -909,6 +1244,28 @@
       "role": "report",
       "rows": 998,
       "unclear": 1,
+      "wrong": 0
+    },
+    "report/germeval2021": {
+      "benign_errors": 3,
+      "benign_reviewed": 25,
+      "dataset": "germeval2021",
+      "error_rate": 0.48,
+      "reviewed": 50,
+      "role": "report",
+      "rows": 4150,
+      "unclear": 13,
+      "wrong": 11
+    },
+    "report/injecagent": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "injecagent",
+      "error_rate": 0.12,
+      "reviewed": 50,
+      "role": "report",
+      "rows": 62,
+      "unclear": 6,
       "wrong": 0
     },
     "report/jackhhao_jailbreak": {
@@ -1021,6 +1378,17 @@
       "unclear": 1,
       "wrong": 0
     },
+    "train_dev/gentel": {
+      "benign_errors": 0,
+      "benign_reviewed": 13,
+      "dataset": "gentel",
+      "error_rate": 0.0,
+      "reviewed": 52,
+      "role": "dev",
+      "rows": 3953,
+      "unclear": 0,
+      "wrong": 0
+    },
     "train_dev/germanquad": {
       "benign_errors": 0,
       "benign_reviewed": 50,
@@ -1076,6 +1444,28 @@
       "unclear": 3,
       "wrong": 0
     },
+    "train_dev/neuralchemy": {
+      "benign_errors": 0,
+      "benign_reviewed": 13,
+      "dataset": "neuralchemy",
+      "error_rate": 0.0385,
+      "reviewed": 52,
+      "role": "dev",
+      "rows": 2996,
+      "unclear": 1,
+      "wrong": 1
+    },
+    "train_dev/polyguardprompts": {
+      "benign_errors": 0,
+      "benign_reviewed": 17,
+      "dataset": "polyguardprompts",
+      "error_rate": 0.0392,
+      "reviewed": 51,
+      "role": "dev",
+      "rows": 1737,
+      "unclear": 2,
+      "wrong": 0
+    },
     "train_dev/redcode": {
       "benign_errors": 0,
       "benign_reviewed": 0,
@@ -1084,6 +1474,17 @@
       "reviewed": 50,
       "role": "dev",
       "rows": 293,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "train_dev/satml_ctf": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "satml_ctf",
+      "error_rate": 0.0,
+      "reviewed": 7,
+      "role": "dev",
+      "rows": 7,
       "unclear": 0,
       "wrong": 0
     },
