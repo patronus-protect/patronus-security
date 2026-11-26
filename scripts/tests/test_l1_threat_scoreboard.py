@@ -830,7 +830,7 @@ def test_refresh_renders_the_fair_files_of_head_with_the_commit(mix_split, tmp_p
     text = (tree / MODULE.SCOREBOARD_DIR / "baseline.md").read_text()
     assert f"{MODULE.RENDERED_FROM} `{first[:12]}` on the mix." in text
     assert "## At 0.1% FPR (decisive)" in text and "report TPR / FPR" in text
-    assert "| exfiltration | all | 4 | 1 |" in text and "100.0 / 0.00 (atr)" in text
+    assert "| exfiltration | all | 10 | 1 |" in text and "100.0 / 0.00 (atr)" in text
     # Without a calibrated cascade config only the rules are predicted, with the L1 build.
     assert built == [(first, False)]
     out = capsys.readouterr().out
