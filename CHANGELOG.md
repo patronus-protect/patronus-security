@@ -11,6 +11,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Ark Core examples for every part of Core, in Rust and Python: PII and DLP with redaction,
+  the Threat L1 classes with the built-in L1 models, Wolf Defender (alone and in the injection
+  cascade) and Cat for shell commands. `ark-core/examples/README.md` lists them and marks the
+  development tools in the same directory.
 - Ark dedicated Wolf Small L3 can use the pinned FP16 TensorRT model on a private Triton
   endpoint through `PATRONUS_WOLF_TRITON_URL`. Worker startup verifies model readiness and
   real logits; malformed or unavailable remote inference fails the scan instead of silently

@@ -233,6 +233,11 @@ Guide: [Check shell commands](https://patronus-protect.github.io/patronus-securi
   `native::NativeEngine` with the `ScanGateMatrix` gates; it returns raw detections and leaves error
   policy and aggregation to the host.
 
+## Examples
+
+[`examples/`](examples/README.md) has runnable examples in Rust and Python: PII and DLP, the
+Threat L1 classes with the built-in L1 models, Wolf Defender, and Cat for shell commands.
+
 ## Development
 
 ```sh
