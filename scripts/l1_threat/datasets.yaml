@@ -19,7 +19,7 @@
 #   dropped     left out for good (reason: licence, quality, overlap with the holdout); never fetched
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
-#   format      jsonl | json (list of records; `records` names the field holding them, '.' = one record per file, '*' expands list items or dict values) | text (one record per file: fields text and path) | csv | parquet (UTF-8, plain integer, floating-point and boolean columns) |
+#   format      jsonl (gzip when the file ends in .gz) | json (list of records; `records` names the field holding them, '.' = one record per file, '*' expands list items or dict values) | text (one record per file: fields text and path) | csv | parquet (UTF-8, plain integer, floating-point and boolean columns) |
 #               agentdojo_trace (one AgentDojo run trace per file; records: tool outputs, see prepare_corpora.py) |
 #               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
 #               | redcode (RedCode-Exec item lists and RedCode-Gen stubs; records: the requests of each Exec item, each stub)
@@ -1468,8 +1468,10 @@ datasets:
 # Competitor benchmarks (competitors.py, `scoreboard.py competitors` → scoreboard/competitors.md): the competitors'
 # own sets, scored under the protocol of their paper. Evaluation only: never in a split, the mix, training or
 # calibration, and never a holdout source (competitors.py check). `dataset` reuses a registered set's recipe;
-# `files` pin the fetched files by SHA-256 (`revision`: the commit, or the Zenodo record version); `protocol` is
-# one of competitors.PROTOCOLS; `pending` / `dropped` name why a benchmark is not measured.
+# `files` pin the fetched files by SHA-256 (`revision`: the commit, or the Zenodo record version); `format` and `text`
+# as in a recipe; `positive` rules (any match: an attack row, otherwise a negative) and `rows` rules (all must hold:
+# the benchmark's split) use the recipe rule operators; `protocol` is one of competitors.PROTOCOLS; `pending` /
+# `dropped` name why a benchmark is not measured.
 benchmarks:
   - id: promptshield_test
     name: PromptShield benchmark, test split
@@ -1482,6 +1484,10 @@ benchmarks:
       - {path: test.json, sha256: 526207c2485829d9961407011d7f4cd929569e7f285dc8396b3f385e0608bc70}
     commercial: true
     eval_only: true
+    format: json
+    text: prompt
+    positive:
+      - {field: label, equals: 1}
     protocol: tpr_at_fpr
     targets: [0.01, 0.001]
     note: >-
@@ -1497,6 +1503,8 @@ benchmarks:
     dataset: deepset_prompt_injections
     commercial: true
     eval_only: true
+    positive:
+      - {field: label, equals: "1"}
     protocol: f1_at_cut
     note: >-
       binary F1 at each system's own decision (arXiv 2506.05446, Table 2); the paper does not name the split or the
@@ -1511,6 +1519,8 @@ benchmarks:
     dataset: jackhhao_jailbreak
     commercial: true
     eval_only: true
+    positive:
+      - {field: type, equals: jailbreak}
     protocol: f1_at_cut
     note: >-
       binary F1 at each system's own decision (arXiv 2506.05446, Table 2); ProtectAI v2 lists this set among its
@@ -1554,6 +1564,17 @@ benchmarks:
       - {path: data/samples-1680.jsonl.gz, sha256: ef3f7de86ee394fe337b0a566ba4b9c7db058f3caa8d6a4a0006138b663ab9a8}
     commercial: true
     eval_only: true
+    format: jsonl
+    text: prompt
+    positive:
+      - {field: S, equals: 1}
+      - {field: H, equals: 1}
+      - {field: V, equals: 1}
+      - {field: HR, equals: 1}
+      - {field: SH, equals: 1}
+      - {field: S3, equals: 1}
+      - {field: H2, equals: 1}
+      - {field: V2, equals: 1}
     protocol: f1_at_cut
     note: >-
       1,680 prompts; a row is unsafe when one of the flags S, H, V, HR, SH, S3, H2, V2 is 1 (522 rows); WildGuard's
@@ -1569,6 +1590,17 @@ benchmarks:
       - {path: data/samples-1680.jsonl.gz, sha256: ef3f7de86ee394fe337b0a566ba4b9c7db058f3caa8d6a4a0006138b663ab9a8}
     commercial: true
     eval_only: true
+    format: jsonl
+    text: prompt
+    positive:
+      - {field: S, equals: 1}
+      - {field: H, equals: 1}
+      - {field: V, equals: 1}
+      - {field: HR, equals: 1}
+      - {field: SH, equals: 1}
+      - {field: S3, equals: 1}
+      - {field: H2, equals: 1}
+      - {field: V2, equals: 1}
     protocol: best_f1
     note: ShieldGemma's protocol, F1 at the best cut on the set itself (arXiv 2407.21772, Table 1); an upper bound
   - id: openai_moderation_auprc
@@ -1582,6 +1614,17 @@ benchmarks:
       - {path: data/samples-1680.jsonl.gz, sha256: ef3f7de86ee394fe337b0a566ba4b9c7db058f3caa8d6a4a0006138b663ab9a8}
     commercial: true
     eval_only: true
+    format: jsonl
+    text: prompt
+    positive:
+      - {field: S, equals: 1}
+      - {field: H, equals: 1}
+      - {field: V, equals: 1}
+      - {field: HR, equals: 1}
+      - {field: SH, equals: 1}
+      - {field: S3, equals: 1}
+      - {field: H2, equals: 1}
+      - {field: V2, equals: 1}
     protocol: auprc
     note: Llama Guard's protocol (arXiv 2312.06674, Table 2)
   - id: rp_mod
@@ -1595,6 +1638,12 @@ benchmarks:
       - {path: RP-Mod-folds.csv, sha256: 65c96dd6279fce5912a528862591c03b276ec2d90f7c5acca1daa014707ed75c}
     commercial: false
     eval_only: true
+    format: csv
+    text: text
+    positive:
+      - {field: label, at_least: 0.5}
+    rows:
+      - {field: train_test_split, equals: "1"}
     protocol: auroc
     note: >-
       non-commercial (NC-SA): evaluation only, reported, never decides; 2,856 balanced rows with train_test_split = 1
@@ -1611,6 +1660,12 @@ benchmarks:
       - {path: RP-Crowd-3-folds.csv, sha256: 58688412ef208c8e5ac3a3842869ff5eeb7fa3db41239a8ed5ab2ce88e0f1f3a}
     commercial: false
     eval_only: true
+    format: csv
+    text: text
+    positive:
+      - {field: label, at_least: 0.5}
+    rows:
+      - {field: train_test_split, equals: "1"}
     protocol: auroc
     note: >-
       non-commercial (NC-SA): evaluation only, reported, never decides; 1,260 balanced rows with train_test_split = 1

@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -545,7 +546,7 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
     for item in entry["files"]:
         path = root / item["path"]
         if entry["format"] == "jsonl":
-            with path.open(encoding="utf-8") as handle:
+            with (gzip.open(path, "rt", encoding="utf-8") if path.suffix == ".gz" else path.open(encoding="utf-8")) as handle:
                 yield from (json.loads(line) for line in handle if line.strip())
         elif entry["format"] == "json":
             data = json.loads(path.read_text(encoding="utf-8"))

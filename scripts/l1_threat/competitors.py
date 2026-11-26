@@ -33,7 +33,9 @@ from __future__ import annotations
 import argparse
 import bisect
 import importlib.util
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -63,7 +65,16 @@ OBFUSCATION_KINDS = SCOREBOARD.OBFUSCATION_KINDS
 BENCHMARK_KEYS = {"id", "name", "classes", "languages", "source", "licence", "revision", "commercial", "eval_only",
                   "protocol", "note"}
 SCHEMA = "ark-l1-threat-competitors-v1"
-OPTIONAL_BENCHMARK_KEYS = {"dataset", "targets", "files", "pending", "dropped"}
+OPTIONAL_BENCHMARK_KEYS = {"dataset", "targets", "files", "format", "text", "positive", "rows", "pending", "dropped"}
+CORPORA = SCOREBOARD.CORPORA
+PII_LATENCY = sys.modules.get("_ark_l1_pii_latency") or SCOREBOARD._load_file(
+    "_ark_l1_pii_latency", ROOT / "scripts" / "l1_presidio" / "latency.py")
+# Systems measured by ``run``: rules only on the L1 score curve, the L1 model through the calibrated cascade config of
+# the scoreboard (its answer as ``scoreboard.decision_score``), as ``refresh`` runs them; the Wolf cascade is not run.
+
+
+def run_systems() -> dict[str, dict[str, Any]]:
+    return {"rules": SCOREBOARD.L1_CASCADE, "l1_model": SCOREBOARD.load_config(ROOT / SCOREBOARD.CASCADE_CONFIG)}
 SHA256 = re.compile(r"[0-9a-f]{64}")
 CITATION = re.compile(r"https://\S+")
 
@@ -102,14 +113,16 @@ def auroc(pos: list[float], neg: list[float]) -> float | None:
     return wins / (len(pos) * len(neg))
 
 
-def evaluate(benchmark: dict[str, Any], pos: list[float], neg: list[float], cut: float) -> dict[str, Any]:
-    """One system on one benchmark under the benchmark's protocol; ``cut`` is the system's own decision."""
+def evaluate(benchmark: dict[str, Any], pos: list[float], neg: list[float], pos_flag: list[bool],
+             neg_flag: list[bool]) -> dict[str, Any]:
+    """One system on one benchmark under the benchmark's protocol: ``pos``/``neg`` are its scores, ``*_flag`` its own
+    decisions (the shipped or calibrated detect cut), which ``f1_at_cut`` scores."""
     protocol = benchmark["protocol"]
     out: dict[str, Any] = {"protocol": protocol, "positives": len(pos), "negatives": len(neg)}
     if protocol == "tpr_at_fpr":
         out["tpr_at_fpr"] = {f"{t:g}": BASELINES.matched_fpr(pos, neg, t) for t in benchmark["targets"]}
     elif protocol == "f1_at_cut":
-        out["f1"] = f1_at_cut(pos, neg, cut)
+        out["f1"] = f1_at_cut([float(f) for f in pos_flag], [float(f) for f in neg_flag], 1.0)
     elif protocol == "best_f1":
         out["f1"] = best_f1(pos, neg)
     elif protocol == "auroc":
@@ -132,12 +145,12 @@ def obfuscate(text: str, kind: str) -> str:
     return SCOREBOARD.GENERATORS.OBFUSCATIONS[kind](text)
 
 
-def tpr_drop(clean: list[float], variant: list[float], cut: float) -> float | None:
-    """TPR on the clean positives minus TPR on their variants (obfuscated or translated), both at ``cut``."""
+def tpr_drop(clean: list[bool], variant: list[bool]) -> float | None:
+    """TPR on the clean positives minus TPR on their variants (obfuscated or translated), both at the system's own
+    decision."""
     if not clean or not variant:
         return None
-    hit = lambda scores: sum(1 for s in scores if s > 0 and s >= cut) / len(scores)  # noqa: E731
-    return hit(clean) - hit(variant)
+    return sum(clean) / len(clean) - sum(variant) / len(variant)
 
 
 # ── registry ─────────────────────────────────────────────────────────────────
@@ -177,6 +190,8 @@ def check(registry: dict[str, Any], emap: dict[str, Any], published: dict[str, A
         if "dataset" in entry and (dataset is None or dataset["split"] == "holdout"):
             problems.append(f"{where}: dataset {entry['dataset']!r} must be a registered non-holdout set")
         live = not entry.get("pending") and not entry.get("dropped")
+        if live and not entry.get("positive"):
+            problems.append(f"{where}: a measured benchmark names its positive rows (positive)")
         if live and "dataset" not in entry and not (
                 entry.get("files") and all(SHA256.fullmatch(str(f.get("sha256", ""))) for f in entry["files"])):
             problems.append(f"{where}: a measured benchmark pins its files by SHA-256 (or reuses a registered dataset)")
@@ -201,6 +216,131 @@ def gaps(registry: dict[str, Any]) -> list[str]:
     return [cls for cls in CLASSES if cls not in covered]
 
 
+# ── measurement ──────────────────────────────────────────────────────────────
+
+
+def recipe(entry: dict[str, Any], registry: dict[str, Any]) -> dict[str, Any]:
+    """The fetch-and-read recipe of a benchmark: its own keys over the registered dataset's recipe it reuses."""
+    base = next((d for d in registry.get("datasets") or [] if d["id"] == entry.get("dataset")), {})
+    merged = {**{k: base[k] for k in ("source", "revision", "files", "format", "text") if k in base}, **entry}
+    if "dataset" in entry:
+        merged.update({k: base[k] for k in ("source", "revision", "files")})
+    # read_records reads the columns the label rules name (parquet).
+    merged["labels"] = [*entry["positive"], *entry.get("rows", [])]
+    return merged
+
+
+def benchmark_rows(entry: dict[str, Any], registry: dict[str, Any], sources: Path, offline: bool) -> list[dict[str, Any]]:
+    """``{id, text, positive}`` of every row of the benchmark's split (``rows``), fetched and verified."""
+    full = recipe(entry, registry)
+    root = CORPORA.fetch({**full, "id": entry["id"]}, sources, offline)
+    out = []
+    for record in CORPORA.read_records(full, root):
+        if not all(CORPORA.rule_matches(rule, record) for rule in entry.get("rows", [])):
+            continue
+        text = CORPORA._text_value(CORPORA._field(record, full["text"]) or "")
+        if text.strip():
+            out.append({"id": f"{entry['id']}:{len(out)}", "text": text,
+                        "positive": any(CORPORA.rule_matches(rule, record) for rule in entry["positive"])})
+    return out
+
+
+def variants(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every positive again under each obfuscation, id ``<id>~<kind>``."""
+    return [{"id": f"{row['id']}~{kind}", "text": obfuscate(row["text"], kind), "positive": True}
+            for row in rows if row["positive"] for kind in OBFUSCATION_KINDS]
+
+
+def predict(rows: list[dict[str, Any]], binary: Path, config: dict[str, Any], work: Path) -> dict[str, dict[str, Any]]:
+    """Core predictions by row id (the scoreboard's predictor, one process over all rows)."""
+    work.mkdir(parents=True, exist_ok=True)
+    config_path = work / "config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    payload = "".join(json.dumps({"id": r["id"], "text": r["text"]}) + "\n" for r in rows).encode("utf-8")
+    result = subprocess.run([str(binary), str(config_path)], input=payload, capture_output=True)
+    if result.returncode != 0:
+        # Errors never echo benchmark text.
+        raise RuntimeError(f"Core prediction failed (exit {result.returncode})")
+    return {p["id"]: p for p in map(json.loads, result.stdout.decode("utf-8").splitlines())}
+
+
+def system_result(entry: dict[str, Any], rows: list[dict[str, Any]], predictions: dict[str, dict[str, Any]],
+                  curve: bool) -> dict[str, Any]:
+    """Protocol result of one system on one benchmark, with the TPR drop under each obfuscation; the score of a row
+    is the highest over the benchmark's classes, of the L1 score curve (``curve``) or of the cascade's answer."""
+    def score(row_id: str) -> float:
+        p = predictions[row_id]
+        return max(float((p.get("scores") or {}).get(cls, 0.0)) if curve else
+                   SCOREBOARD.decision_score(SCOREBOARD._stage(p, cls)) for cls in entry["classes"])
+
+    def flag(row_id: str) -> bool:
+        return any(cls in (predictions[row_id].get("flagged") or []) for cls in entry["classes"])
+
+    pos = [r["id"] for r in rows if r["positive"]]
+    neg = [r["id"] for r in rows if not r["positive"]]
+    out = evaluate(entry, [score(i) for i in pos], [score(i) for i in neg], [flag(i) for i in pos],
+                   [flag(i) for i in neg])
+    clean = [flag(i) for i in pos]
+    out["drops"] = {kind: tpr_drop(clean, [flag(f"{i}~{kind}") for i in pos]) for kind in OBFUSCATION_KINDS}
+    return out
+
+
+# Latency windows: UTF-8 sizes, and how many windows of each the benchmark texts are packed into.
+WINDOWS = {"1KiB": (1024, 200), "100KiB": (100 * 1024, 20)}
+
+
+def windows(texts: list[str], size: int, count: int) -> list[str]:
+    """Up to ``count`` windows of exactly ``size`` UTF-8 bytes, packed from the texts in order (cut at a character
+    boundary); each text is used once."""
+    out, current = [], ""
+    for text in texts:
+        current += text + "\n"
+        while len(current.encode("utf-8")) >= size and len(out) < count:
+            data = current.encode("utf-8")
+            out.append(data[:size].decode("utf-8", errors="ignore"))
+            current = data[size:].decode("utf-8", errors="ignore")
+    return out
+
+
+def latency(texts: list[str], binary: Path, work: Path) -> dict[str, Any]:
+    """Per system and window size p50 / p95 of Core's scan milliseconds (one process, one row at a time) and the
+    throughput at 1 KiB (rows per second of scan time)."""
+    out = {}
+    for system, config in run_systems().items():
+        row = {}
+        for name, (size, count) in WINDOWS.items():
+            rows = [{"id": f"{name}:{i}", "text": t} for i, t in enumerate(windows(texts, size, count))]
+            ms = [float(p["ms"]["scan"]) for p in predict(rows, binary, config, work / f"latency-{system}").values()]
+            if ms:
+                row[name] = SCOREBOARD._quantiles(ms)
+                if name == "1KiB":
+                    row["throughput"] = round(1000.0 * len(ms) / sum(ms)) if sum(ms) else None
+        out[dict(SCOREBOARD.COMPETITOR_SYSTEMS)[system]] = row
+    return out
+
+
+def run(registry: dict[str, Any], binary: Path, sources: Path, work: Path, offline: bool = False) -> dict[str, Any]:
+    """Every live benchmark through every ``run_systems`` system: the ``results`` that ``scoreboard.py competitors``
+    renders."""
+    machine = PII_LATENCY.machine_info()
+    results: dict[str, Any] = {"benchmarks": {},
+                               "machine": f"{machine['cpu']}, {machine['cpus_usable']} usable CPUs, {machine['system']}"}
+    texts: list[str] = []
+    for entry in registry.get("benchmarks") or []:
+        if entry.get("pending") or entry.get("dropped"):
+            continue
+        rows = benchmark_rows(entry, registry, sources, offline)
+        texts += [row["text"] for row in rows]
+        systems = {}
+        for system, config in run_systems().items():
+            predictions = predict(rows + variants(rows), binary, config, work / system)
+            systems[system] = system_result(entry, rows, predictions, curve=system == "rules")
+        results["benchmarks"][entry["id"]] = {"rows": len(rows), "positives": sum(r["positive"] for r in rows),
+                                              "systems": systems}
+    results["latency"] = latency(texts, binary, work)
+    return results
+
+
 def read(path: Path) -> Any:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
@@ -214,12 +354,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check", help="check the benchmark recipes and the cited competitor numbers")
-    parser.parse_args(argv)
+    r = commands.add_parser("run", help="measure ARK on every live benchmark (results JSON for scoreboard.py)")
+    r.add_argument("--predictor", type=Path, required=True, help=f"built {SCOREBOARD.PREDICTOR} example")
+    r.add_argument("--sources", type=Path, required=True, help="download cache of the benchmark files")
+    r.add_argument("--work", type=Path, required=True, help="scratch directory")
+    r.add_argument("--offline", action="store_true")
+    r.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args(argv)
     registry, published = load()
     problems = check(registry, read(ENTITY_MAP), published)
     for problem in problems:
         print(problem, file=sys.stderr)
-    return 1 if problems else 0
+    if problems or args.command == "check":
+        return 1 if problems else 0
+    results = run(registry, args.predictor, args.sources, args.work, args.offline)
+    args.output.write_text(json.dumps(results, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    return 0
 
 
 if __name__ == "__main__":
