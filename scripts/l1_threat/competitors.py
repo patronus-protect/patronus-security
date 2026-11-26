@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+"""Head-to-head against the open-source competitors on their own benchmarks (E12).
+
+The benchmarks are the ``benchmarks`` section of ``datasets.yaml``: where a set comes from (source, licence,
+pinned revision, commercial flag), which classes it measures and the protocol its paper scores it with. Every
+benchmark is evaluation only: it never enters the dev split, the mix, training or calibration, and no benchmark
+reads a holdout source of ``entity_map.yaml``. A benchmark that reuses a registered set names it in ``dataset``
+(rows any shipped L1 model was trained on are left out, as in the fair measurement).
+
+The competitors' published numbers live in ``research/l1-threat/competitors.yaml``, each with the URL and the
+table or section it was re-read from; a number without a citation is never quoted.
+
+Protocol adapters (one per benchmark protocol), all on per-row scores (``score >= cut`` flags):
+
+- ``tpr_at_fpr``: TPR at the lowest cut whose FPR on the benchmark's own negatives is within each target
+  (PromptShield: 1 % and 0.1 %), ``run_baselines.matched_fpr``;
+- ``f1_at_cut``: precision, recall and F1 of the system's own decision (the shipped or calibrated detect cut,
+  a classifier's 0.5), the protocol of Sentinel, the MCP tool-poisoning study, WildGuard and RP-Mod;
+- ``best_f1``: F1 at the best cut on the set itself (ShieldGemma's optimal-F1 protocol), named as an upper bound;
+- ``auroc``: area under the ROC curve (the RP-Mod / RP-Crowd paper);
+- ``auprc``: average precision (``scoreboard.average_precision``; Llama Guard's protocol on the OpenAI moderation set).
+
+Every set with negatives also reports TPR at 0.1 % FPR. Robustness: ``obfuscate`` renders a positive under
+zero-width characters, Unicode tags, base64, leetspeak or homoglyphs (``generators.OBFUSCATIONS``);
+``tpr_drop`` is the TPR lost at the same cut as on the clean set.
+
+    python3 scripts/l1_threat/competitors.py check
+"""
+
+from __future__ import annotations
+
+import argparse
+import bisect
+import importlib.util
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+DATASETS = HERE / "datasets.yaml"
+ENTITY_MAP = ROOT / "research" / "l1-threat" / "entity_map.yaml"
+PUBLISHED = ROOT / "research" / "l1-threat" / "competitors.yaml"
+
+
+SCOREBOARD = sys.modules.get("_ark_l1_threat_scoreboard")
+if SCOREBOARD is None:
+    _spec = importlib.util.spec_from_file_location("_ark_l1_threat_scoreboard", HERE / "scoreboard.py")
+    assert _spec is not None and _spec.loader is not None
+    SCOREBOARD = importlib.util.module_from_spec(_spec)
+    sys.modules[_spec.name] = SCOREBOARD
+    _spec.loader.exec_module(SCOREBOARD)
+BASELINES = SCOREBOARD.BASELINES
+CLASSES = SCOREBOARD.CLASSES
+
+PROTOCOLS = ("tpr_at_fpr", "f1_at_cut", "best_f1", "auprc", "auroc")
+DECISIVE_FPR = 0.001
+OBFUSCATION_KINDS = SCOREBOARD.OBFUSCATION_KINDS
+BENCHMARK_KEYS = {"id", "name", "classes", "languages", "source", "licence", "revision", "commercial", "eval_only",
+                  "protocol", "note"}
+SCHEMA = "ark-l1-threat-competitors-v1"
+OPTIONAL_BENCHMARK_KEYS = {"dataset", "targets", "files", "pending", "dropped"}
+SHA256 = re.compile(r"[0-9a-f]{64}")
+CITATION = re.compile(r"https://\S+")
+
+
+# ── protocol adapters ────────────────────────────────────────────────────────
+
+
+def f1_at_cut(pos: list[float], neg: list[float], cut: float) -> dict[str, Any]:
+    """Precision, recall and F1 of the decision ``score >= cut`` (a score of 0 never flags)."""
+    tp = sum(1 for s in pos if s > 0 and s >= cut)
+    fp = sum(1 for s in neg if s > 0 and s >= cut)
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / len(pos) if pos else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return {"cut": cut, "tp": tp, "fp": fp, "precision": precision, "recall": recall, "f1": f1,
+            "fpr": fp / len(neg) if neg else None}
+
+
+def best_f1(pos: list[float], neg: list[float]) -> dict[str, Any]:
+    """F1 at the best cut over every distinct positive score (an upper bound: the cut is chosen on the set)."""
+    best = f1_at_cut(pos, neg, float("inf"))
+    for cut in sorted({s for s in pos if s > 0}):
+        cell = f1_at_cut(pos, neg, cut)
+        if cell["f1"] > best["f1"]:
+            best = cell
+    return best
+
+
+def auroc(pos: list[float], neg: list[float]) -> float | None:
+    """Area under the ROC curve: the share of positive/negative pairs ranked right, ties count half."""
+    if not pos or not neg:
+        return None
+    ranked = sorted(neg)
+    wins = sum(bisect.bisect_left(ranked, s) + 0.5 * (bisect.bisect_right(ranked, s) - bisect.bisect_left(ranked, s))
+               for s in pos)
+    return wins / (len(pos) * len(neg))
+
+
+def evaluate(benchmark: dict[str, Any], pos: list[float], neg: list[float], cut: float) -> dict[str, Any]:
+    """One system on one benchmark under the benchmark's protocol; ``cut`` is the system's own decision."""
+    protocol = benchmark["protocol"]
+    out: dict[str, Any] = {"protocol": protocol, "positives": len(pos), "negatives": len(neg)}
+    if protocol == "tpr_at_fpr":
+        out["tpr_at_fpr"] = {f"{t:g}": BASELINES.matched_fpr(pos, neg, t) for t in benchmark["targets"]}
+    elif protocol == "f1_at_cut":
+        out["f1"] = f1_at_cut(pos, neg, cut)
+    elif protocol == "best_f1":
+        out["f1"] = best_f1(pos, neg)
+    elif protocol == "auroc":
+        out["auroc"] = auroc(pos, neg)
+    elif protocol == "auprc":
+        out["auprc"] = SCOREBOARD.average_precision(pos, neg)
+    else:
+        raise ValueError(f"unknown protocol {protocol!r}")
+    if neg:
+        out["tpr_at_0.001"] = BASELINES.matched_fpr(pos, neg, DECISIVE_FPR)
+    return out
+
+
+# ── robustness ───────────────────────────────────────────────────────────────
+
+
+def obfuscate(text: str, kind: str) -> str:
+    if kind not in OBFUSCATION_KINDS:
+        raise ValueError(f"unknown obfuscation {kind!r}")
+    return SCOREBOARD.GENERATORS.OBFUSCATIONS[kind](text)
+
+
+def tpr_drop(clean: list[float], variant: list[float], cut: float) -> float | None:
+    """TPR on the clean positives minus TPR on their variants (obfuscated or translated), both at ``cut``."""
+    if not clean or not variant:
+        return None
+    hit = lambda scores: sum(1 for s in scores if s > 0 and s >= cut) / len(scores)  # noqa: E731
+    return hit(clean) - hit(variant)
+
+
+# ── registry ─────────────────────────────────────────────────────────────────
+
+
+def _repo(source: str) -> str:
+    """``owner/name`` of a Hugging Face or GitHub source in either spelling (URL or ``hf:``/``github:``)."""
+    text = re.sub(r"^(?:https://(?:huggingface\.co/datasets|github\.com)/|hf:|github:)", "", source.strip())
+    return "/".join(text.split()[0].split("/")[:2]).lower()
+
+
+def check(registry: dict[str, Any], emap: dict[str, Any], published: dict[str, Any]) -> list[str]:
+    problems: list[str] = []
+    datasets = {d["id"]: d for d in emap.get("datasets") or []}
+    holdout_repos = {_repo(d["source"]) for d in datasets.values() if d["split"] == "holdout" and "/" in d["source"]}
+    benchmarks = {}
+    for entry in registry.get("benchmarks") or []:
+        where = f"benchmark {entry.get('id')}"
+        benchmarks[entry.get("id")] = entry
+        missing, unknown = BENCHMARK_KEYS - set(entry), set(entry) - BENCHMARK_KEYS - OPTIONAL_BENCHMARK_KEYS
+        if missing or unknown:
+            problems.append(f"{where}: missing {sorted(missing)} or unknown keys {sorted(unknown)}")
+            continue
+        if entry["eval_only"] is not True:
+            problems.append(f"{where}: a competitor benchmark is evaluation only (eval_only: true)")
+        if entry["commercial"] not in (True, False, "unknown"):
+            problems.append(f"{where}: commercial must be true, false or unknown")
+        if entry["protocol"] not in PROTOCOLS:
+            problems.append(f"{where}: protocol must be one of {PROTOCOLS}")
+        if entry["protocol"] == "tpr_at_fpr" and not entry.get("targets"):
+            problems.append(f"{where}: protocol tpr_at_fpr needs targets")
+        if not set(entry["classes"]) <= set(CLASSES):
+            problems.append(f"{where}: unknown classes {sorted(set(entry['classes']) - set(CLASSES))}")
+        if _repo(entry["source"]) in holdout_repos:
+            problems.append(f"{where}: {entry['source']} is a holdout source")
+        dataset = datasets.get(entry.get("dataset", ""))
+        if "dataset" in entry and (dataset is None or dataset["split"] == "holdout"):
+            problems.append(f"{where}: dataset {entry['dataset']!r} must be a registered non-holdout set")
+        live = not entry.get("pending") and not entry.get("dropped")
+        if live and "dataset" not in entry and not (
+                entry.get("files") and all(SHA256.fullmatch(str(f.get("sha256", ""))) for f in entry["files"])):
+            problems.append(f"{where}: a measured benchmark pins its files by SHA-256 (or reuses a registered dataset)")
+        if live and dataset is not None and dataset["split"] == "train_dev":
+            problems.append(f"{where}: dataset {entry['dataset']!r} is dev data (training, calibration)")
+    if published.get("schema") != SCHEMA:
+        problems.append(f"published numbers: schema must be {SCHEMA}")
+    for number in published.get("numbers") or []:
+        where = f"published {number.get('benchmark')}/{number.get('system')}"
+        if number.get("benchmark") not in benchmarks:
+            problems.append(f"{where}: unknown benchmark")
+        if not CITATION.fullmatch(str(number.get("url", ""))) or not str(number.get("table", "")).strip():
+            problems.append(f"{where}: needs the source url and the table or section it was read from")
+        if not isinstance(number.get("value"), (int, float)) or not number.get("metric"):
+            problems.append(f"{where}: needs a numeric value and its metric")
+    return problems
+
+
+def gaps(registry: dict[str, Any]) -> list[str]:
+    """Classes no live benchmark measures."""
+    covered = {cls for entry in registry.get("benchmarks") or [] if not entry.get("dropped") for cls in entry["classes"]}
+    return [cls for cls in CLASSES if cls not in covered]
+
+
+def read(path: Path) -> Any:
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def load() -> tuple[dict[str, Any], dict[str, Any]]:
+    """The benchmark registry (``datasets.yaml``) and the cited published numbers."""
+    return read(DATASETS), read(PUBLISHED)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("check", help="check the benchmark recipes and the cited competitor numbers")
+    parser.parse_args(argv)
+    registry, published = load()
+    problems = check(registry, read(ENTITY_MAP), published)
+    for problem in problems:
+        print(problem, file=sys.stderr)
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
