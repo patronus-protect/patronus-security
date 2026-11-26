@@ -1640,7 +1640,9 @@ def render_competitors(registry: dict[str, Any], published: dict[str, Any], resu
             "Each benchmark is scored under its own protocol (metric and threshold rule of its paper) and, where "
             "it has negatives, by its TPR at 0.1 % FPR; reference classifiers measured here decide at 0.5. Benchmarks are evaluation only: never in training or calibration, "
             "no holdout source. Published competitor numbers are quoted only with the table they were read from. "
-            f"`{NOT_RUN}`: not measured yet.", ""]
+            f"`{NOT_RUN}`: not measured yet. Published values keep the unit of their source (percent or 0–1); measured "
+            "values are percent. A negative TPR drop means the obfuscated rows were caught more often than the clean ones.",
+            ""] + ([f"Measured on {results['machine']}.", ""] if results.get("machine") else [])
     return "\n".join(lead + competitor_lines(registry, published, results, gaps)) + "\n"
 
 
