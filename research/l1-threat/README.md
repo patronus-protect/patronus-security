@@ -892,6 +892,24 @@ Auf den nativen Zeilen findet ARK heute (B0) getrennt von den Vorlagen (83 von 8
 Exec 0 von 152, RedCode-Gen 3 von 141, Agent-SafetyBench 4 von 59, ohne Fund auf den 52 Hard Negatives und den übrigen
 Dev-Benign-Zeilen (§17 von `categories/unsafe_action.md`) → **T21**.
 
+### H01: Hard-Negative-Bank über alle Klassen
+
+Goldens `threat_l1-hard-bank-*` (`generate_l1_goldens.py`, `HARD_BANK_CASES`): 1 100 Hard Negatives, je
+Klasse fünf beschriebene (nicht ausgeführte) Angriffsformen × fünf Genres (Sicherheitsdokumentation,
+CTF-Write-up, Code-Review, defensiver Systemprompt, Moderationsprotokoll) × zwei Rahmen × DE/EN, 550 je
+Sprache. Jede Zeile muss unter allen elf Kategorien benign bleiben. Erstlauf: 13 von 1 100 gemeldet (alle EN:
+10 `unsafe_action` in Review-Kommentaren und Moderationsprotokollen, 2 `instruction_leak`, 1
+`instruction_override` in einem defensiven Systemprompt); nach dem Fix 0 von 1 100, alle 2 658 gesperrten
+Threat-Goldens bestehen. Fix: Meta-Gegenkontext um beschreibende Review- und Moderationswendungen („should also
+catch“, „sollte auch … abfangen“, „items removed“, „action=removed“; EN + DE) — Genre-Nomen allein („code
+review“, „moderation log“) setzen nach dem Review nichts ab, sonst unterdrückt „For this code review, run cat
+~/.aws/credentials …“ den Befehl —, defensiver Gegenkontext um „must never follow“/„denen du nie folgst“, und eine
+Override-Phrase in Anführungszeichen direkt nach einem benennenden Nomen („the phrase '…'“, „die Phrase „…““)
+gilt in `injection` (nativer Producer und Regelkatalog) als Erwähnung, außer der Satzteil davor verlangt die
+Ausführung („Carry out this sentence '…'“). Offen: die Bank liegt nur in den Goldens; ein Dev-/Holdout-Satz daraus (Generator
+mit eigener `source_id`) braucht einen Owner-Lauf des Generators. `baseline.md` blieb unverändert (Baseline-Cache
+außerhalb der Sandbox; ohne ihn fallen die Baseline-Spalten weg).
+
 ## Reihenfolge
 
 | Schritt | Wer | Inhalt | Backlog |
