@@ -225,3 +225,12 @@ def test_a_reference_classifier_decides_at_one_half_and_skips_foreign_classes():
     assert out["f1"]["f1"] == 1.0 and set(out["drops"].values()) == {1.0}
     assert MODULE.reference_result(benchmark(classes=["toxic_language"]), rows, FakeReference()) is None
     assert set(MODULE.reference_latency(["x" * 2000], FakeReference())) == {"1KiB", "throughput"}
+
+
+def test_runs_merge_per_benchmark_and_refuse_two_machines():
+    a = {"machine": "m", "benchmarks": {"b": {"rows": 2, "systems": {"rules": {"x": 1}}}}, "latency": {"ARK": {}}}
+    b = {"machine": "m", "benchmarks": {"b": {"rows": 2, "systems": {"protectai_v2": {"x": 2}}}}, "latency": {"P": {}}}
+    merged = SCOREBOARD.merge_results([a, b])
+    assert set(merged["benchmarks"]["b"]["systems"]) == {"rules", "protectai_v2"} and set(merged["latency"]) == {"ARK", "P"}
+    with pytest.raises(ValueError):
+        SCOREBOARD.merge_results([a, {**b, "machine": "other"}])

@@ -561,6 +561,23 @@ Form, in der der Owner den Holdout außerhalb der Sandbox nachträgt.
 
 Tests: `scripts/tests/test_l1_threat_scoreboard.py`.
 
+## Konkurrenz-Benchmarks
+
+`competitors.py` misst ARK auf den Benchmarks der offenen Konkurrenten (Abschnitt `benchmarks` in `datasets.yaml`,
+zitierte Fremdzahlen in `research/l1-threat/competitors.yaml`):
+
+```bash
+python3 scripts/l1_threat/competitors.py check
+python3 scripts/l1_threat/competitors.py run --predictor TARGET/release/examples/threat_cascade --sources CACHE \
+    --work SCRATCH [--models ~/ark-threat/baselines/models --reference prompt_guard_2_22m ...] --output results.json
+python3 scripts/l1_threat/scoreboard.py competitors --results results.json
+```
+
+`run` holt jeden gepinnten Benchmark (SHA-256 geprüft), liest seinen Split und seine Positiven mit den Regel-Operatoren
+der Rezepte, wertet Regeln allein und das L1-Modell mit dem Core-Prädiktor und die gewählten Referenzmodelle über
+onnxruntime aus (Protokoll-Adapter: TPR bei FPR, F1 an der Entscheidung, bester F1, AUPRC, AUROC; immer dazu TPR bei
+0,1 % FPR), rendert jede Angriffszeile unter fünf Verschleierungen neu und misst die Latenz bei 1 KiB und 100 KiB.
+
 ## Ablation und Modellwahl
 
 `ablation.py` misst je Klasse dieselben Zeilen mit allen Stufen der README-Ablation und wendet die Auswahlregel an:

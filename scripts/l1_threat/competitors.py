@@ -354,21 +354,22 @@ def latency(texts: list[str], binary: Path, work: Path) -> dict[str, Any]:
     return out
 
 
-def run(registry: dict[str, Any], binary: Path, sources: Path, work: Path, offline: bool = False,
-        references: list[Any] = ()) -> dict[str, Any]:
+def run(registry: dict[str, Any], binary: Path | None, sources: Path, work: Path, offline: bool = False,
+        references: list[Any] = (), only: set[str] | None = None) -> dict[str, Any]:
     """Every live benchmark through every ``run_systems`` system and every reference classifier (``references``,
-    ``run_baselines.reference_baselines``): the ``results`` that ``scoreboard.py competitors`` renders."""
+    ``run_baselines.reference_baselines``), on the benchmarks of ``only`` when given; without ``binary`` ARK is not
+    run (a separate reference run). The ``results`` are what ``scoreboard.py competitors`` renders and merges."""
     machine = PII_LATENCY.machine_info()
     results: dict[str, Any] = {"benchmarks": {},
                                "machine": f"{machine['cpu']}, {machine['cpus_usable']} usable CPUs, {machine['system']}"}
     texts: list[str] = []
     for entry in registry.get("benchmarks") or []:
-        if entry.get("pending") or entry.get("dropped"):
+        if entry.get("pending") or entry.get("dropped") or (only and entry["id"] not in only):
             continue
         rows = benchmark_rows(entry, registry, sources, offline)
         texts += [row["text"] for row in rows]
         systems = {}
-        for system, config in run_systems().items():
+        for system, config in run_systems().items() if binary else ():
             predictions = predict(rows + variants(rows), binary, config, work / system)
             systems[system] = system_result(entry, rows, predictions, curve=system == "rules")
         for model in references:
@@ -377,7 +378,7 @@ def run(registry: dict[str, Any], binary: Path, sources: Path, work: Path, offli
                 systems[model.id] = result
         results["benchmarks"][entry["id"]] = {"rows": len(rows), "positives": sum(r["positive"] for r in rows),
                                               "systems": systems}
-    results["latency"] = latency(texts, binary, work)
+    results["latency"] = latency(texts, binary, work) if binary else {}
     for model in references:
         results["latency"][dict(SCOREBOARD.FAIR_SYSTEMS)[model.id]] = reference_latency(texts, model)
     return results
@@ -397,7 +398,8 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check", help="check the benchmark recipes and the cited competitor numbers")
     r = commands.add_parser("run", help="measure ARK on every live benchmark (results JSON for scoreboard.py)")
-    r.add_argument("--predictor", type=Path, required=True, help=f"built {SCOREBOARD.PREDICTOR} example")
+    r.add_argument("--predictor", type=Path, help=f"built {SCOREBOARD.PREDICTOR} example (without: references only)")
+    r.add_argument("--benchmark", action="append", default=[], help="only these benchmark ids (repeatable)")
     r.add_argument("--sources", type=Path, required=True, help="download cache of the benchmark files")
     r.add_argument("--work", type=Path, required=True, help="scratch directory")
     r.add_argument("--offline", action="store_true")
@@ -413,7 +415,7 @@ def main(argv: list[str] | None = None) -> int:
     if problems or args.command == "check":
         return 1 if problems else 0
     references = BASELINES.reference_baselines(read(ENTITY_MAP), args.models, set(args.reference)) if args.reference else []
-    results = run(registry, args.predictor, args.sources, args.work, args.offline, references)
+    results = run(registry, args.predictor, args.sources, args.work, args.offline, references, set(args.benchmark))
     args.output.write_text(json.dumps(results, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 

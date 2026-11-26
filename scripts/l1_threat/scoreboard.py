@@ -1605,6 +1605,23 @@ def competitor_lines(registry: dict[str, Any], published: dict[str, Any], result
     return lines
 
 
+def merge_results(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Several ``competitors.py run`` outputs as one: systems per benchmark and latency rows side by side; runs on
+    different machines are refused (latency is compared on one machine only)."""
+    machines = {run["machine"] for run in runs}
+    if len(machines) > 1:
+        raise ValueError(f"results from different machines: {sorted(machines)}")
+    merged: dict[str, Any] = {"benchmarks": {}, "latency": {}}
+    for run in runs:
+        merged["machine"] = run["machine"]
+        merged["latency"].update(run.get("latency") or {})
+        for bench, measured in (run.get("benchmarks") or {}).items():
+            slot = merged["benchmarks"].setdefault(bench, {"systems": {}})
+            slot["systems"].update(measured["systems"])
+            slot.update({k: v for k, v in measured.items() if k != "systems"})
+    return merged
+
+
 def competitors_command(args: argparse.Namespace) -> int:
     competitors = sys.modules.get("_ark_l1_threat_competitors") or _load_file(
         "_ark_l1_threat_competitors", HERE / "competitors.py")
@@ -1612,7 +1629,7 @@ def competitors_command(args: argparse.Namespace) -> int:
     problems = competitors.check(registry, competitors.read(competitors.ENTITY_MAP), published)
     if problems:
         raise ValueError("; ".join(problems))
-    results = json.loads(args.results.read_text(encoding="utf-8")) if args.results else {}
+    results = merge_results([json.loads(path.read_text(encoding="utf-8")) for path in args.results])
     args.out.write_text(render_competitors(registry, published, results, competitors.gaps(registry)), encoding="utf-8")
     return 0
 
@@ -1851,7 +1868,8 @@ def main(argv: list[str] | None = None) -> int:
     fa.add_argument("--output", type=Path, required=True, help="fair report (JSON)")
     fa.add_argument("--scoreboard", type=Path, help=f"also render {', '.join(FAIR_FILES)} into this directory")
     co = commands.add_parser("competitors", help=f"render {COMPETITORS_FILE}: the competitors' benchmarks")
-    co.add_argument("--results", type=Path, help="measured results (JSON); without it only the cited numbers")
+    co.add_argument("--results", type=Path, action="append", default=[],
+                    help="measured results (JSON, repeatable: runs are merged); without it only the cited numbers")
     co.add_argument("--out", type=Path, default=ROOT / "research" / "l1-threat" / "scoreboard" / COMPETITORS_FILE)
     rf = commands.add_parser("refresh", help="re-render the fair scoreboard reports in a checkout of main")
     rf.add_argument("--tree", type=Path, default=ROOT, help="checkout of main; its HEAD is measured, its reports rewritten")
