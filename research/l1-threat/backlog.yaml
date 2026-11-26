@@ -919,11 +919,27 @@ tasks:
     deps: [S01, S06]
 
   # ── H: Hardening and wrap-up ──────────────────────────────────────────
+  # Owner, 2026-11-26 (user feedback): with all eleven built-in L1 models on, a plain injection input also
+  # reports agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on
+  # text without any tool description; the example therefore turns on only six models.
+  - id: T34
+    title: "Cross-class firing of the built-in L1 models: a plain instruction_injection input also flags agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on text without a tool or MCP description — every model must stay quiet on the other classes' positives and on text without its carrier"
+    type: precision-fix
+    deps: [E10b]
+    accept: >-
+      a cross-class confusion table (rows: true class, columns: each model's flag rate at its detect cut) on the
+      mix's measurement part and the report sets, in research/l1-threat/scoreboard/; each model's flag rate on
+      every other class's positives at most its benign FPR budget (0.1% per language), or the exception named
+      with its number; the carrier-bound classes (tool_poisoning, agent_config_tampering, memory_poisoning)
+      score only text with their structural carrier (tool or MCP description, agent config or rules file,
+      memory or RAG write) via a structural prefilter in ark-core, so plain chat never reaches their model;
+      goldens with the user's example (injection input, all eleven models on: only instruction_injection)
+      and hard negatives per class, DE + EN; L1 100 KiB p95 within +5 %
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34]}
 
 recurring:
   - id: TRIAGE
