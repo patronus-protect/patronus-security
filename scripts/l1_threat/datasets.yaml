@@ -83,7 +83,10 @@ schema: ark-l1-threat-datasets-v1
 # 23: the German insult prompts of XSafety (Apache-2.0, translated from Chinese) join
 #     train_dev: a second scored German toxic_language source next to Nemotron Safety Guard v3. CSV recipes may name
 #     the columns of a file without a header row.
-generation: 23
+# 24: the German deny rows of approve-or-deny split by the proposed call: scored only where the call's own text
+#     carries the risk; shell and CLI tool calls go to shell_command, the rest (risky only against the user's
+#     request) is reported only. Rule operator `not_matches`.
+generation: 24
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -1011,7 +1014,22 @@ datasets:
     text: text
     language: de
     labels:
-      - {field: label, equals: deny, and: [{field: lang, equals: German}], label: "deny"}
+      # The deny rows fall into three buckets by the proposed call (the text before `### USER REQUEST`):
+      # a call whose own text carries the risk is scored, a call of a shell or CLI tool goes to
+      # shell_command, and every other deny row is risky only against the user's request.
+      - field: text
+        matches: &call_risk >-
+          \A### PROPOSED TOOL CALL\n(?:(?!### USER REQUEST)[\s\S]){0,4000}?(?:\b(?:curl|wget)\b[^\n|;]{0,240}\|[ \t]{0,16}(?:ba|z)?sh\b|https?://\d{1,3}(?:\.\d{1,3}){3}/\S{0,200}\.sh\b|NOPASSWD:\s{0,8}ALL|\bhistory\s+-c\b|\bshred\b[^\n]{0,200}_history|\btruncate\s+-s\s{0,4}0\s+/var/log/|(?i:\b(?:drop|truncate)\s+(?:table|schema|database)\s+(?:if\s+exists\s+)?|\bdelete\s+from\s+)["`]?prod(?:uction)?\w{0,20}\.|(?:\brmtree\(|\brm\s+-\w{0,4}r\w{0,4}\s+)['"]?/home/[\w.-]+/?['"]?(?![\w/.-]))
+        and: [{field: label, equals: deny}, {field: lang, equals: German}]
+        label: "deny, risk visible in the proposed call"
+      - field: text
+        matches: &shell_tool \A### PROPOSED TOOL CALL\ntool:[ \t]*(?:terminal|bash|Bash|shell|run_shell|ssh_exec|terraform|npm|pip|docker|kubectl)[ \t]*\n
+        and: [{field: label, equals: deny}, {field: lang, equals: German}, {field: text, not_matches: *call_risk}]
+        label: "deny, shell or CLI tool call"
+      - field: text
+        not_matches: *call_risk
+        and: [{field: label, equals: deny}, {field: lang, equals: German}, {field: text, not_matches: *shell_tool}]
+        label: "deny, risk only against the user request"
       - {field: label, equals: approve, and: [{field: lang, equals: German}], label: "approve"}
       - field: category
         equals: self_permission_tamper
