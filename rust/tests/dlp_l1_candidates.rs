@@ -293,7 +293,7 @@ dlp_golden!(
 dlp_golden!(
     detects_database_dump,
     "dlp.content.database_dump",
-    "-- PostgreSQL database dump",
+    "-- PostgreSQL database dump\nCOPY public.kunden (id, email) FROM stdin;\n1\tanna.berger@posteo.de\n\\.\n",
     "-- PostgreSQL database dump"
 );
 dlp_golden!(
@@ -465,8 +465,9 @@ fn confidential_content_rules_cover_coherent_blocks_and_statements() {
     let sql = "SELECT * FROM kunden WHERE jahresumsatz > 100000;";
     assert_span(&scan(sql), "dlp.content.sql", sql);
 
-    let dump = "INSERT INTO kunden (id, name) VALUES (42, 'Ada');";
-    assert_span(&scan(dump), "dlp.content.database_dump", dump);
+    let rows = "INSERT INTO kunden (id, name) VALUES (42, 'Ada');";
+    let dump = format!("-- MySQL dump 10.13\n{rows}\n");
+    assert_span(&scan(&dump), "dlp.content.database_dump", rows);
 
     let trace = "RuntimeError: database failed\n    at service.rs:42\n    at main.rs:9\n";
     assert_span(&scan(trace), "dlp.content.system_log", trace);
@@ -651,8 +652,11 @@ fn source_sql_and_dump_rules_cover_common_unfenced_structures() {
     let sql = "SELECT id, email\nFROM customers\nWHERE active = true;";
     assert_span(&scan(sql), "dlp.content.sql", sql);
 
-    let dump = "-- PostgreSQL database dump";
-    assert_span(&scan(dump), "dlp.content.database_dump", dump);
+    let header = "-- PostgreSQL database dump";
+    let dump = format!("{header}\nCOPY public.kunden (id, name) FROM stdin;\n42\tAda\n\\.\n");
+    assert_span(&scan(&dump), "dlp.content.database_dump", header);
+    // T35: a header without rows is no dump.
+    assert!(scan(header).evidence_spans.is_empty());
 
     let fenced = concat!(
         "```env\n",

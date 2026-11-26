@@ -64,6 +64,9 @@ struct FixtureEntity {
     start: usize,
     end: usize,
     label: String,
+    /// The rule that reports this span, where a positive holds spans of several
+    /// rules (a SQL dump: header and rows); else the row's `rule_id`.
+    rule_id: Option<String>,
 }
 
 /// Default-off DLP classes (business records, content) are reachability-tested
@@ -235,10 +238,12 @@ fn evaluate(
     let mut coverage = Coverage::default();
 
     for row in &rows {
-        let expected = row
+        let targets = row
             .entities
             .iter()
-            .filter(|entity| entity.label == row.target_label)
+            .filter(|entity| entity.label == row.target_label);
+        let expected = targets
+            .clone()
             .map(|entity| (entity.start, entity.end, entity.label.clone()))
             .collect::<BTreeSet<_>>();
         let gateway = gateways.for_row(row)?;
@@ -271,10 +276,14 @@ fn evaluate(
         match row.case_type.as_str() {
             "positive" => {
                 // v2 rows also require that the declared rule reported every gold span.
-                let attributed = row.rule_id.as_ref().is_none_or(|rule_id| {
-                    expected
-                        .iter()
-                        .all(|(start, end, _)| rules.contains(&(*start, *end, rule_id.clone())))
+                let attributed = targets.clone().all(|entity| {
+                    entity
+                        .rule_id
+                        .as_ref()
+                        .or(row.rule_id.as_ref())
+                        .is_none_or(|rule_id| {
+                            rules.contains(&(entity.start, entity.end, rule_id.clone()))
+                        })
                 });
                 let passed = predicted == expected && attributed;
                 if let Some(rule_id) = &row.rule_id {
