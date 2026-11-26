@@ -709,6 +709,7 @@ tasks:
   # cascade FPR 2.1% (jailbreak) and 4.2% (toxic_language). Goal: one broad mix on which every L1 model is
   # trained, calibrated and measured. Model and cascade tasks wait for E10; rule work goes on.
   - id: E10
+    status: done
     title: "Fair measurement on one broad mix: every L1 model and the cascade trained, calibrated and measured on one mix (benign pool, positives of the other ten classes as negatives, PII and DLP texts, trigger-word hard negatives in the NotInject style, DE + EN), split row-wise and stratified by source into train / calibration / measurement; cut only from calibration, FPR and TPR only from measurement; report sets kept outside the mix"
     type: eval-infra
     deps: [E09]
