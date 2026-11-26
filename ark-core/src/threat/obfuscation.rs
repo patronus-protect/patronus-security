@@ -203,7 +203,8 @@ pub fn slash_unicode_decode_lossy(text: &str) -> String {
     let mut idx = 0;
     while idx < bytes.len() {
         if bytes[idx] == b'\\' && idx + 5 < bytes.len() && bytes[idx + 1] == b'u' {
-            let hex = &text[idx + 2..idx + 6];
+            // `get` instead of slicing: the four bytes after `\u` may end inside a multi-byte character.
+            let hex = text.get(idx + 2..idx + 6).unwrap_or_default();
             if hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
                 if let Ok(value) = u32::from_str_radix(hex, 16) {
                     if let Some(ch) = char::from_u32(value) {
@@ -222,4 +223,16 @@ pub fn slash_unicode_decode_lossy(text: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::slash_unicode_decode_lossy;
+
+    #[test]
+    fn slash_unicode_decode_keeps_a_multibyte_character_after_the_escape_marker() {
+        // Regression: `\u` followed by a Cyrillic homoglyph used to panic on a char boundary.
+        assert_eq!(slash_unicode_decode_lossy("a\\uabcс b"), "a\\uabcс b");
+        assert_eq!(slash_unicode_decode_lossy("x\\u0041y"), "xAy");
+    }
 }

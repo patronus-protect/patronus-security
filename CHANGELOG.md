@@ -47,6 +47,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Detection changes
 
+- **Detection change (crash fix):** the threat scan no longer fails on text where a `\u` escape marker is
+  followed by a multi-byte character (for example a Cyrillic look-alike letter); the request used to end with
+  a detector error instead of a result.
 - **Detection change (opt-in DLP database dumps):** `dlp_database_dump_header` now recognises the
   header that mysqldump and MariaDB actually write (`-- MySQL dump 10.13 …`), and
   `dlp_database_dump_insert` reports multi-row `INSERT` statements with one tuple per line and the
