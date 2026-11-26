@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import hashlib
 import importlib.util
 import json
 import re
@@ -363,11 +364,19 @@ def run(registry: dict[str, Any], binary: Path | None, sources: Path, work: Path
     results: dict[str, Any] = {"benchmarks": {},
                                "machine": f"{machine['cpu']}, {machine['cpus_usable']} usable CPUs, {machine['system']}"}
     texts: list[str] = []
-    for entry in registry.get("benchmarks") or []:
-        if entry.get("pending") or entry.get("dropped") or (only and entry["id"] not in only):
-            continue
+    live = [e for e in registry.get("benchmarks") or []
+            if not e.get("pending") and not e.get("dropped") and (not only or e["id"] in only)]
+    # Smallest first; each benchmark's result is kept under ``work`` (per input hash), so an aborted run resumes.
+    for entry in sorted(live, key=lambda e: len(benchmark_rows(e, registry, sources, offline))):
         rows = benchmark_rows(entry, registry, sources, offline)
         texts += [row["text"] for row in rows]
+        inputs = [entry, sorted(run_systems()) if binary else [], binary and binary.stat().st_mtime_ns,
+                  [m.id for m in references]]
+        key = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+        done = work / f"{entry['id']}-{key}.json"
+        if done.is_file():
+            results["benchmarks"][entry["id"]] = json.loads(done.read_text(encoding="utf-8"))
+            continue
         systems = {}
         for system, config in run_systems().items() if binary else ():
             predictions = predict(rows + variants(rows), binary, config, work / system)
@@ -378,6 +387,8 @@ def run(registry: dict[str, Any], binary: Path | None, sources: Path, work: Path
                 systems[model.id] = result
         results["benchmarks"][entry["id"]] = {"rows": len(rows), "positives": sum(r["positive"] for r in rows),
                                               "systems": systems}
+        work.mkdir(parents=True, exist_ok=True)
+        done.write_text(json.dumps(results["benchmarks"][entry["id"]]), encoding="utf-8")
     results["latency"] = latency(texts, binary, work) if binary else {}
     for model in references:
         results["latency"][dict(SCOREBOARD.FAIR_SYSTEMS)[model.id]] = reference_latency(texts, model)
