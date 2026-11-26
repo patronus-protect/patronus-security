@@ -724,6 +724,7 @@ tasks:
       baseline.md are regenerated and their old numbers replaced, not extended; unit tests in
       scripts/tests for the split (stratification, disjointness, cut only from calibration)
   - id: E11
+    status: done
     title: "More sources and native German in the dev set: write the recipes for the registered but unwritten sets (deepset prompt-injections, hackaprompt, GermEval 2019/2021/2025, GERMS-AT, InjecAgent, TensorTrust, GenTel, PolyGuardPrompts, NeurAlchemy, SaTML CTF, nemotron IPI, AI Safety Brazil), licence checked; today prompt_extraction EN is ~all mosscap, injection EN mostly spml, the four agent classes are only synthetic and injection, prompt_extraction, harmful_content and toxic_language have no native German positive"
     type: eval-infra
     deps: [E10]
