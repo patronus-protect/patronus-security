@@ -361,6 +361,19 @@ mod tests {
         assert!(dump(
             "-- PostgreSQL database dump\nCOPY public.kunden (id, email) FROM stdin;\n1\ta@b.de\n\\.\n"
         ));
+        // Quoted table names with a blank, a single-column COPY block.
+        assert!(dump(
+            "PRAGMA foreign_keys=OFF;\nINSERT INTO \"customer records\" VALUES('Anna Berger','anna.berger@posteo.de');\n"
+        ));
+        assert!(dump(
+            "-- MySQL dump 10.13\nINSERT INTO `customer records` VALUES (1,'Anna Berger');\n"
+        ));
+        assert!(dump(
+            "-- PostgreSQL database dump\nCOPY public.\"Kunden Liste\" (id, email) FROM stdin;\n1\ta@b.de\n\\.\n"
+        ));
+        assert!(dump(
+            "-- PostgreSQL database dump\nCOPY public.customers (email) FROM stdin;\na@b.de\n\\.\n"
+        ));
         // Rows without a header, a header without rows.
         assert!(!dump(rows));
         assert!(!dump(

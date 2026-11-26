@@ -1472,6 +1472,24 @@ mod dump_tests {
         assert_eq!(dump_rules(sqlite), BOTH);
     }
 
+    /// T35: a quoted table name with a blank (pg_dump, SQLite `.dump`) and a
+    /// single-column COPY block hold rows as well.
+    #[test]
+    fn quoted_table_names_and_single_column_copy_rows_fire_both_dump_rules() {
+        let sqlite = "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n\
+            INSERT INTO \"customer records\" VALUES('Anna Berger','anna.berger@posteo.de');\n\
+            COMMIT;\n";
+        assert_eq!(dump_rules(sqlite), BOTH);
+        let pg_quoted = "--\n-- PostgreSQL database dump\n--\n\n\
+            COPY public.\"Kunden Liste\" (id, email) FROM stdin;\n\
+            1\tanna.berger@posteo.de\n\\.\n";
+        assert_eq!(dump_rules(pg_quoted), BOTH);
+        let single_column = "--\n-- PostgreSQL database dump\n--\n\n\
+            COPY public.customers (email) FROM stdin;\n\
+            anna.berger@posteo.de\nj.weber@gmx.net\n\\.\n";
+        assert_eq!(dump_rules(single_column), BOTH);
+    }
+
     /// T35: DDL without rows and rows without a dump header are no dump.
     #[test]
     fn schemas_migrations_fixtures_and_tutorials_are_no_dump() {
