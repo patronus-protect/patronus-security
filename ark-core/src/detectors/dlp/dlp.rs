@@ -1197,6 +1197,10 @@ impl NativeRegexDetector for DlpPipeline {
         {
             return false;
         }
+        // T35: a dump rule fires on a dump with rows only.
+        if self.entity_groups[index] == "dlp.content.database_dump" && !prepared.is_sql_dump() {
+            return false;
+        }
         let meta = &self.metas[index];
         // T01: a prefix rule's value inside an identifier, hex run or base64
         // blob is no token.
@@ -1403,6 +1407,88 @@ mod prepare_tests {
             let full = expected.detect_prepared_with_mode(&prepared, |_| true, true, mode);
             assert_eq!(lazy.evidence_spans, full.evidence_spans, "{mode}");
             assert_eq!(lazy.details, full.details, "{mode}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod dump_tests {
+    use super::*;
+
+    /// The dump rules that fire on `text` with every rule on (T35).
+    fn dump_rules(text: &str) -> Vec<String> {
+        let prepared = crate::threat::NativeText::new(text);
+        let detection = DlpPipeline::shared().detect_prepared_with_mode(
+            &prepared,
+            |_| true,
+            true,
+            ScoreMode::Strict,
+        );
+        let mut rules: Vec<String> = detection
+            .details
+            .get("matched_rules")
+            .and_then(|rules| rules.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|rule| rule["rule_id"].as_str())
+            .filter(|id| id.starts_with("dlp_database_dump_"))
+            .map(str::to_string)
+            .collect();
+        rules.sort();
+        rules.dedup();
+        rules
+    }
+
+    const BOTH: [&str; 2] = ["dlp_database_dump_header", "dlp_database_dump_insert"];
+
+    /// T35: mysqldump writes `-- MySQL dump 10.13`, not `database dump`, and
+    /// a multi-row INSERT may put each tuple on its own line.
+    #[test]
+    fn mysqldump_with_customer_rows_fires_both_dump_rules() {
+        let extended = "-- MySQL dump 10.13  Distrib 8.0.36, for Linux (x86_64)\n--\n\
+            -- Host: db-prod-01    Database: crm\n\n\
+            LOCK TABLES `customers` WRITE;\n\
+            INSERT INTO `customers` VALUES (1,'Anna Berger','anna.berger@posteo.de','DE89370400440532013000'),(2,'Jonas Weber','j.weber@gmx.net','DE02120300000000202051');\n\
+            UNLOCK TABLES;\n";
+        assert_eq!(dump_rules(extended), BOTH);
+        let pretty = "-- MariaDB dump 10.19  Distrib 10.11.8-MariaDB\n\n\
+            INSERT INTO customers (id, name, email, iban) VALUES\n\
+            \x20 (1, 'Anna Berger', 'anna.berger@posteo.de', 'DE89370400440532013000'),\n\
+            \x20 (2, 'Jonas Weber', 'j.weber@gmx.net', 'DE02120300000000202051');\n";
+        assert_eq!(dump_rules(pretty), BOTH);
+    }
+
+    #[test]
+    fn pg_dump_copy_rows_and_sqlite_dump_fire_both_dump_rules() {
+        let pg = "--\n-- PostgreSQL database dump\n--\n\n\
+            COPY public.kunden (id, vorname, nachname, email) FROM stdin;\n\
+            1\tAnna\tBerger\tanna.berger@posteo.de\n\
+            2\tJonas\tWeber\tj.weber@gmx.net\n\\.\n";
+        assert_eq!(dump_rules(pg), BOTH);
+        let sqlite = "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n\
+            CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT, email TEXT);\n\
+            INSERT INTO customers VALUES(1,'Anna Berger','anna.berger@posteo.de');\n\
+            COMMIT;\n";
+        assert_eq!(dump_rules(sqlite), BOTH);
+    }
+
+    /// T35: DDL without rows and rows without a dump header are no dump.
+    #[test]
+    fn schemas_migrations_fixtures_and_tutorials_are_no_dump() {
+        let schema_only = "--\n-- PostgreSQL database dump\n--\n\n\
+            CREATE TABLE public.kunden (\n    id integer NOT NULL,\n    email text\n);\n\
+            COPY public.kunden (id, email) FROM stdin;\n\\.\n";
+        let migration = "-- V12__create_customers.sql\n\
+            CREATE TABLE customers (id BIGINT PRIMARY KEY, name TEXT, email TEXT);\n\
+            INSERT INTO customers (id, name, email) VALUES (1, 'admin', 'admin@example.com');\n";
+        let fixture = "# tests/fixtures/users.sql\n\
+            INSERT INTO users (id, name, email) VALUES\n\
+            \x20 (1, 'Test User', 'test1@example.com'),\n\
+            \x20 (2, 'Fake Person', 'test2@example.com');\n";
+        let tutorial = "Step 2: add a row with\n\n\
+            INSERT INTO customers (name, email) VALUES ('Alice', 'alice@example.com');\n";
+        for text in [schema_only, migration, fixture, tutorial] {
+            assert!(dump_rules(text).is_empty(), "{text}");
         }
     }
 }

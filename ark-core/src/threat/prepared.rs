@@ -15,6 +15,7 @@ pub struct NativeText<'a> {
     anchors: OnceLock<crate::detectors::lexical_anchors::AnchorPresence>,
     structure: OnceLock<crate::detectors::structure::Fields>,
     sql: OnceLock<Vec<crate::detectors::dlp::sql_rows::Statement>>,
+    sql_dump: OnceLock<bool>,
     context: OnceLock<crate::detectors::context_lexica::ContextScan>,
 }
 
@@ -32,6 +33,7 @@ impl<'a> NativeText<'a> {
             anchors: OnceLock::new(),
             structure: OnceLock::new(),
             sql: OnceLock::new(),
+            sql_dump: OnceLock::new(),
             context: OnceLock::new(),
         }
     }
@@ -69,6 +71,14 @@ impl<'a> NativeText<'a> {
     pub fn sql_statements(&self) -> &[crate::detectors::dlp::sql_rows::Statement] {
         self.sql
             .get_or_init(|| crate::detectors::dlp::sql_rows::statements(self.text()))
+    }
+
+    /// Whether the text is a SQL dump with rows (T35), checked once for the
+    /// matches of every dump rule.
+    pub fn is_sql_dump(&self) -> bool {
+        *self.sql_dump.get_or_init(|| {
+            crate::detectors::dlp::sql_rows::is_dump(self.text(), self.sql_statements())
+        })
     }
 
     /// The context terms and clauses of the text, scanned once for every rule

@@ -181,8 +181,10 @@ Read more: [Architecture](https://patronus-protect.github.io/patronus-security/c
 
 There is one mechanism everywhere: a `rules` map from stable rule id to `true`/`false`.
 
-- Ids you leave out keep their default: every rule is on, except the DLP content families (SQL,
-  source code, business identifiers, MCP risk, …), which are opt-in.
+- Ids you leave out keep their default: every rule is on, except the opt-in DLP families
+  (business identifiers, internal metrics, SQL, database dumps, source code, logs, document classes
+  other than classification markings, MCP risk); a SQL dump with rows, for example, needs
+  `"dlp_database_dump_header": True, "dlp_database_dump_insert": True`.
 - A rule only runs when its detector is on: `models` switches whole detectors (e.g.
   `native:pii`) off.
 - Cat policies are rules `cat.<policy id>` (`cat.core.*`, bundle ids such as `cat.CMD-PIPE-CURL`, `cat.user.*`) in the same
@@ -210,6 +212,10 @@ for name, scanner in [("default", default), ("custom", custom)]:
 default ['EMAIL', 'safe', 'safe', 'safe']
 custom ['safe', 'dlp.content.sql', 'safe', 'safe']
 ```
+
+`dlp_sql_statement` reports single SQL statements; a database dump with customer rows (mysqldump,
+pg_dump, SQLite `.dump`) is its own opt-in family, switched on with `dlp_database_dump_header` and
+`dlp_database_dump_insert`.
 
 ## Shell commands (Cat)
 

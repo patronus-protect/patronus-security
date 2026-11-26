@@ -50,6 +50,7 @@ macro_rules! prose_handover {
 mod auth_url;
 mod connection;
 mod content;
+pub(super) use content::DUMP_HEADER;
 mod credentials;
 mod crypto;
 mod documented;
