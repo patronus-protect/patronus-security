@@ -3,7 +3,7 @@
 use super::{obfuscation::*, patterns::*, util::text_windows};
 use super::{prepared::WINDOW_BYTES, NativeText};
 use crate::detectors::evidence::{L1Component, L1Match, MatchText};
-use crate::detectors::text_views::decode::rot13_decode_text;
+use crate::detectors::text_views::{self, decode::rot13_decode_text};
 use regex::Regex;
 
 fn regex_matches(view: &MatchText, regex: &Regex, role: &str) -> Vec<L1Match> {
@@ -450,10 +450,13 @@ pub fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -> Vec<L
             for window in text_windows(text, WINDOW_BYTES) {
                 let start = window.as_ptr() as usize - text.as_ptr() as usize;
                 let map: fn(char) -> Option<char> = if family == "zero_width_obfuscation" {
-                    if window.chars().all(|c| visible_character(c).is_some()) {
+                    if window
+                        .chars()
+                        .all(|c| text_views::visible_character(c).is_some())
+                    {
                         continue;
                     }
-                    visible_character
+                    text_views::visible_character
                 } else {
                     if !window
                         .split(is_token_boundary)
@@ -555,13 +558,6 @@ fn transformed_match(
     component.explanation = format!("{kind}: decoded match {:?}", &decoded[evidence.range()]);
     L1Match::new(vec![component])
 }
-fn visible_character(c: char) -> Option<char> {
-    (!matches!(
-        c,
-        '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}'
-    ))
-    .then_some(c)
-}
 
 fn encoded_matches(prepared: &NativeText<'_>) -> Vec<L1Match> {
     let text = prepared.text();
@@ -588,7 +584,7 @@ fn encoded_matches(prepared: &NativeText<'_>) -> Vec<L1Match> {
     }
     for window in text_windows(text, WINDOW_BYTES) {
         let start = window.as_ptr() as usize - text.as_ptr() as usize;
-        let stripped = MatchText::mapped(window, visible_character, false);
+        let stripped = MatchText::mapped(window, text_views::visible_character, false);
         let source_text = &stripped.text;
         let mut variants = Vec::new();
         if source_text != window {

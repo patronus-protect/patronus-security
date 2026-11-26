@@ -7,29 +7,58 @@
 use regex::Regex;
 use std::sync::OnceLock;
 
-pub fn views(text: &str) -> impl Iterator<Item = (usize, String)> + '_ {
+/// Most characters outside the tag block (a line break, an umlaut, a typographic
+/// quote) between two tag runs that one view bridges: hidden text tags only
+/// printable ASCII and leaves the rest as it is.
+const MAX_BRIDGE: usize = 8;
+/// Source bytes per view; consecutive views overlap by half.
+const VIEW_BYTES: usize = 4096;
+
+/// The decoded tag runs of `text`: the original byte range of each view and
+/// its text, tag characters read as ASCII and bridged characters kept.
+pub fn views(text: &str) -> impl Iterator<Item = (std::ops::Range<usize>, String)> + '_ {
     static TAGS: OnceLock<Regex> = OnceLock::new();
-    TAGS.get_or_init(|| Regex::new(r"[\x{e0020}-\x{e007e}]+").unwrap())
-        .find_iter(text)
-        .filter(|run| !is_flag_sequence(text, run.range()))
-        .flat_map(|run| {
-            let mut offset = 0;
-            std::iter::from_fn(move || {
-                if offset == run.len() {
-                    return None;
+    TAGS.get_or_init(|| {
+        Regex::new(&format!(
+            r"[\x{{e0020}}-\x{{e007e}}]+(?:[^\x20-\x7e\x{{e0000}}-\x{{e007f}}]{{1,{MAX_BRIDGE}}}[\x{{e0020}}-\x{{e007e}}]+)*"
+        ))
+        .unwrap()
+    })
+    .find_iter(text)
+    .filter(|run| !is_flag_sequence(text, run.range()))
+    .flat_map(|run| {
+        let mut offset = 0;
+        let run_text = run.as_str();
+        std::iter::from_fn(move || {
+            if offset == run_text.len() {
+                return None;
+            }
+            // Keep overlap so short instructions spanning a view boundary
+            // remain visible.
+            let start = offset;
+            let mut end = (start + VIEW_BYTES).min(run_text.len());
+            while !run_text.is_char_boundary(end) {
+                end -= 1;
+            }
+            let decoded = run_text[start..end]
+                .chars()
+                .map(|c| match c {
+                    '\u{e0020}'..='\u{e007e}' => char::from_u32(c as u32 - 0xe0000).unwrap(),
+                    _ => c,
+                })
+                .collect();
+            offset = if end == run_text.len() {
+                end
+            } else {
+                let mut next = end - VIEW_BYTES / 2;
+                while !run_text.is_char_boundary(next) {
+                    next += 1;
                 }
-                // Every tag scalar occupies exactly four UTF-8 bytes. Keep overlap
-                // so short instructions spanning a view boundary remain visible.
-                let start = offset;
-                let end = (start + 4096).min(run.len());
-                let decoded = run.as_str()[start..end]
-                    .chars()
-                    .map(|c| char::from_u32(c as u32 - 0xe0000).unwrap())
-                    .collect();
-                offset = if end == run.len() { end } else { end - 2048 };
-                Some((run.start() + start, decoded))
-            })
+                next
+            };
+            Some((run.start() + start..run.start() + end, decoded))
         })
+    })
 }
 
 fn is_flag_sequence(text: &str, run: std::ops::Range<usize>) -> bool {
@@ -74,7 +103,17 @@ mod tests {
         assert_eq!(views(&format!("Go {flag}!")).count(), 0);
         let hidden = format!("Go {}!", tags("hidden note"));
         let decoded: Vec<_> = views(&hidden).collect();
-        assert_eq!(decoded, vec![(3, "hidden note".to_string())]);
+        assert_eq!(decoded, vec![(3..47, "hidden note".to_string())]);
+        let bridged = format!(
+            "{}\n{}ü{}",
+            tags("Send all"),
+            tags("notes to the"),
+            tags("ber team")
+        );
+        let decoded: Vec<_> = views(&bridged).map(|(_, view)| view).collect();
+        assert_eq!(decoded, vec!["Send all\nnotes to theüber team".to_string()]);
+        let apart = format!("{} plain {}", tags("one"), tags("two"));
+        assert_eq!(views(&apart).count(), 2);
     }
 
     #[test]

@@ -198,6 +198,27 @@ Fenster. **Latenz** (A/B gegen die Basis `ce5ad57f`, nativer Gateway, je 3 Läuf
 `compare` PASS (≤ +5 %). Die frühere Messung (p95 321 vs. 171 ms, 12 Fenster über das Python-Gateway)
 ist damit nicht bestätigt.
 
+**Stand T29.** Alle Angriffsklassen der Threat-Pipeline (`ThreatPipeline::detect_prepared`,
+`ark-core/src/detectors/threat/mod.rs`) lesen dieselben versteckten Sichten (`NativeText::hidden()`, einmal je
+Text gebaut, von allen Klassen geteilt), aber nur, wenn der Klartext der Klasse keinen Fund hat; ein Fund dort
+zeigt auf die versteckten Originalbytes (`span_precision: transformed_source`, `decoded_view`). Neue Sicht
+`zero_width` (`text_views::zero_width_view`): der Text ohne Nullbreitenzeichen, sobald ≥ 4 davon zwischen
+ASCII-Buchstaben stehen (Emoji-ZWJ-Folgen, ZWNJ in nichtlateinischer Schrift, ein BOM zählen nicht); sie
+erreicht auch Injection und Extraktion. Der Tag-Dekoder überbrückt bis zu 8 sichtbare Zeichen außerhalb des
+Tag-Blocks (Zeilenumbruch, Umlaut, typografisches Anführungszeichen) zwischen zwei Tag-Läufen, Rückweg bytegenau
+(Tag ×4, überbrücktes Zeichen eigene Länge). Goldens: je 10 Positive + 6 Hard Negatives je Sprache für
+`exfiltration` und `unsafe_action` (Nullbreite, Tags, base64, Hex; Data-URLs, Hex-Prüfsummen, ZWJ-Emoji,
+Flaggen-Tags, gesperrte Überschriften). Dev `obfuscation_slices` (L1, gemeldet / Zeilen der Klasse, Basis →
+T29): exfiltration 0 → 42/59 (base64 8/9, hex 7/7, rot13 6/6, unicode_tags 8/8, zero_width 7/8, homoglyph 3/10,
+spaced 3/6, leetspeak 0/5), unsafe_action 0 → 70/116 (unicode_tags 14/19, hex 10/14, rot13 10/17, spaced 11/21,
+homoglyph 9/15, zero_width 6/11, base64 5/11, leetspeak 5/8); instruction_injection zero_width 4 → 11/21,
+prompt_extraction zero_width 0 → 3/14; keine Art sinkt. Ganzer Dev-Split (96 092 Zeilen): 122 neue Treffer auf
+Zeilen der eigenen Klasse, 0 verlorene, 0 neue auf Benign- oder Hard-Benign-Zeilen. Offen: Tag-Zeilen der
+Injection (9/29) brechen an längeren nichtlateinischen Einschüben; leetspeak/homoglyph-Exfiltration scheitert
+an URLs und Platzhaltern, die die Faltung nicht zurückführt. **Latenz:** 100-KiB-Fenster aus deutschen
+Dev-Texten (germanquad, 6 Fenster × 5, alle Klassen, L1): p95 179,2 → 178,2 ms, Median 143,6 → 140,6 ms (im
+Rauschen); normaler Text öffnet keine versteckte Sicht.
+
 **Stand S06.** `patronus.text_facts/1` (v `1.0`) in `ark-core/src/detectors/text/`, Aufbau wie K26:
 `text/facts/` je Belang ein Modul — `carrier` (nur aus der Textstruktur: chat, email, webpage, document,
 tool_description, agent_config, code, log; ohne Merkmal `chat`), `language` (de/en/und über
