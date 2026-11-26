@@ -495,14 +495,22 @@ NotInject-Stil aus einem eigenen DE/EN-Generator (`trigger_negatives`; NotInject
 reine Holdout-Sets). Die Zusatzsätze liegen als eingefrorenes Verzeichnis `MIX/mix`, die Teilung in `MIX/parts.json`:
 zeilenweise, geschichtet nach Quelle (Satz-ID), innerhalb der Quelle nach normalisiertem Text gruppiert (Leerraum
 zusammengefasst, Groß-/Kleinschreibung egal), nach Sprache und Klassen geordnet und mit gesätem SHA-256 des Texts im
-Muster 3 Train : 1 Kalibrierung : 1 Messung ausgeteilt; ein schon in einer früheren Quelle ausgeteilter Text behält
-seinen Teil, gleiche Texte liegen also nie in zwei Teilen. Jede Quelle ab fünf neuen Texten liegt in allen drei
+Muster 1 Kalibrierung : 1 Messung ausgeteilt; ein schon in einer früheren Quelle ausgeteilter Text behält
+seinen Teil, gleiche Texte liegen also nie in zwei Teilen. Einen Train-Teil gibt es nicht: die eingebauten
+L1-Modelle behalten ihre Trainingsdaten, und jede Zeile, auf der eines von ihnen trainiert wurde, fliegt vor dem
+Austeilen aus beiden Teilen (`trained_keys`, Abgleich über den SHA-256 des normalisierten Texts; da kein Modell
+seine Trainingszeilen aufgezeichnet hat, wird die Teilung seines Trainingsskripts nachgebildet: für die elf
+fastText-Modelle die Train-Seite von `ablation.split_rows` über `FASTTEXT_TRAIN_SETS`, für das
+harmful_content-Subklassenmodell jede gelabelte Positive). `parts.json` nennt die Schlüssel je Modell und die
+ausgeschlossenen Zeilen je Quelle, die Berichte ebenso. Jede Quelle ab zwei neuen Texten liegt in beiden
 Teilen, keine Zeile in zweien; kleinere Quellen nennt `short_sources`. `fair` misst
-Regeln allein (L1-Score-Kurve), L1-Modell und Kaskade (L1-Score der Kaskade), Prompt Guard 2 22M und die beste
-Heuristik (je Klasse und Sprache auf dem Kalibrier-Teil gewählt) auf denselben Zeilen: der Schnitt kommt nur aus
+Regeln allein (L1-Score-Kurve), L1-Modell und Kaskade (L1-Score der Kaskade), Prompt Guard 2 22M und 86M,
+ProtectAI v2 und die beste Heuristik (je Klasse und Sprache auf dem Kalibrier-Teil gewählt) auf denselben Zeilen: der Schnitt kommt nur aus
 den Negativen des Kalibrier-Teils (je Klasse und Sprache, 0,1 % entscheidend, 1 % daneben), TPR, FPR und
 Hard-Negative-FPR nur aus dem Mess-Teil, dazu Pflichtspalten TPR/FPR auf den Report-Sätzen (außerhalb des Mixes) am
-selben Schnitt und die Zahl der Quellen hinter den Positiven.
+selben Schnitt und die Zahl der Quellen hinter den Positiven. Jede Zelle hat eine Zahl oder `n/r` mit Grund
+(`n/r: not run` – System nicht gemessen, Grund unter „Not measured“; `n/r: class` – System bewertet die Klasse
+nicht; `n/r: budget` – FPR-Budget nicht erreichbar).
 
 `refresh` hält das Scoreboard von main aktuell: im Checkout `--tree` (Standard: dieses Repo) baut es den
 Predictor von HEAD (Cache wie `gate`, Builds und Vorhersagen werden geteilt), friert den Mix im Cache ein, sagt
