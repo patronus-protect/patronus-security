@@ -956,7 +956,7 @@ tasks:
       dumps on; the DLP dev scoreboard (scripts/l1_dlp) shows no regression and no new FP on its hard
       negatives; DLP 100 KiB p95 within budget (scripts/l1_dlp/latency.py)
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
-  - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
+  - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
   - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35]}
