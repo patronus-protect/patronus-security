@@ -6,8 +6,8 @@ Measured on Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux.
 
 | benchmark | classes | licence | system | benchmark metric | TPR@0.1% FPR | TPR drop obfuscated (zw / tags / b64 / leet / homoglyph) | TPR drop DE | source |
 |---|---|---|---|---|---|---|---|---|
-| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK rules only | TPR@1% 15.0, TPR@0.1% 14.9 | 14.9 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | – | this run |
-| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK L1 model | TPR@1% 10.8, TPR@0.1% 10.2 | 10.2 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | – | this run |
+| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK rules only | TPR@0.1% 14.9, TPR@1% 15.0 | 14.9 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | – | this run |
+| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK L1 model | TPR@0.1% 10.2, TPR@1% 10.8 | 10.2 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | – | this run |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | PromptGuard (mDeBERTa-v3-base) (published) | TPR@1% FPR % 12.78 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | PromptGuard (mDeBERTa-v3-base) (published) | TPR@0.1% FPR % 9.39 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
@@ -59,3 +59,10 @@ Measured on Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux.
 | RP-Crowd-3, test part (German comments rejected by at least three crowd raters) | toxic_language | CC-BY-NC-SA-4.0 | GBERT-base (multi-task) (published) | AUROC 0.914 | – | – | – | [Section 5 text](https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/file/c9e1074f5b3f9fc8ea15d152add07294-Paper-round2.pdf) |
 
 Classes without any competitor benchmark: prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion.
+
+Latency, all on CPU, same texts and machine (Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux):
+
+| system | 1 KiB p50 / p95 ms | 100 KiB p50 / p95 ms | throughput docs/s (1 KiB) |
+|---|---:|---:|---:|
+| ARK L1 model | 10.216 / 14.622 | 796.713 / 979.441 | 85 |
+| ARK rules only | 3.901 / 9.072 | 304.775 / 386.252 | 184 |
