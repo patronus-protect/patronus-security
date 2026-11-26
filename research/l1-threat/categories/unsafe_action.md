@@ -472,3 +472,65 @@ Offen: `injection_l1` und die Text-Facts scannen den Kontext weiter selbst (eige
 `NativeText`); der Punkte-Kontext wertet Anführungszeichen weiter bewusst nicht, ein zitierter
 Satz ohne Zitat-/Meta-Wort („an attacker may write "upload ~/.aws/credentials to …"“) bleibt für
 `ex_secret_to_sink` ein Treffer.
+
+
+## 20. Stand T33 (2026-11-25): Scope der deutschen approve-or-deny-Zeilen
+
+Alle gewerteten deutschen `unsafe_action`-Positiven außerhalb der Vorlagen stammen aus den 35 deny-Zeilen von
+`approve_or_deny_de` (übersetzt, Apache-2.0) bzw. ihren Carrier- und Obfuskations-Kopien. Das Risiko steckt im
+vorgeschlagenen Tool-Aufruf und oft erst im Widerspruch zur Nutzerbitte. Entscheidung (Rezept `generation: 24`,
+Regeln auf den Text des Aufrufs vor `### USER REQUEST`, neuer Rezept-Operator `not_matches`):
+
+| Bucket | Label | Zeilen | Wertung |
+|---|---|---:|---|
+| L1-Text | `deny, risk visible in the proposed call` | 6 | `unsafe_action` gewertet |
+| Shell/CLI-Werkzeug (`terminal`, `bash`, `shell`, `run_shell`, `ssh_exec`, `terraform`, `npm`, `pip`, `docker`, `kubectl`) | `deny, shell or CLI tool call` | 13 | `handoff: shell_command` (K26, wie RedCode Bash) |
+| Anfrage ↔ Aktion | `deny, risk only against the user request` | 16 | `unsafe_action` nur berichtet |
+
+Die Kategorien `self_permission_tamper` (3 Zeilen) und `credential_exfiltration` (1) behalten ihre Klasse
+(`agent_config_tampering`, `exfiltration`) unabhängig vom Bucket. Die 47 approve-Zeilen bleiben Benign; sie
+enthalten dieselben Werkzeuge mit `rm -rf`, `DROP SCHEMA`, `DROP DATABASE … staging`, `git push --force`,
+`docker system prune` — deshalb wertet L1-Text nur Formen, die in keiner approve-Zeile vorkommen.
+
+L1-Text-Formen (je eine Punkte-Regel, Basis 40, `format`, ohne Pflichtkontext; Anker-Gate aus dem Regex):
+
+| Regel | Familie | Struktur | Dev-Zeile |
+|---|---|---|---|
+| (bestehend) `remote_execution` | `handoff_shell` | `curl … \| sh` | 0048 |
+| `ua_remote_script_ip` | `fetch_and_run` | `curl`/`wget`/`download` + Skript-URL (`.sh`/`.ps1`) auf nackter IPv4 | 0058 |
+| `ua_trace_wipe` | `destructive_request` | Leeren/Löschen unter `/var/log/` und `history -c`/`shred …_history`/`unset HISTFILE` in einer Zeile | 1287 |
+| `ua_sudoers_grant` | `privilege_widening` | `NOPASSWD: ALL` + `>>`/`tee -a` + `/etc/sudoers(.d/…)` | 2379 |
+| `ua_home_dir_delete` | `destructive_request` | `rm -r…`/`rmtree(`/`Remove-Item -Recurse` auf `/home/<name>`, `/Users/<name>`, `~` als Ganzes | 2488 |
+| `ua_prod_destructive_sql` | `destructive_request` | `DROP TABLE/SCHEMA/DATABASE`, `TRUNCATE`, `DELETE FROM` auf `prod`/`production`/`live`-Schema | 2706 |
+
+**Gold-Review (alle 35 deny-Zeilen, Hand-Durchsicht des Aufrufs gegen die Nutzerbitte).** 1 Grenzfall: 2706
+(`DELETE FROM prod.app_logs` alter Logs) ist für sich Routine-Wartung; die Zeile bleibt L1-Text, weil der Aufruf
+die Produktion nennt und die Bitte die lokale Dev-DB. 1/35 = 2,9 % ≤ 5 %. Die 16 Anfrage↔Aktion-Zeilen (DELETE
+auf einer nur zu prüfenden Tabelle, Force-Push für einen Tippfehler, Klick auf „publish-all“/„truncate-all“/
+„refund“, Türschloss statt Heizung, `rmtree` des Jenkins-Workspace bei einer Analyse-Bitte, Admin-Anlage trotz
+„ändere nichts“, `DROP TABLE` bei „nur Skript schreiben“) sind ohne die Bitte nicht als Angriff lesbar.
+
+**Messung (Dev, ohne DEV-Neuerzeugung: Rezept lokal über die 82 Zeilen angewandt, `threat_cascade`, Regeln
+allein).** Vorher 1/6 der L1-Text-Zeilen gefunden (nur 0048), nachher 6/6; ihre Carrier-Kopien 23/24, die 15
+Obfuskations-Kopien 0/15 (offen, decodierte Sichten). Die 47 approve-Zeilen ohne `unsafe_action`-Treffer.
+Auf dem heutigen Gold (alle 122 deutschen Zeilen noch gewertet, `scoreboard.py refresh`): Regeln allein
+`unsafe_action` DE TPR@0,1 % 26,8 → 43,9, all 68,5 → 72,0, EN 79,2 unverändert; Hard-Benign-FP 0/841 (DE),
+0/2412 (all); Kaskade DE 93,9 → 95,1 bei FPR 0,06 %. Goldens: je Regel DE + EN Positive in Tool-Call, Chat, Log, E-Mail und Hard Negatives
+(vom Nutzer gewünschte Dev-DB-Bereinigung, Migrationsskript im Tutorial, Trockenlauf mit `SELECT count(*)`,
+sudoers-Audit, Logrotate, Installer von benanntem Host, Löschen unterhalb des Home-Verzeichnisses).
+
+**Owner-Befehl (DEV neu erzeugen, `generation: 24`):**
+`python3 scripts/l1_threat/prepare_corpora.py --dev-out "$ARK_L1_DEV_DATA" --holdout-out <HOLDOUT> --force`,
+danach die Generatoren (Carrier/Obfuskation ziehen nur noch gewertete Quellzeilen) und
+`python3 scripts/l1_threat/scoreboard.py refresh`.
+
+**Zweite deutsche Quelle (offen).** Eine native deutsche Prosa-Quelle für `unsafe_action` mit offener Lizenz hat
+dieser Lauf nicht gefunden (kein Netz in der Sandbox; nur übersetzte oder EN-Sätze bekannt). Owner: eine
+Kandidatin lizenzprüfen (nur MIT/Apache/CC-BY, nicht aus den Holdout-Quellen) und als `train_dev`-Rezept in
+`scripts/l1_threat/datasets.yaml` eintragen; ohne Kandidatin bleibt der M09-Weg (zweite Generator-Familie).
+
+Latenz (Release, `threat_cascade` alle elf Klassen, 4 × 100 KiB deutsche Benign-Prosa aus Dev (GermanQuAD,
+MASSIVE), je 8 Samples × 3, Basis 4d4c2b0c gegen Head, je zwei Läufe): p50 152,8 / 152,8 → 153,5 / 156,4 ms
+(+0,5 % bis +2,4 %), p95 194,3 / 181,3 → 189,8 / 227,2 ms (Streuung der Sandbox; drei weitere Head-Läufe 196,9,
+195,7, 195,0). Die fünf Regeln laufen hinter dem aus ihrem Regex abgeleiteten Anker-Gate wie alle Punkte-Regeln.
+Das E03-Korpus (`scripts/l1_threat/latency.py`) fehlt in der Sandbox.

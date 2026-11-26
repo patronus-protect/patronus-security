@@ -1499,7 +1499,7 @@ classes:
         de: [<Imperativ LÖSCHEN> <gesamte Produktionsdatenbank> <ohne Rückfrage>]
         en: [<imperative WIPE> <all backups> <right away>]
       carriers: [chat, email, tool_output, web, document, rag_chunk]
-      existing_rules: [ark.threat.ua_destructive_request, ark.threat.ua_delete_by_id, ark.threat.ua_cover_tracks, ark.threat.ua_system_file_delete]
+      existing_rules: [ark.threat.ua_destructive_request, ark.threat.ua_delete_by_id, ark.threat.ua_cover_tracks, ark.threat.ua_system_file_delete, ark.threat.ua_trace_wipe, ark.threat.ua_prod_destructive_sql, ark.threat.ua_home_dir_delete]
       baseline_coverage: {atr: partial, prompt_guard_2: none, protectai_v2: none}
       gap: Prose destructive requests without shell syntax; today only dlp destructive_operation
     - id: security_disable
@@ -1538,7 +1538,7 @@ classes:
         de: [<Imperativ HERUNTERLADEN> <Skript von URL> und <Imperativ AUSFÜHREN>]
         en: [<imperative INSTALL> from <this URL> and run it]
       carriers: [chat, email, tool_output, tool_description, web, document]
-      existing_rules: [ark.threat.remote_execution_instruction, ark.threat.ua_fetch_and_run]
+      existing_rules: [ark.threat.remote_execution_instruction, ark.threat.ua_fetch_and_run, ark.threat.ua_remote_script_ip]
       baseline_coverage: {atr: partial, cisco_yara: partial}
       gap: Indirect fetch-and-run in tool output; DE paraphrases
     - id: container_escape_config
@@ -1581,7 +1581,7 @@ classes:
         de: [<Imperativ VERGEBEN> <Admin-Rechte> an <alle Nutzer>]
         en: [<imperative MAKE> <directory> <world-writable>]
       carriers: [chat, email, tool_output, document, config]
-      existing_rules: [ark.threat.ua_privilege_widening, ark.threat.ua_invite_and_remove]
+      existing_rules: [ark.threat.ua_privilege_widening, ark.threat.ua_invite_and_remove, ark.threat.ua_sudoers_grant]
       baseline_coverage: {atr: partial}
       gap: No ARK rule for privilege widening in prose
     - id: persistence
