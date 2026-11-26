@@ -14,8 +14,8 @@ on:
       - "scripts/release_version.py"
       - "scripts/bootstrap_python_tls.py"
       - "!**/*.md"
-      - "LICENSE*"
-      - "NOTICE"
+      - "ark-coordinator/LICENSE*"
+      - "ark-coordinator/NOTICE"
   push:
     branches: [main, "release/**", codex/ionos-ark-api-0.1.6]
     paths:
@@ -30,8 +30,8 @@ on:
       - "scripts/release_version.py"
       - "scripts/bootstrap_python_tls.py"
       - "!**/*.md"
-      - "LICENSE*"
-      - "NOTICE"
+      - "ark-coordinator/LICENSE*"
+      - "ark-coordinator/NOTICE"
   workflow_dispatch:
 
 permissions:

@@ -463,5 +463,5 @@ these as defects and fix them, rather than waiting for a formal complaint.
 ## License
 
 These fixtures are distributed under the same terms as the project — see
-[LICENSE](../../../LICENSE) — except for any third-party material described
+[LICENSE](../../LICENSE) — except for any third-party material described
 above, which remains under its original terms.

@@ -234,9 +234,9 @@ and `ark-coordinator` accept the category.
 ## Licensing
 
 The Docker image conveys `patronus-ark` under GPL-3.0-only — see [`LICENSE`](
-https://github.com/patronus-protect/patronus-security/blob/main/LICENSE) and [`NOTICE`](
-https://github.com/patronus-protect/patronus-security/blob/main/NOTICE), both copied into the
+https://github.com/patronus-protect/patronus-security/blob/main/ark-api/LICENSE) and [`NOTICE`](
+https://github.com/patronus-protect/patronus-security/blob/main/ark-api/NOTICE), both copied into the
 image. Self-hosted deployment and distribution of this image is subject to those terms; see
 [`LICENSE-COMMERCIAL.md`](
-https://github.com/patronus-protect/patronus-security/blob/main/LICENSE-COMMERCIAL.md) if you
+https://github.com/patronus-protect/patronus-security/blob/main/ark-api/LICENSE-COMMERCIAL.md) if you
 need rights beyond the GPL — for example, embedding it in a closed-source product.

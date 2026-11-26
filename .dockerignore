@@ -17,9 +17,6 @@
 !ark-coordinator/**
 !ark-distributed-protocol/
 !ark-distributed-protocol/**
-!LICENSE
-!LICENSE-COMMERCIAL.md
-!NOTICE
 **/target
 **/__pycache__
 ark-api/config.yaml
