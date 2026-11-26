@@ -755,12 +755,13 @@ tasks:
       DEV they join the mix first; the PR lists every accept point of E10 and E10b as met or not met with
       its number
 
-  # Owner, 2026-11-26: besides the baselines on our data, compare on the competitors' own benchmarks under
-  # their protocol, next to their published numbers. Census of 2026-11-26: only these have open data and
+  # Owner, 2026-11-26: the programme goal is to show Ark is better, more stable and faster than the open-source
+  # competitors. Besides the baselines on our data, compare on the competitors' own benchmarks under
+  # their protocol, next to their published numbers, plus latency and obfuscation robustness. Census of 2026-11-26: only these have open data and
   # published detector numbers; agent_config_tampering, exfiltration, resource_exhaustion and input-side
   # prompt_extraction have none, memory_poisoning only attack-side benchmarks.
   - id: E12
-    title: "Head-to-head on competitor benchmarks: rules only, L1 model and cascade on the competitors' own sets under their protocol, next to their published numbers — PromptShield eval split (TPR at 1% / 0.1% FPR vs InjecGuard, PromptGuard, ProtectAI v2), the Sentinel protocol on deepset / jackhhao / WildJailbreak (F1 vs ProtectAI v2), the MCP tool-poisoning protocol of arXiv 2604.10534 (F1 vs Cisco YARA 31.25), the OpenAI moderation set (F1 vs Llama Guard, ShieldGemma, WildGuard), RP-Mod / RP-Crowd for German toxic language"
+    title: "Better, more stable, faster than the open-source competitors — head-to-head on their benchmarks: rules only, L1 model and cascade on the competitors' own sets under their protocol, next to their published numbers — PromptShield eval split (TPR at 1% / 0.1% FPR vs InjecGuard, PromptGuard, ProtectAI v2), the Sentinel protocol on deepset / jackhhao / WildJailbreak (F1 vs ProtectAI v2), the MCP tool-poisoning protocol of arXiv 2604.10534 (F1 vs Cisco YARA 31.25), the OpenAI moderation set (F1 vs Llama Guard, ShieldGemma, WildGuard), RP-Mod / RP-Crowd for German toxic language"
     type: eval-infra
     deps: [E10b]
     accept: >-
@@ -771,7 +772,12 @@ tasks:
       our rules only, L1 model and cascade follow the benchmark's own metric and threshold protocol, plus
       TPR at 0.1% FPR where the set has negatives; results in a new research/l1-threat/scoreboard/competitors.md
       rendered by scoreboard.py, one row per benchmark and system, with the classes without any competitor
-      benchmark named as gaps; unit tests for the protocol adapters in scripts/tests
+      benchmark named as gaps; faster: latency p50/p95 at 1 KiB and 100 KiB and throughput of Ark L1 (rules,
+      rules + L1 model) next to every competitor tool on the same machine and texts, all on CPU (Prompt Guard
+      and ProtectAI over onnxruntime), with the machine named; more stable: every benchmark again under
+      obfuscation (zero-width characters, Unicode tags, base64, leetspeak, homoglyphs) and in German
+      translation (own translation, marked ark_authored), reporting each system's TPR drop at the same cut;
+      unit tests for the protocol adapters in scripts/tests
 
   # TRIAGE 2026-W48: generation-23 dev split — baseline column, rule transfer to the second generator family,
   # secret extraction, jailbreak personas and spoofed headers, decoded views for all classes, native toxic text.
