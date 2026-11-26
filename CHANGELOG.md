@@ -50,6 +50,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - **Detection change (crash fix):** the threat scan no longer fails on text where a `\u` escape marker is
   followed by a multi-byte character (for example a Cyrillic look-alike letter); the request used to end with
   a detector error instead of a result.
+- **Detection change (built-in L1 models of `tool_poisoning`, `agent_config_tampering` and
+  `memory_poisoning`, opt-in cascade):** these three models now score only text that shows their
+  carrier: a tool or MCP description, an agent configuration or rules file (also one named in
+  prose, such as the agent's settings or permission file), or a write to the agent's memory, a
+  stored profile or a knowledge base. Plain chat without that carrier never reaches the model and
+  is `clear` for the class, so a plain prompt injection with all built-in models on no longer also
+  reports these classes.
 - **Detection change (opt-in DLP database dumps):** `dlp_database_dump_header` now recognises the
   header that mysqldump and MariaDB actually write (`-- MySQL dump 10.13 …`), and
   `dlp_database_dump_insert` reports multi-row `INSERT` statements with one tuple per line and the

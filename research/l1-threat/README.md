@@ -41,6 +41,37 @@ Abgrenzung:
 - Kein L1-Scope: Rug Pull, Toxic Flows, visuelle Injection, Multi-Turn ohne Sitzungszustand,
   Desinformation, Fachberatung, Urheberrecht.
 
+## Klassengrenzen: erlaubte Überlappung (T34)
+
+Ein Text kann zwei Klassen tragen (eine Injection, die exfiltriert; eine Extraktion, die per Injection
+verlangt wird). Dann darf er beide melden. Alles andere ist ein Klassen-Fehlalarm: Regeln und L1-Modelle
+einer Klasse melden die Positiven einer Klasse außerhalb ihrer erlaubten Überlappung höchstens im Rahmen
+ihres Benign-FPR-Budgets (0,1 % je Sprache), sonst steht die Ausnahme mit Zahl im Scoreboard.
+
+| Klasse | darf zusammen melden mit | nie zusammen mit |
+|---|---|---|
+| `instruction_injection` | jailbreak, prompt_extraction, exfiltration, unsafe_action, resource_exhaustion; tool_poisoning, agent_config_tampering, memory_poisoning nur mit deren Träger | harmful_content, toxic_language |
+| `jailbreak` | instruction_injection, prompt_extraction, harmful_content, toxic_language | tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, unsafe_action, resource_exhaustion |
+| `prompt_extraction` | instruction_injection, jailbreak, exfiltration, tool_poisoning (mit Träger) | agent_config_tampering, memory_poisoning, unsafe_action, resource_exhaustion, harmful_content, toxic_language |
+| `tool_poisoning` | instruction_injection, prompt_extraction, exfiltration, unsafe_action, resource_exhaustion | jailbreak, agent_config_tampering, memory_poisoning, harmful_content, toxic_language |
+| `agent_config_tampering` | instruction_injection, exfiltration, unsafe_action | jailbreak, prompt_extraction, tool_poisoning, memory_poisoning, resource_exhaustion, harmful_content, toxic_language |
+| `memory_poisoning` | instruction_injection, exfiltration, unsafe_action | jailbreak, prompt_extraction, tool_poisoning, agent_config_tampering, resource_exhaustion, harmful_content, toxic_language |
+| `exfiltration` | instruction_injection, prompt_extraction, tool_poisoning, agent_config_tampering, memory_poisoning, unsafe_action | jailbreak, resource_exhaustion, harmful_content, toxic_language |
+| `unsafe_action` | instruction_injection, tool_poisoning, agent_config_tampering, memory_poisoning, exfiltration, resource_exhaustion | jailbreak, prompt_extraction, harmful_content, toxic_language |
+| `resource_exhaustion` | instruction_injection, tool_poisoning, unsafe_action | jailbreak, prompt_extraction, agent_config_tampering, memory_poisoning, exfiltration, harmful_content, toxic_language |
+| `harmful_content` | jailbreak, toxic_language | alle Agenten-Klassen, instruction_injection, prompt_extraction |
+| `toxic_language` | jailbreak, harmful_content | alle Agenten-Klassen, instruction_injection, prompt_extraction |
+
+Die Tabelle ist symmetrisch. **Trägergebundene Klassen** (`tool_poisoning`, `agent_config_tampering`,
+`memory_poisoning`) bewerten nur Text mit ihrem strukturellen Träger: Tool- oder MCP-Beschreibung
+(JSON-Schlüssel einer Tool-Definition, Tool-Liste, YAML-Tool-Eintrag, `@mcp.tool`), Agent-Config oder
+Rules-Datei (auch in Prosa benannt: Agenten-Konfiguration, `agent.yaml`, Berechtigungsdatei, Hooks) bzw.
+Schreibzugriff auf Gedächtnis oder RAG-Speicher (Langzeitgedächtnis, gespeichertes Profil, Wissensdatenbank,
+spätere Sitzungen). Der Struktur-Prefilter liegt in `ark-core` (`carries_class` in
+`detectors/text/facts/carrier.rs`) vor dem L1-Modell: Klartext-Chat ohne Träger erreicht ihr Modell nie und
+ist für sie `clear`. Eine reine Injection im Chat meldet bei allen elf eingeschalteten Modellen nur
+`instruction_injection` (Golden-Fall `threat_l1-class-border-*`).
+
 ## Kategorien und Regeln: alles wie bei PII, DLP und Injection
 
 Jede Klasse ist eine Kategorie wie `pii`, `dlp` und `injection`: Sie läuft nur, wenn sie in der Anfrage bzw.
