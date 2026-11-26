@@ -734,6 +734,22 @@ tasks:
       DEV and the expected positives and sources per class and language afterwards; after the owner run,
       gold.md shows the new source counts and no class loses its go
 
+  # Owner, 2026-11-26: E10 (#495) built the mix, the split and the report but measured the built-in L1
+  # models only as an upper bound (trained before the mix, partly on its calibration and measurement rows)
+  # and left the cascade, Prompt Guard 2 and the best heuristic unmeasured. E10b finishes E10's accept.
+  - id: E10b
+    title: "Finish the fair measurement: retrain all eleven L1 models on the mix's train part only, cache Prompt Guard 2 (22M, 86M), ProtectAI v2 and the heuristic baselines for every set of the mix and the report sets, measure the cascade, and drop the upper-bound note"
+    type: eval-infra
+    deps: [E10, E11]
+    accept: >-
+      every built-in L1 model is retrained on the mix's train part only (no calibration or measurement row in
+      its training data, checked by a test in scripts/tests) and its bundle re-pinned; cut per class and
+      language from the calibration part; rules only, L1 model, cascade, Prompt Guard 2 and the best heuristic
+      each have a number (or n/r with the reason) in every cell of cascade.md, builtin-models.md,
+      fasttext-all-classes.md and baseline.md at 0.1% and 1% FPR, with the report-set column; the upper-bound
+      note is gone; if E11's new sets are in DEV, the mix is rebuilt on them first; the PR lists every accept
+      point of E10 and E10b as met or not met with its number
+
   # TRIAGE 2026-W48: generation-23 dev split — baseline column, rule transfer to the second generator family,
   # secret extraction, jailbreak personas and spoofed headers, decoded views for all classes, native toxic text.
   - id: T22
@@ -889,7 +905,7 @@ tasks:
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E11, T29, T32, T33]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, T29, T32, T33]}
 
 recurring:
   - id: TRIAGE
