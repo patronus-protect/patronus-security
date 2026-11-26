@@ -12,21 +12,25 @@ password, delete …). NotInject, XSTest and OR-Bench-Hard stay holdout-only; re
 
 The extra sets are a frozen directory like a generated one (``manifest.json`` + ``.ready``; ``scoreboard.py
 mix --out DIR`` writes ``DIR/mix``). The split is row-wise and stratified by source (the set id): per source the
-rows are ordered by stratum (language, classes) and a seeded SHA-256 of the row id, and dealt in the pattern
-``PATTERN`` (3 train : 1 calibration : 1 measurement) from a seeded offset, so every source with at least
-``len(PATTERN)`` rows has rows in all three parts (a smaller one is named in ``short_sources``), every stratum is
-spread in proportion and no row is in two parts. The assignment is a pure function of the seed and the rows; ``parts.json`` freezes it with the set
-hashes it was dealt from.
+rows are grouped by normalized text (``text_key``), the groups ordered by stratum (language, classes) and a seeded
+SHA-256 of the text, and dealt in the pattern ``PATTERN`` (3 train : 1 calibration : 1 measurement) from a seeded
+offset; a text already dealt in an earlier source keeps its part. So identical texts never sit in two parts, every
+source with at least ``len(PATTERN)`` new texts has rows in all three parts (a smaller one is named in
+``short_sources``), every stratum is spread in proportion and no row is in two parts. The assignment is a pure
+function of the seed and the rows; ``parts.json`` freezes it with the set hashes it was dealt from.
 """
 
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import random
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
+
+ROOT = Path(__file__).resolve().parents[2]
 
 SEED = "ark-l1-threat-e10-mix-v1"
 PARTS = ("train", "calibration", "measurement")
@@ -140,14 +144,27 @@ def trigger_negatives(seed: str = SEED, per_language: int = TRIGGER_ROWS) -> lis
     return rows
 
 
+def _load_recipes():
+    spec = importlib.util.spec_from_file_location("_ark_dlp_golden_recipes",
+                                                  ROOT / "python/patronus_ark/dlp_synth/recipes.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+RECIPES = _load_recipes()
+
+
 def corpus_texts(root: Path, set_id: str) -> list[dict[str, Any]]:
-    """The German and English rows with a text of one PII or DLP golden file, as benign mix rows."""
+    """The German and English rows with a text of one PII or DLP golden file (recipe rows materialized), as benign
+    mix rows."""
     rows = []
     with (root / GOLDENS / CORPUS_SETS[set_id]).open(encoding="utf-8") as handle:
         for line in handle:
             if not line.strip():
                 continue
-            golden = json.loads(line)
+            golden = RECIPES.materialize_row(json.loads(line))
             if golden.get("language") in LANGUAGES and golden.get("text"):
                 rows.append({"id": f"{set_id}:{golden['id']}", "dataset": set_id, "benign": True, "classes": [],
                              "reported_classes": [], "labels": [OTHER_LABEL], "language": golden["language"],
@@ -165,18 +182,32 @@ def _stratum(row: dict[str, Any]) -> tuple[str, str]:
     return (row.get("language") or "unknown", ",".join(sorted(row.get("classes") or ())) or "benign")
 
 
+def text_key(row: dict[str, Any]) -> str:
+    """The text a row is deduplicated by: whitespace collapsed and case folded (the row id for a row without text)."""
+    return " ".join(str(row.get("text") or "").split()).casefold() or f"\x00{row['id']}"
+
+
 def assign_parts(sources: dict[str, Iterable[dict[str, Any]]], seed: str = SEED) -> dict[str, str]:
-    """Row id -> part, dealt per source (see the module docstring). A row id in two sources is an error: no row may
-    land in two parts. A source smaller than ``PATTERN`` cannot reach every part; ``short_sources`` names it."""
+    """Row id -> part, dealt per source by text group (see the module docstring). A row id in two sources is an
+    error: no row may land in two parts. A source with fewer new texts than ``PATTERN`` cannot reach every part;
+    ``short_sources`` names it."""
     parts: dict[str, str] = {}
+    text_parts: dict[str, str] = {}
     for source, rows in sorted(sources.items()):
-        rows = list(rows)
+        groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            groups[text_key(row)].append(row)
         offset = int(_digest(seed, source), 16) % len(PATTERN)
-        ordered = sorted(rows, key=lambda row: (_stratum(row), _digest(seed, row["id"])))
-        for index, row in enumerate(ordered):
-            if row["id"] in parts:
-                raise ValueError(f"row {row['id']} appears twice in the mix")
-            parts[row["id"]] = PATTERN[(index + offset) % len(PATTERN)]
+        ordered = sorted(groups.items(), key=lambda item: (min(map(_stratum, item[1])), _digest(seed, item[0])))
+        index = 0
+        for key, group in ordered:
+            if key not in text_parts:
+                text_parts[key] = PATTERN[(index + offset) % len(PATTERN)]
+                index += 1
+            for row in group:
+                if row["id"] in parts:
+                    raise ValueError(f"row {row['id']} appears twice in the mix")
+                parts[row["id"]] = text_parts[key]
     return parts
 
 
@@ -199,7 +230,7 @@ def parts_document(sources: dict[str, Iterable[dict[str, Any]]], set_hashes: dic
 
 
 def short_sources(counts: dict[str, dict[str, int]]) -> list[str]:
-    """The sources without a row in some part (fewer rows than ``PATTERN``)."""
+    """The sources without a row in some part (fewer new texts than ``PATTERN``)."""
     return sorted(source for source, by_part in counts.items() if not all(by_part.values()))
 
 

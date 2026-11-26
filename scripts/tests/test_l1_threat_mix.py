@@ -21,7 +21,8 @@ MIX = MODULE.MIX
 
 def rows(source: str, count: int, classes=(), language="en"):
     return [{"id": f"{source}:{language}:{','.join(classes)}:{i}", "dataset": source, "benign": not classes,
-             "classes": list(classes), "language": language, "text": "x"} for i in range(count)]
+             "classes": list(classes), "language": language, "text": f"{source} {language} {classes} {i}"}
+            for i in range(count)]
 
 
 def test_every_source_reaches_every_part_and_no_row_is_in_two():
@@ -87,6 +88,37 @@ def test_extra_sets_take_german_and_english_pii_and_dlp_texts():
     for set_id in MIX.CORPUS_SETS:
         assert extra[set_id] and {r["language"] for r in extra[set_id]} == {"de", "en"}
         assert all(r["benign"] and r["text"] and r["id"].startswith(f"{set_id}:") for r in extra[set_id])
+
+
+def test_dlp_texts_materialize_the_recipe_rows():
+    goldens = [json.loads(line) for line in (ROOT / MIX.GOLDENS / MIX.CORPUS_SETS["dlp_texts"]).read_text().splitlines()
+               if line.strip()]
+    recipe_ids = {f"dlp_texts:{g['id']}" for g in goldens if "template" in g and g.get("language") in MIX.LANGUAGES}
+    assert recipe_ids
+    texts = {r["id"]: r["text"] for r in MIX.corpus_texts(ROOT, "dlp_texts")}
+    assert recipe_ids <= set(texts)
+    assert all(texts[rid] and "<<secret" not in texts[rid] for rid in recipe_ids)
+
+
+def test_identical_texts_land_in_one_part_across_rows_and_sources():
+    sources = {"a": [{**row, "text": f"text {i % 7}"} for i, row in enumerate(rows("a", 60))],
+               "b": [{**row, "text": f"Text  {i % 7}"} for i, row in enumerate(rows("b", 30))] + rows("b", 10, language="de")}
+    parts = MIX.assign_parts(sources)
+    by_text = {}
+    for row in [*sources["a"], *sources["b"]]:
+        by_text.setdefault(MIX.text_key(row), set()).add(parts[row["id"]])
+    assert all(len(found) == 1 for found in by_text.values())
+    assert MIX.assign_parts({k: list(reversed(v)) for k, v in reversed(sources.items())}) == parts
+
+
+def test_the_checked_in_extra_sets_share_no_text_between_parts():
+    extra = MIX.extra_sets(ROOT)
+    parts = MIX.assign_parts(extra)
+    by_text = {}
+    for set_rows in extra.values():
+        for row in set_rows:
+            by_text.setdefault(MIX.text_key(row), set()).add(parts[row["id"]])
+    assert all(len(found) == 1 for found in by_text.values())
 
 
 def test_negatives_of_a_class_are_benign_rows_and_other_classes():

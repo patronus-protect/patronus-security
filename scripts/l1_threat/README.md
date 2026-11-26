@@ -486,12 +486,14 @@ python3 scripts/l1_threat/scoreboard.py fair --dev DEV --mix MIX --predictions r
 
 `mix` (`mix.py`) friert einen breiten Mix ein: die gegateten Dev-Sätze (Benign-Pool samt Hard-Benigns; für eine
 Klasse zählen die Positiven aller anderen Klassen als Negative), PII- und DLP-Texte (die eingecheckten L1-Goldens
-`python/patronus_ark/benchmark_data/{pii,dlp}_l1.jsonl`, DE und EN) und Trigger-Wort-Hard-Negatives im
+`python/patronus_ark/benchmark_data/{pii,dlp}_l1.jsonl`, DE und EN, Rezeptzeilen materialisiert) und Trigger-Wort-Hard-Negatives im
 NotInject-Stil aus einem eigenen DE/EN-Generator (`trigger_negatives`; NotInject, XSTest und OR-Bench-Hard bleiben
 reine Holdout-Sets). Die Zusatzsätze liegen als eingefrorenes Verzeichnis `MIX/mix`, die Teilung in `MIX/parts.json`:
-zeilenweise, geschichtet nach Quelle (Satz-ID), innerhalb der Quelle nach Sprache und Klassen geordnet und mit
-gesätem SHA-256 der Zeilen-ID im Muster 3 Train : 1 Kalibrierung : 1 Messung ausgeteilt; jede Quelle ab fünf
-Zeilen liegt in allen drei Teilen, keine Zeile in zweien; kleinere Quellen nennt `short_sources`. `fair` misst
+zeilenweise, geschichtet nach Quelle (Satz-ID), innerhalb der Quelle nach normalisiertem Text gruppiert (Leerraum
+zusammengefasst, Groß-/Kleinschreibung egal), nach Sprache und Klassen geordnet und mit gesätem SHA-256 des Texts im
+Muster 3 Train : 1 Kalibrierung : 1 Messung ausgeteilt; ein schon in einer früheren Quelle ausgeteilter Text behält
+seinen Teil, gleiche Texte liegen also nie in zwei Teilen. Jede Quelle ab fünf neuen Texten liegt in allen drei
+Teilen, keine Zeile in zweien; kleinere Quellen nennt `short_sources`. `fair` misst
 Regeln allein (L1-Score-Kurve), L1-Modell und Kaskade (L1-Score der Kaskade), Prompt Guard 2 22M und die beste
 Heuristik (je Klasse und Sprache auf dem Kalibrier-Teil gewählt) auf denselben Zeilen: der Schnitt kommt nur aus
 den Negativen des Kalibrier-Teils (je Klasse und Sprache, 0,1 % entscheidend, 1 % daneben), TPR, FPR und
