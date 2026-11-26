@@ -39,6 +39,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and `ark-distributed-protocol/` each carry its `LICENSE`, `LICENSE-COMMERCIAL.md` and
   `NOTICE`, and the `ark-api` and `ark-coordinator` images copy them from there. No package
   changes its license.
+- The opt-in attack classes scan German and other non-ASCII text much faster: a rule with a word
+  boundary no longer falls back to the slow regex engine at the first umlaut. On 100 KiB windows
+  of German prose, the ten opt-in attack classes together take about 40 ms (p95) instead of about
+  170 ms; on German text with many imperative requests, `harmful_content` drops from about 160 ms
+  to about 5 ms. Findings are unchanged.
 
 ### Detection changes
 

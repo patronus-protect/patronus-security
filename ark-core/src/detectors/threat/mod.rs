@@ -6,7 +6,8 @@ use std::{
     sync::OnceLock,
 };
 
-use regex::{Regex, RegexBuilder};
+use regex::{Captures, Regex, RegexBuilder};
+use regex_automata::{meta, util::syntax};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -15,7 +16,7 @@ use super::{
     evidence::{char_offsets, L1Match},
     score::{self, Context, RulePoints, ValidatorStrength},
     text::facts::Finding,
-    NativeDetection,
+    word_boundary, NativeDetection,
 };
 use crate::{EvaluationResult, EvidenceSpan, SecurityCategory};
 
@@ -161,6 +162,23 @@ struct RuleRegexes {
     /// The rule without its `record` source branch: a business record
     /// yields to a sensitive source later in the same transfer.
     sources: Option<Regex>,
+    /// A rule with a Unicode word boundary: the rule without its word
+    /// boundaries and the rule for anchored probes, so that a non-ASCII text
+    /// stays on the lazy DFA ([`word_boundary::leftmost_start`]).
+    relaxed: Option<(Regex, meta::Regex)>,
+}
+
+impl RuleRegexes {
+    /// The leftmost match from `at`, as `regex.captures_at`.
+    fn captures_at<'t>(&self, text: &'t str, at: usize, ascii: bool) -> Option<Captures<'t>> {
+        match &self.relaxed {
+            Some((relaxed, anchored)) if !ascii => self.regex.captures_at(
+                text,
+                word_boundary::leftmost_start(relaxed, anchored, text, at)?,
+            ),
+            _ => self.regex.captures_at(text, at),
+        }
+    }
 }
 
 impl CompiledRule {
@@ -180,9 +198,22 @@ impl CompiledRule {
                 regex.capture_names().flatten().count() >= 2,
                 "Threat rules require components"
             );
+            let relaxed =
+                word_boundary::without_unicode_word_boundaries(&self.rule.pattern).map(|relaxed| {
+                    let anchored = meta::Builder::new()
+                        .configure(
+                            meta::Config::new()
+                                .hybrid_cache_capacity(super::dlp::prefilter::RULE_DFA_CACHE_BYTES),
+                        )
+                        .syntax(syntax::Config::new().case_insensitive(true))
+                        .build(&self.rule.pattern)
+                        .expect("valid bounded Threat regex");
+                    (build(&relaxed), anchored)
+                });
             RuleRegexes {
                 sources: without_record_branch(&self.rule.pattern).map(|p| build(&p)),
                 regex,
+                relaxed,
             }
         })
     }
@@ -351,9 +382,10 @@ impl ThreatPipeline {
                 window_end -= 1;
             }
             let window = &text[window_start..window_end];
+            let ascii = window.is_ascii();
             for &(compiled, regexes) in &enabled {
                 let mut from = 0;
-                while let Some(captures) = regexes.regex.captures_at(window, from) {
+                while let Some(captures) = regexes.captures_at(window, from, ascii) {
                     let m = captures.get(0).unwrap();
                     from = m.end();
                     // The regex takes the first source after the verb; a
@@ -1975,6 +2007,73 @@ mod tests {
             |_| true,
             &ThreatThresholds::default(),
         )
+    }
+
+    /// A Unicode word boundary sends the lazy DFA to the slow NFA at the
+    /// first umlaut; the harmful content rules took about 50 ms per 100 KiB
+    /// of German text each before they searched without it.
+    #[test]
+    fn rules_with_a_unicode_word_boundary_search_relaxed_on_non_ascii_text() {
+        let (_, rules) = catalog();
+        for id in [
+            "ark.threat.hc_evasion",
+            "ark.threat.hc_howto_hazard",
+            "ark.threat.credential_harvesting",
+        ] {
+            let rule = rules.iter().find(|r| r.rule.id == id).unwrap();
+            assert!(rule.regexes().relaxed.is_some(), "{id}");
+        }
+    }
+
+    /// The relaxed search finds exactly the matches of the rule's regex, with
+    /// umlauts before, between and after them.
+    #[test]
+    fn relaxed_search_finds_the_matches_of_the_rule_regex() {
+        let goldens =
+            include_str!("../../../../python/patronus_ark/benchmark_data/threat_l1.jsonl");
+        let mut texts: Vec<String> = goldens
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .map(|row| format!("Grüße – {}", row["text"].as_str().unwrap()))
+            .collect();
+        texts.push(texts.join("\nÄnderung: "));
+        let (_, rules) = catalog();
+        let mut relaxed = 0;
+        for rule in rules {
+            let regexes = rule.regexes();
+            relaxed += usize::from(regexes.relaxed.is_some());
+            for text in &texts {
+                let ranges = |ascii: bool| {
+                    let mut found = Vec::new();
+                    let mut from = 0;
+                    while let Some(captures) = regexes.captures_at(text, from, ascii) {
+                        let m = captures.get(0).unwrap();
+                        let names: Vec<_> = regexes
+                            .regex
+                            .capture_names()
+                            .flatten()
+                            .map(|name| captures.name(name).map(|c| c.range()))
+                            .collect();
+                        found.push((m.range(), names));
+                        from = m.end().max(m.start() + 1);
+                        if from > text.len() {
+                            break;
+                        }
+                        while !text.is_char_boundary(from) {
+                            from += 1;
+                        }
+                    }
+                    found
+                };
+                assert_eq!(
+                    ranges(false),
+                    ranges(true),
+                    "{} on {text:.80}",
+                    rule.rule.id
+                );
+            }
+        }
+        assert!(relaxed > 0);
     }
 
     #[test]
