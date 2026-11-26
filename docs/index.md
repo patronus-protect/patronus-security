@@ -114,5 +114,5 @@ Patronus Ark, distributed as `patronus-ark`, is **dual-licensed**:
 - **GPL-3.0-only** for open-source use.
 - A **commercial license** for distributing Patronus Ark in proprietary products without the GPL obligations.
 
-See [`LICENSE`](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE) and
-[`LICENSE-COMMERCIAL.md`](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE-COMMERCIAL.md).
+See [`LICENSE`](https://github.com/patronus-protect/patronus-security/blob/main/rust/LICENSE) and
+[`LICENSE-COMMERCIAL.md`](https://github.com/patronus-protect/patronus-security/blob/main/rust/LICENSE-COMMERCIAL.md).

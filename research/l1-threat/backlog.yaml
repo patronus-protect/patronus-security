@@ -734,6 +734,40 @@ tasks:
       DEV and the expected positives and sources per class and language afterwards; after the owner run,
       gold.md shows the new source counts and no class loses its go
 
+  # Owner, 2026-11-26: E10 (#495) built the mix, the split and the report but measured the built-in L1
+  # models only as an upper bound (trained before the mix, partly on its calibration and measurement rows)
+  # and left the cascade, Prompt Guard 2 and the best heuristic unmeasured. E10b finishes E10's accept.
+  - id: E10b
+    title: "Finish the fair measurement: retrain all eleven L1 models on the mix's train part only, cache Prompt Guard 2 (22M, 86M), ProtectAI v2 and the heuristic baselines for every set of the mix and the report sets, measure the cascade, and drop the upper-bound note"
+    type: eval-infra
+    deps: [E10, E11]
+    accept: >-
+      every built-in L1 model is retrained on the mix's train part only (no calibration or measurement row in
+      its training data, checked by a test in scripts/tests) and its bundle re-pinned; cut per class and
+      language from the calibration part; rules only, L1 model, cascade, Prompt Guard 2 and the best heuristic
+      each have a number (or n/r with the reason) in every cell of cascade.md, builtin-models.md,
+      fasttext-all-classes.md and baseline.md at 0.1% and 1% FPR, with the report-set column; the upper-bound
+      note is gone; if E11's new sets are in DEV, the mix is rebuilt on them first; the PR lists every accept
+      point of E10 and E10b as met or not met with its number
+
+  # Owner, 2026-11-26: besides the baselines on our data, compare on the competitors' own benchmarks under
+  # their protocol, next to their published numbers. Census of 2026-11-26: only these have open data and
+  # published detector numbers; agent_config_tampering, exfiltration, resource_exhaustion and input-side
+  # prompt_extraction have none, memory_poisoning only attack-side benchmarks.
+  - id: E12
+    title: "Head-to-head on competitor benchmarks: rules only, L1 model and cascade on the competitors' own sets under their protocol, next to their published numbers — PromptShield eval split (TPR at 1% / 0.1% FPR vs InjecGuard, PromptGuard, ProtectAI v2), the Sentinel protocol on deepset / jackhhao / WildJailbreak (F1 vs ProtectAI v2), the MCP tool-poisoning protocol of arXiv 2604.10534 (F1 vs Cisco YARA 31.25), the OpenAI moderation set (F1 vs Llama Guard, ShieldGemma, WildGuard), RP-Mod / RP-Crowd for German toxic language"
+    type: eval-infra
+    deps: [E10b]
+    accept: >-
+      each benchmark has a recipe in scripts/l1_threat/datasets.yaml with source, licence, revision and
+      commercial flag (non-commercial or unlicensed sets are eval-only and named as such, or dropped with the
+      reason); never mixed into train or calibration, and no holdout source; each competitor number is
+      re-read at its original source and cited (paper table or model card with URL) before it is quoted;
+      our rules only, L1 model and cascade follow the benchmark's own metric and threshold protocol, plus
+      TPR at 0.1% FPR where the set has negatives; results in a new research/l1-threat/scoreboard/competitors.md
+      rendered by scoreboard.py, one row per benchmark and system, with the classes without any competitor
+      benchmark named as gaps; unit tests for the protocol adapters in scripts/tests
+
   # TRIAGE 2026-W48: generation-23 dev split — baseline column, rule transfer to the second generator family,
   # secret extraction, jailbreak personas and spoofed headers, decoded views for all classes, native toxic text.
   - id: T22
@@ -886,11 +920,45 @@ tasks:
     deps: [S01, S06]
 
   # ── H: Hardening and wrap-up ──────────────────────────────────────────
+  # Owner, 2026-11-26 (user feedback): with all eleven built-in L1 models on, a plain injection input also
+  # reports agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on
+  # text without any tool description; the example therefore turns on only six models.
+  - id: T34
+    title: "Cross-class firing of the built-in L1 models: a plain instruction_injection input also flags agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on text without a tool or MCP description — every model must stay quiet on the other classes' positives and on text without its carrier"
+    type: precision-fix
+    deps: [E10b]
+    accept: >-
+      a cross-class confusion table (rows: true class, columns: each model's flag rate at its detect cut) on the
+      mix's measurement part and the report sets, in research/l1-threat/scoreboard/; each model's flag rate on
+      every other class's positives at most its benign FPR budget (0.1% per language), or the exception named
+      with its number; the carrier-bound classes (tool_poisoning, agent_config_tampering, memory_poisoning)
+      score only text with their structural carrier (tool or MCP description, agent config or rules file,
+      memory or RAG write) via a structural prefilter in ark-core, so plain chat never reaches their model;
+      goldens with the user's example (injection input, all eleven models on: only instruction_injection)
+      and hard negatives per class, DE + EN; L1 100 KiB p95 within +5 %
+  # Owner, 2026-11-26 (user feedback): a SQL dump with customer rows raises no DLP finding. With default
+  # categories that is by design (SQL and dump families are opt-in), but with dlp_database_dump_insert and
+  # dlp_database_dump_header switched on a mysqldump-style multi-row INSERT with names, e-mails and IBANs
+  # still raises no dlp.content.database_dump finding (checked on patronus-ark-core 0.1.18); only
+  # dlp_sql_statement reports dlp.content.sql. The DLP programme is finished, so the threat programme
+  # solves it (owner decision); the DLP goldens, scoreboard and latency budget apply.
+  - id: T35
+    title: "Database dumps with customer rows (DLP): dlp_database_dump_insert and dlp_database_dump_header miss a mysqldump-style dump (header comment, multi-row INSERT INTO customers with names, e-mails, IBANs) even when switched on; and the README's SQL example does not say that dumps need opt-in"
+    type: recall-fix
+    deps: []
+    accept: >-
+      both dump rules fire on mysqldump (header + multi-row INSERT), pg_dump (header + COPY ... FROM stdin rows)
+      and sqlite .dump output with personal data columns, DE + EN carriers (file, chat paste, log), with
+      goldens >= 5 positives + 5 hard negatives per language (schema-only dumps, migration files, ORM test
+      fixtures with fake rows, SQL tutorials) in the DLP golden set and rust/tests/fixtures/l1_bilingual_rules.json;
+      the README and docs/ say in one sentence which DLP families are opt-in and show the rule ids that switch
+      dumps on; the DLP dev scoreboard (scripts/l1_dlp) shows no regression and no new FP on its hard
+      negatives; DLP 100 KiB p95 within budget (scripts/l1_dlp/latency.py)
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E11, T29, T32, T33]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35]}
 
 recurring:
   - id: TRIAGE

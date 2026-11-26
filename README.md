@@ -10,7 +10,7 @@
   <a href="https://patronus-protect.github.io/patronus-security/"><img src="https://img.shields.io/badge/docs-patronus--ark-38bdf8?style=flat-square" alt="Documentation"></a>
   <a href="https://github.com/patronus-protect/patronus-security/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/patronus-protect/patronus-security/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/patronus-protect/patronus-security/blob/main/ark-core/LICENSE-MIT"><img src="https://img.shields.io/badge/core%20license-MIT%20OR%20Apache--2.0-34d399?style=flat-square" alt="Ark Core license: MIT OR Apache-2.0"></a>
-  <a href="https://github.com/patronus-protect/patronus-security/blob/main/LICENSE"><img src="https://img.shields.io/badge/ark%20license-GPL--3.0--only%20or%20commercial-34d399?style=flat-square" alt="Ark license: GPL-3.0-only or commercial"></a>
+  <a href="https://github.com/patronus-protect/patronus-security/blob/main/rust/LICENSE"><img src="https://img.shields.io/badge/ark%20license-GPL--3.0--only%20or%20commercial-34d399?style=flat-square" alt="Ark license: GPL-3.0-only or commercial"></a>
 </p>
 
 # Patronus Ark
@@ -360,7 +360,10 @@ Report vulnerabilities privately — see [SECURITY.md](https://github.com/patron
   rule catalogs carry the same license; per-rule `source_license` fields describe upstream
   provenance. See [`ark-core/LICENSE-MIT`](https://github.com/patronus-protect/patronus-security/blob/main/ark-core/LICENSE-MIT) and
   [`ark-core/LICENSE-APACHE`](https://github.com/patronus-protect/patronus-security/blob/main/ark-core/LICENSE-APACHE).
-- **Ark** and everything else in this repository: **GPL-3.0-only** for open-source use, or a
-  **commercial license** for proprietary products. See
-  [LICENSE](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE) and
-  [LICENSE-COMMERCIAL.md](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE-COMMERCIAL.md).
+- **Ark** (`rust/`, `python/`, `ark-api/`, `ark-coordinator/`, `ark-distributed-protocol/`):
+  **GPL-3.0-only** for open-source use, or a **commercial license** for proprietary products.
+  Each of these directories carries its `LICENSE`, `LICENSE-COMMERCIAL.md` and `NOTICE`; see
+  [`rust/LICENSE`](https://github.com/patronus-protect/patronus-security/blob/main/rust/LICENSE) and
+  [`rust/LICENSE-COMMERCIAL.md`](https://github.com/patronus-protect/patronus-security/blob/main/rust/LICENSE-COMMERCIAL.md).
+- Everything else in this repository (documentation, scripts, research notes): **MIT**, see
+  [LICENSE](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE).

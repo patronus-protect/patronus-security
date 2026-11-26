@@ -6,18 +6,20 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-# Package copies that must equal their source byte for byte.
+# Copies that must equal their source byte for byte. The root LICENSE is
+# the MIT license of Ark Core; every Ark directory carries Ark's legal files.
 COPIES = (
-    ("LICENSE", "rust/LICENSE"),
-    ("LICENSE-COMMERCIAL.md", "rust/LICENSE-COMMERCIAL.md"),
-    ("NOTICE", "rust/NOTICE"),
-    ("LICENSE", "python/LICENSE"),
-    ("LICENSE-COMMERCIAL.md", "python/LICENSE-COMMERCIAL.md"),
-    ("NOTICE", "python/NOTICE"),
+    ("ark-core/LICENSE-MIT", "LICENSE"),
+    *(
+        (f"rust/{name}", f"{directory}/{name}")
+        for directory in ("python", "ark-api", "ark-coordinator", "ark-distributed-protocol")
+        for name in ("LICENSE", "LICENSE-COMMERCIAL.md", "NOTICE")
+    ),
     ("ark-core/LICENSE-MIT", "ark-core/python/LICENSE-MIT"),
     ("ark-core/LICENSE-APACHE", "ark-core/python/LICENSE-APACHE"),
     ("ark-core/NOTICE", "ark-core/python/NOTICE"),
 )
+ARK_NOTICE = "rust/NOTICE"
 CORE_NOTICE = "ark-core/NOTICE"
 RULE = "-" * 79
 
@@ -37,19 +39,19 @@ def problems(root: Path = ROOT) -> list[str]:
         for source, copy in COPIES
         if (root / source).read_bytes() != (root / copy).read_bytes()
     ]
-    notice = notice_sections((root / "NOTICE").read_text())
+    notice = notice_sections((root / ARK_NOTICE).read_text())
     core = notice_sections((root / CORE_NOTICE).read_text())
     if not core:
         found.append(f"{CORE_NOTICE} has no third-party sections")
-    # Core ships inside Ark, so each Core attribution is part of the root NOTICE.
+    # Core ships inside Ark, so each Core attribution is part of the Ark NOTICE.
     found += [
-        f"{CORE_NOTICE} section {title.splitlines()[0]!r} is missing from NOTICE or differs"
+        f"{CORE_NOTICE} section {title.splitlines()[0]!r} is missing from {ARK_NOTICE} or differs"
         for title, body in core.items()
         if notice.get(title) != body
     ]
     # Every attribution of Core sources belongs in the Core NOTICE.
     found += [
-        f"NOTICE section {title.splitlines()[0]!r} covers ark-core/ but is missing from {CORE_NOTICE}"
+        f"{ARK_NOTICE} section {title.splitlines()[0]!r} covers ark-core/ but is missing from {CORE_NOTICE}"
         for title in notice
         if "ark-core/" in title and title not in core
     ]

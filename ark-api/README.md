@@ -102,7 +102,7 @@ graph on the target before changing this setting.
 ## Licensing
 
 This container conveys `patronus-ark` under GPL-3.0-only (see
-[`LICENSE`](../LICENSE), [`NOTICE`](../NOTICE)). Self-hosted deployment and
+[`LICENSE`](LICENSE), [`NOTICE`](NOTICE)). Self-hosted deployment and
 distribution of this image is subject to those terms; see
-[`LICENSE-COMMERCIAL.md`](../LICENSE-COMMERCIAL.md) if you need rights beyond
+[`LICENSE-COMMERCIAL.md`](LICENSE-COMMERCIAL.md) if you need rights beyond
 the GPL (e.g. embedding in a closed-source product).

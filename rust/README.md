@@ -256,6 +256,6 @@ map. For harness context (cwd, home) and session chains, use Core's `shell_verdi
 
 Ark is **GPL-3.0-only** for open-source use, or available under a **commercial license** for
 proprietary products — see
-[LICENSE](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE) and
-[LICENSE-COMMERCIAL.md](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE-COMMERCIAL.md).
+[LICENSE](https://github.com/patronus-protect/patronus-security/blob/main/rust/LICENSE) and
+[LICENSE-COMMERCIAL.md](https://github.com/patronus-protect/patronus-security/blob/main/rust/LICENSE-COMMERCIAL.md).
 Ark Core, which Ark builds on, is MIT OR Apache-2.0.

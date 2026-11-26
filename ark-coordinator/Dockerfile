@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && useradd --system --create-home --uid 10001 arkcoordinator
 
 COPY --from=builder /src/target/release/ark-coordinator /usr/local/bin/ark-coordinator
-COPY LICENSE LICENSE-COMMERCIAL.md NOTICE /usr/share/doc/ark-coordinator/
+COPY ark-coordinator/LICENSE ark-coordinator/LICENSE-COMMERCIAL.md ark-coordinator/NOTICE /usr/share/doc/ark-coordinator/
 
 RUN mkdir -p /etc/ark-coordinator /run/ark-coordinator \
     && chown -R arkcoordinator:arkcoordinator /etc/ark-coordinator /run/ark-coordinator

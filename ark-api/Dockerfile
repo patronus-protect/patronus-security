@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /src/target/release/ark-api /usr/local/bin/ark-api
 COPY --from=builder /src/target/release/ark-api-entrypoint /usr/local/bin/ark-api-entrypoint
 COPY --from=assets /data/models /data/models
-COPY LICENSE LICENSE-COMMERCIAL.md NOTICE /usr/share/doc/ark-api/
+COPY ark-api/LICENSE ark-api/LICENSE-COMMERCIAL.md ark-api/NOTICE /usr/share/doc/ark-api/
 
 RUN mkdir -p /data/cache /etc/ark-api \
     && chown -R arkapi:arkapi /data /etc/ark-api
