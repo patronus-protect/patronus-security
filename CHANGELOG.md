@@ -28,6 +28,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and expose Cat's `shell_decision` (`allow`, `ask` or `block`) with bounded
   `shell_details` for the `shell_command` category.
 
+### Changed
+
+- The repository's root `LICENSE` is now MIT, the license of Ark Core. Ark keeps
+  GPL-3.0-only or a commercial license: `rust/`, `python/`, `ark-api/`, `ark-coordinator/`
+  and `ark-distributed-protocol/` each carry its `LICENSE`, `LICENSE-COMMERCIAL.md` and
+  `NOTICE`, and the `ark-api` and `ark-coordinator` images copy them from there. No package
+  changes its license.
+
 ### Detection changes
 
 - **Detection change (`exfiltration`, `unsafe_action` and the other opt-in attack classes):**

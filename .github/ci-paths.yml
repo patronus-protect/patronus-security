@@ -105,5 +105,5 @@ python:
   - '!**/*.md'
 licenses:
   - '**/deny.toml'
-  - 'LICENSE*'
-  - 'NOTICE'
+  - '**/LICENSE*'
+  - '**/NOTICE'

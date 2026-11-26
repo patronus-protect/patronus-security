@@ -27,8 +27,8 @@ on:
       - ".github/ci-paths.yml"
       - ".github/workflows/release.yml"
       - "!**/*.md"
-      - "LICENSE*"
-      - "NOTICE"
+      - "**/LICENSE*"
+      - "**/NOTICE"
 
 permissions:
   contents: read
