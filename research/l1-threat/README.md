@@ -637,7 +637,8 @@ Berichte nennen die ausgeschlossenen Zeilen je Quelle; `scripts/tests/test_l1_th
 Trainingszeile in Kalibrierung oder Messung liegt (synthetisch und, mit `ARK_L1_DEV_DATA`, auf dem echten
 Dev-Split). Gemessen werden Regeln allein, L1-Modell, Kaskade, Prompt Guard 2 22M und 86M, ProtectAI v2 und die
 beste Heuristik; jede Zelle trägt eine Zahl oder `n/r` mit Grund (nicht gemessen, Klasse nicht bewertet, Budget
-nicht erreichbar). Der Obergrenzen-Hinweis entfällt. Offen: Prompt Guard 2 86M und ProtectAI v2 sind nicht für
+nicht erreichbar). Der Obergrenzen-Hinweis entfällt. Offen: Prompt Guard 2 22M (noch ohne `xl_safetybench`, `xsafety_de` und
+ein Teil der Report-Sätze), 86M und ProtectAI v2 sind nicht für
 alle Sätze des Mixes gecacht (Owner-Befehl oben); die Wolf-Stufe (L3) fehlt in der Kaskaden-Spalte, solange auf dem
 Host kein Wolf-Edge-fp32-Bundle vorbereitet ist.
 
