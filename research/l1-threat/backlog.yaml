@@ -935,11 +935,29 @@ tasks:
       memory or RAG write) via a structural prefilter in ark-core, so plain chat never reaches their model;
       goldens with the user's example (injection input, all eleven models on: only instruction_injection)
       and hard negatives per class, DE + EN; L1 100 KiB p95 within +5 %
+  # Owner, 2026-11-26 (user feedback): a SQL dump with customer rows raises no DLP finding. With default
+  # categories that is by design (SQL and dump families are opt-in), but with dlp_database_dump_insert and
+  # dlp_database_dump_header switched on a mysqldump-style multi-row INSERT with names, e-mails and IBANs
+  # still raises no dlp.content.database_dump finding (checked on patronus-ark-core 0.1.18); only
+  # dlp_sql_statement reports dlp.content.sql. The DLP programme is finished, so the threat programme
+  # solves it (owner decision); the DLP goldens, scoreboard and latency budget apply.
+  - id: T35
+    title: "Database dumps with customer rows (DLP): dlp_database_dump_insert and dlp_database_dump_header miss a mysqldump-style dump (header comment, multi-row INSERT INTO customers with names, e-mails, IBANs) even when switched on; and the README's SQL example does not say that dumps need opt-in"
+    type: recall-fix
+    deps: []
+    accept: >-
+      both dump rules fire on mysqldump (header + multi-row INSERT), pg_dump (header + COPY ... FROM stdin rows)
+      and sqlite .dump output with personal data columns, DE + EN carriers (file, chat paste, log), with
+      goldens >= 5 positives + 5 hard negatives per language (schema-only dumps, migration files, ORM test
+      fixtures with fake rows, SQL tutorials) in the DLP golden set and rust/tests/fixtures/l1_bilingual_rules.json;
+      the README and docs/ say in one sentence which DLP families are opt-in and show the rule ids that switch
+      dumps on; the DLP dev scoreboard (scripts/l1_dlp) shows no regression and no new FP on its hard
+      negatives; DLP 100 KiB p95 within budget (scripts/l1_dlp/latency.py)
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35]}
 
 recurring:
   - id: TRIAGE
