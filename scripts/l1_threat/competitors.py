@@ -328,13 +328,14 @@ WINDOWS = {"1KiB": (1024, 200), "100KiB": (100 * 1024, 20)}
 def windows(texts: list[str], size: int, count: int) -> list[str]:
     """Up to ``count`` windows of exactly ``size`` UTF-8 bytes, packed from the texts in order (cut at a character
     boundary); each text is used once."""
-    out, current = [], ""
+    out, current = [], b""
     for text in texts:
-        current += text + "\n"
-        while len(current.encode("utf-8")) >= size and len(out) < count:
-            data = current.encode("utf-8")
-            out.append(data[:size].decode("utf-8", errors="ignore"))
-            current = data[size:].decode("utf-8", errors="ignore")
+        if len(out) >= count:
+            break
+        current += (text + "\n").encode("utf-8")
+        while len(current) >= size and len(out) < count:
+            out.append(current[:size].decode("utf-8", errors="ignore"))
+            current = current[size:]
     return out
 
 
