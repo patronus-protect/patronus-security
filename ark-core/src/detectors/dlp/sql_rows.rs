@@ -24,20 +24,28 @@ use regex::Regex;
 
 use super::config_keys::{ConfigFormat, ConfigValue};
 
+/// A table name, optionally with its schema: bare parts and quoted
+/// identifiers (`"customer records"`, `` `kunden` ``, `[dbo]`) that may hold
+/// blanks.
+const TABLE: &str = r#"(?:"[^"\r\n]*"|`[^`\r\n]*`|\[[^\]\r\n]*\]|[^\s("`\[]+)+"#;
+
 /// The head of an `INSERT` statement at the start of a line up to the first
-/// tuple: table name, optional column list (group 1) and `VALUES`. Matched
-/// at the start of a line that holds `INTO` ([`line_starts`]).
+/// tuple: table name ([`TABLE`]), optional column list (group 1) and
+/// `VALUES`. Matched at the start of a line that holds `INTO`
+/// ([`line_starts`]).
 static INSERT_HEAD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?i)\A[ \t]*(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+[^\s(]+[ \t]*(?:\(([^();]*)\)\s*)?VALUES\s*",
-    )
+    Regex::new(&format!(
+        r"(?i)\A[ \t]*(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+{TABLE}[ \t]*(?:\(([^();]*)\)\s*)?VALUES\s*",
+    ))
     .unwrap()
 });
 
 /// A pg_dump `COPY table (columns) FROM stdin;` line; the rows follow.
 static COPY_HEAD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?m)\ACOPY[ \t]+[^\s(]+[ \t]*\(([^()\r\n]*)\)[ \t]+FROM[ \t]+stdin;[ \t]*\r?$")
-        .unwrap()
+    Regex::new(&format!(
+        r"(?m)\ACOPY[ \t]+{TABLE}[ \t]*\(([^()\r\n]*)\)[ \t]+FROM[ \t]+stdin;[ \t]*\r?$"
+    ))
+    .unwrap()
 });
 
 /// The header of a dump ([`super::rules::DUMP_HEADER`]).

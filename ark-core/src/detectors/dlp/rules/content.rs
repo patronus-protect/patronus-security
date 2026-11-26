@@ -42,8 +42,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         name: "dlp_database_dump_insert",
         // T35: the rows of a dump, as an `INSERT … VALUES` statement with its
         // tuples on one or more lines (mysqldump, SQLite `.dump`) or as a
-        // pg_dump `COPY … FROM stdin;` block; in a dump only (`allows_match`).
-        pattern: r"(?im)^[ \t]*(?:(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+[^;\n]+?VALUES\s*\([^\n]*\)(?:,?[ \t]*\r?\n[ \t]*\([^\n]*\))*[ \t]*;?[ \t]*$|COPY[ \t]+[^\n]+?[ \t]+FROM[ \t]+stdin;[ \t]*\r?\n(?:[^\\\n][^\n]*\t[^\n]*\n)+)",
+        // pg_dump `COPY … FROM stdin;` block (tab-separated rows, or rows of
+        // one column up to the `\.` line); in a dump only (`allows_match`).
+        pattern: r"(?im)^[ \t]*(?:(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+[^;\n]+?VALUES\s*\([^\n]*\)(?:,?[ \t]*\r?\n[ \t]*\([^\n]*\))*[ \t]*;?[ \t]*$|COPY[ \t]+[^\n]+?[ \t]+FROM[ \t]+stdin;[ \t]*\r?\n(?:(?:[^\\\n][^\n]*\t[^\n]*\n)+|(?:[^\\\n][^\n]*\n)+\\\.))",
         entity_group: "dlp.content.database_dump",
         validator: None,
         span_group: None,
