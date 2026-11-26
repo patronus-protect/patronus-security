@@ -165,7 +165,10 @@ runs on what L1 hands on: by default every input, as before; with the opt-in gat
 
 Gates decide which levels and which model/native scanners are active for subsequent scans.
 Unspecified rules inherit shared defaults: credential/secret DLP rules and the classification
-markings (`dlp_marking_*`) are enabled, broader DLP rules are opt-in. Other gates stay enabled; `max_level` remains the hard upper bound.
+markings (`dlp_marking_*`) are enabled; the other DLP families (business identifiers, internal
+metrics, SQL, database dumps, source code, logs, the other document classes, MCP risk) are opt-in,
+e.g. `{"dlp_database_dump_header": true, "dlp_database_dump_insert": true}` reports SQL dumps with rows
+(mysqldump, pg_dump, SQLite `.dump`). Other gates stay enabled; `max_level` remains the hard upper bound.
 
 Python (the gate keys of the config, `enqueue`), the Ark API (`gates` in the server
 config, per key and per request) and Rust (`ScanGateMatrix`, which deserializes it) share **one

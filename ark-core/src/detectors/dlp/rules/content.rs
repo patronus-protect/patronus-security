@@ -7,6 +7,10 @@ use crate::detectors::score::ValidatorStrength;
 use std::ops::Range;
 use std::sync::LazyLock;
 
+/// The header of a SQL dump: the comment of mysqldump, MariaDB and pg_dump,
+/// the `PRAGMA` line of SQLite `.dump` (T35).
+pub(in crate::detectors::dlp) const DUMP_HEADER: &str = r"(?im)^(?:--[ \t]*(?:(?P<anchor_1>PostgreSQL|MySQL|MariaDB|SQLite)[ \t]+database[ \t]+dump|(?P<anchor_2>MySQL|MariaDB)[ \t]+dump[ \t]+\d[\d.]*)|PRAGMA[ \t]+foreign_keys[ \t]*=[ \t]*[^;\n]+;?)";
+
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Confidential business content ───────────────────────────────────────
     DlpPattern {
@@ -36,12 +40,20 @@ pub(super) const RULES: &[DlpPattern] = &[
     // ── Source/code-like content ────────────────────────────────────────────
     DlpPattern {
         name: "dlp_database_dump_insert",
-        pattern: r"(?im)^[ \t]*INSERT\s+INTO\s+[^;\n]+\s+VALUES\s*\([^;\n]+\);?[ \t]*$",
+        // T35: the rows of a dump, as an `INSERT … VALUES` statement with its
+        // tuples on one or more lines (mysqldump, SQLite `.dump`) or as a
+        // pg_dump `COPY … FROM stdin;` block (tab-separated rows, or rows of
+        // one column up to the `\.` line); in a dump only (`allows_match`).
+        pattern: r"(?im)^[ \t]*(?:(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+[^;\n]+?VALUES\s*\([^\n]*\)(?:,?[ \t]*\r?\n[ \t]*\([^\n]*\))*[ \t]*;?[ \t]*$|COPY[ \t]+[^\n]+?[ \t]+FROM[ \t]+stdin;[ \t]*\r?\n(?:(?:[^\\\n][^\n]*\t[^\n]*\n)+|(?:[^\\\n][^\n]*\n)+\\\.))",
         entity_group: "dlp.content.database_dump",
         validator: None,
         span_group: None,
         base_score: 40,
-        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["insert"]),
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &["insert", "replace", "copy"],
+        ),
     },
     DlpPattern {
         name: "dlp_source_code_fence",
@@ -132,16 +144,14 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_database_dump_header",
-        pattern: r"(?im)^(?:--\s*(?P<anchor_1>PostgreSQL|MySQL|MariaDB|SQLite)\s+database\s+dump|PRAGMA\s+foreign_keys\s*=\s*[^;\n]+;?|CREATE\s+TABLE\s+[^\n(]+\s*\([^;]+\);)",
+        // T35: in a dump with rows only (`allows_match`); DDL alone is a
+        // schema or a migration.
+        pattern: DUMP_HEADER,
         entity_group: "dlp.content.database_dump",
         validator: None,
         span_group: None,
         base_score: 40,
-        meta: RuleMeta::new(
-            ValidatorStrength::Format,
-            "ark",
-            &["dump", "pragma", "create"],
-        ),
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["dump", "pragma"]),
     },
     DlpPattern {
         name: "dlp_stacktrace_block",

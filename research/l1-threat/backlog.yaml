@@ -961,6 +961,7 @@ tasks:
   # dlp_sql_statement reports dlp.content.sql. The DLP programme is finished, so the threat programme
   # solves it (owner decision); the DLP goldens, scoreboard and latency budget apply.
   - id: T35
+    status: done
     title: "Database dumps with customer rows (DLP): dlp_database_dump_insert and dlp_database_dump_header miss a mysqldump-style dump (header comment, multi-row INSERT INTO customers with names, e-mails, IBANs) even when switched on; and the README's SQL example does not say that dumps need opt-in"
     type: recall-fix
     deps: []

@@ -5225,6 +5225,29 @@ def dp(
     return dlp_row(positive(label, language, prefix, value, suffix), rule, carrier, tags, gap)
 
 
+DUMP_HEADER = "dlp_database_dump_header"
+DUMP_ROWS = "dlp_database_dump_insert"
+
+
+def dd(language: str, rule: str, parts: tuple, *, carrier: str) -> dict:
+    """SQL dump positive (T35): `parts` are text and `(rule, value)` pairs; each value is
+    a gold span that its own dump rule reports (the header, the rows). `rule` is the rule
+    whose coverage the row counts for."""
+    label = "dlp.content.database_dump"
+    text, entities = "", []
+    for part in parts:
+        if isinstance(part, tuple):
+            part_rule, value = part
+            entities.append(
+                {"label": label, "text": value, "start": len(text), "end": len(text) + len(value), "rule_id": part_rule}
+            )
+            part = value
+        text += part
+    row = positive(label, language, "", text)
+    row["entities"] = entities
+    return dlp_row(row, rule, carrier, (), False)
+
+
 def dx(
     label: str,
     language: str,
@@ -7140,52 +7163,153 @@ DLP_CASES = {
         dn("dlp.content.sql", "en", "dlp_sql_multiline_statement", "Select a file from the dialog", "natural language is not SQL", carrier="prose"),
     ],
     "dlp.content.database_dump": [
-        dp("dlp.content.database_dump", "en", "dlp_database_dump_header", "", "-- PostgreSQL database dump"),
-        dp("dlp.content.database_dump", "de", "dlp_database_dump_insert", "", "INSERT INTO kunden VALUES (1, 'Ada');"),
-        dp("dlp.content.database_dump", "en", "dlp_database_dump_header", "", "PRAGMA foreign_keys = ON;"),
-        dn("dlp.content.database_dump", "de", "dlp_database_dump_header", "Datenbankexport wurde abgeschlossen.", "natural language is not a dump"),
-        dn("dlp.content.database_dump", "en", "dlp_database_dump_insert", "INSERT the row into the table", "prose lacks SQL dump syntax"),
-        dp(
-            "dlp.content.database_dump", "de", "dlp_database_dump_header",
-            "--\n", "-- MySQL database dump", "\n--\n-- Host: db.intern    Datenbank: shop\n", carrier="sql",
+        # T35: a dump is a dump header with rows; each rule reports its part.
+        dd("en", DUMP_HEADER, (
+            (DUMP_HEADER, "-- MySQL dump 10.13"), "  Distrib 8.0.36, for Linux (x86_64)\n--\n-- Host: db-prod-01    Database: crm\n\n"
+            "LOCK TABLES `customers` WRITE;\n",
+            (DUMP_ROWS, "INSERT INTO `customers` VALUES (1,'Olivia Hart','olivia.hart@fastmail.com','GB33BUKB20201555555555'),"
+                  "(2,'Ethan Cole','ethan.cole@proton.me','GB94BARC10201530093459');"),
+            "\nUNLOCK TABLES;\n",
+        ), carrier="sql"),
+        dd("en", DUMP_ROWS, (
+            "Can you see why the import fails? Here is the start of the dump:\n\n",
+            (DUMP_HEADER, "-- MariaDB dump 10.19"), "  Distrib 10.11.8-MariaDB\n\n",
+            (DUMP_ROWS, "INSERT INTO customers (id, full_name, email, iban) VALUES\n"
+                  "  (1, 'Olivia Hart', 'olivia.hart@fastmail.com', 'GB33BUKB20201555555555'),\n"
+                  "  (2, 'Ethan Cole', 'ethan.cole@proton.me', 'GB94BARC10201530093459');"),
+            "\n",
+        ), carrier="prose"),
+        dd("en", DUMP_ROWS, (
+            (DUMP_HEADER, "-- PostgreSQL database dump"), "\n--\n-- Dumped from database version 16.4\n\n",
+            (DUMP_ROWS, "COPY public.customers (id, first_name, last_name, email, phone) FROM stdin;\n"
+                  "1\tOlivia\tHart\tolivia.hart@fastmail.com\t+44 20 7946 0958\n"
+                  "2\tEthan\tCole\tethan.cole@proton.me\t+44 161 496 0742\n"),
+            "\\.\n",
+        ), carrier="sql"),
+        dd("en", DUMP_HEADER, (
+            "2026-09-14 02:00:01 INFO backup-job: writing shop.sql\n",
+            (DUMP_HEADER, "PRAGMA foreign_keys=OFF;"), "\nBEGIN TRANSACTION;\n"
+            "CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT, email TEXT, birth_date TEXT);\n",
+            (DUMP_ROWS, "INSERT INTO customers VALUES(1,'Olivia Hart','olivia.hart@fastmail.com','1987-04-12');"),
+            "\nCOMMIT;\n2026-09-14 02:00:03 INFO backup-job: done\n",
+        ), carrier="log"),
+        dd("en", DUMP_ROWS, (
+            "[ci] step restore-fixture printed:\n",
+            (DUMP_HEADER, "-- MySQL dump 10.13"), "  Distrib 8.0.36\n-- Dumping data for table `patients`\n",
+            (DUMP_ROWS, "INSERT INTO `patients` (`id`,`name`,`email`,`insurance_no`) VALUES "
+                  "(7,'Grace Miller','grace.miller@outlook.com','A123456780');"),
+            "\n",
+        ), carrier="log"),
+        dd("de", DUMP_HEADER, (
+            (DUMP_HEADER, "-- MySQL dump 10.13"), "  Distrib 8.0.36, for Linux (x86_64)\n--\n-- Host: db-prod-01    Database: kundenstamm\n"
+            "-- Sicherung der Kundendaten\n\n",
+            (DUMP_ROWS, "INSERT INTO `kunden` VALUES (1,'Anna Berger','anna.berger@posteo.de','DE89370400440532013000'),"
+                  "(2,'Jonas Weber','j.weber@gmx.net','DE02120300000000202051');"),
+            "\n",
+        ), carrier="sql"),
+        dd("de", DUMP_ROWS, (
+            "Hallo, beim Einspielen kommt ein Fehler. Hier der Anfang vom Dump:\n\n",
+            (DUMP_HEADER, "-- MariaDB dump 10.19"), "  Distrib 10.11.8-MariaDB\n\n",
+            (DUMP_ROWS, "INSERT INTO kunden (id, vorname, nachname, email, iban) VALUES\n"
+                  "  (1, 'Anna', 'Berger', 'anna.berger@posteo.de', 'DE89370400440532013000'),\n"
+                  "  (2, 'Jonas', 'Weber', 'j.weber@gmx.net', 'DE02120300000000202051');"),
+            "\n",
+        ), carrier="prose"),
+        dd("de", DUMP_ROWS, (
+            "--\n", (DUMP_HEADER, "-- PostgreSQL database dump"), "\n--\n-- Sicherung der Mitgliederdatenbank\n\n",
+            (DUMP_ROWS, "COPY public.mitglieder (id, vorname, nachname, email, telefon) FROM stdin;\n"
+                  "1\tAnna\tBerger\tanna.berger@posteo.de\t+49 30 901820\n"
+                  "2\tJonas\tWeber\tj.weber@gmx.net\t+49 89 2180 4711\n"),
+            "\\.\n",
+        ), carrier="sql"),
+        dd("de", DUMP_HEADER, (
+            "2026-09-14 02:00:01 INFO sicherung: schreibe praxis.sql\n",
+            (DUMP_HEADER, "PRAGMA foreign_keys=OFF;"), "\nBEGIN TRANSACTION;\n"
+            "CREATE TABLE patienten (id INTEGER PRIMARY KEY, name TEXT, geburtsdatum TEXT, versichertennr TEXT);\n",
+            (DUMP_ROWS, "INSERT INTO patienten VALUES(1,'Anna Berger','1987-04-12','A123456780');"),
+            "\nCOMMIT;\n2026-09-14 02:00:03 INFO sicherung: fertig\n",
+        ), carrier="log"),
+        dd("de", DUMP_ROWS, (
+            "[ci] Schritt restore-fixture gab aus:\n",
+            (DUMP_HEADER, "-- MySQL dump 10.13"), "  Distrib 8.0.36\n-- Daten der Tabelle `mitarbeiter`\n",
+            (DUMP_ROWS, "INSERT INTO `mitarbeiter` (`id`,`name`,`email`,`gehalt`) VALUES "
+                  "(3,'Lena Fischer','lena.fischer@web.de',64000),(4,'Paul Wagner','paul.wagner@t-online.de',58000);"),
+            "\n",
+        ), carrier="log"),
+        # Hard negatives: a header without rows, rows without a header, DDL, prose.
+        dn("dlp.content.database_dump", "en", DUMP_HEADER, "-- PostgreSQL database dump", "dump header without any rows"),
+        dn("dlp.content.database_dump", "en", DUMP_ROWS, "INSERT the row into the table", "prose lacks SQL dump syntax"),
+        dn(
+            "dlp.content.database_dump", "en", DUMP_HEADER,
+            "--\n-- PostgreSQL database dump\n--\n\nCREATE TABLE public.customers (\n    id integer NOT NULL,\n"
+            "    email text\n);\n\nCOPY public.customers (id, email) FROM stdin;\n\\.\n",
+            "schema-only dump: DDL and an empty COPY block, no rows", carrier="sql",
         ),
-        dp(
-            "dlp.content.database_dump", "de", "dlp_database_dump_insert",
-            "-- Auszug aus dem Export\n", "INSERT INTO bestellungen (id, kunde, summe) VALUES (17, 'Beispiel', 99.5);", "\n", carrier="sql",
+        dn(
+            "dlp.content.database_dump", "en", DUMP_HEADER,
+            "-- MySQL dump 10.13  Distrib 8.0.36\n-- mysqldump --no-data crm\n\nCREATE TABLE `customers` (\n"
+            "  `id` int NOT NULL,\n  `email` varchar(255) DEFAULT NULL\n);\n",
+            "schema-only dump without rows", carrier="sql",
         ),
-        dp(
-            "dlp.content.database_dump", "de", "dlp_database_dump_header",
-            "Hier der Anfang der Sicherung:\n", "CREATE TABLE mitarbeiter (\n  id INTEGER PRIMARY KEY,\n  gehalt INTEGER\n);", "\n",
-            carrier="prose",
+        dn(
+            "dlp.content.database_dump", "en", DUMP_ROWS,
+            "-- migrations/V12__create_customers.sql\nCREATE TABLE customers (id BIGINT PRIMARY KEY, name TEXT, email TEXT);\n"
+            "INSERT INTO customers (id, name, email) VALUES (1, 'admin', 'admin@example.com');\n",
+            "migration with a seed row, no dump", carrier="sql",
         ),
-        dp(
-            "dlp.content.database_dump", "de", "dlp_database_dump_insert",
-            "Im Anhang steht zum Beispiel\n", "INSERT INTO patienten VALUES (4, 'Muster', '1980-02-01');", "\n", carrier="prose",
+        dn(
+            "dlp.content.database_dump", "en", DUMP_ROWS,
+            "# tests/fixtures/users.sql (fake rows for the ORM tests)\nINSERT INTO users (id, name, email) VALUES\n"
+            "  (1, 'Test User', 'test1@example.com'),\n  (2, 'Fake Person', 'test2@example.com');\n",
+            "ORM test fixture with fake rows", carrier="code",
         ),
-        dn("dlp.content.database_dump", "de", "dlp_database_dump_header", "$ pg_dump --schema-only shop > schema.sql", "dump command, not dump content", carrier="cli"),
-        dn("dlp.content.database_dump", "de", "dlp_database_dump_insert", "Die Insert-Taste ist kaputt.", "natural language is not a dump", carrier="prose"),
-        dn("dlp.content.database_dump", "de", "dlp_database_dump_header", "Die Sicherung der Datenbank läuft jede Nacht.", "natural language is not a dump", carrier="prose"),
-        dn("dlp.content.database_dump", "de", "dlp_database_dump_header", "Tabellen werden mit CREATE TABLE angelegt.", "prose mentioning a keyword", carrier="prose"),
-        dp(
-            "dlp.content.database_dump", "en", "dlp_database_dump_header",
-            "--\n", "-- MariaDB database dump", "\n--\n-- Host: localhost    Database: crm\n", carrier="sql",
+        dn(
+            "dlp.content.database_dump", "en", DUMP_ROWS,
+            "SQL tutorial, step 2: add a customer with\n\nINSERT INTO customers (name, email) VALUES ('Alice', 'alice@example.com');\n",
+            "SQL tutorial statement", carrier="markdown",
         ),
-        dp(
-            "dlp.content.database_dump", "en", "dlp_database_dump_insert",
-            "-- excerpt from the export\n", "INSERT INTO users (id, email) VALUES (42, 'ada@example.org');", "\n", carrier="sql",
+        dn("dlp.content.database_dump", "en", DUMP_HEADER, "$ mysqldump --no-data crm > schema.sql", "dump command, not dump content", carrier="cli"),
+        dn("dlp.content.database_dump", "en", DUMP_ROWS, "Press Insert to add a new row.", "natural language is not a dump", carrier="prose"),
+        dn("dlp.content.database_dump", "en", DUMP_HEADER, "The nightly database dump finished in 4 minutes.", "natural language is not a dump", carrier="prose"),
+        dn(
+            "dlp.content.database_dump", "en", DUMP_HEADER,
+            "Here is the schema from the backup:\nCREATE TABLE payroll (\n  id INTEGER,\n  salary INTEGER\n);\n",
+            "DDL is a schema, not a dump with rows", carrier="prose",
         ),
-        dp(
-            "dlp.content.database_dump", "en", "dlp_database_dump_header",
-            "Here is the schema from the backup:\n", "CREATE TABLE payroll (\n  id INTEGER,\n  salary INTEGER\n);", "\n", carrier="prose",
+        dn("dlp.content.database_dump", "de", DUMP_HEADER, "Datenbankexport wurde abgeschlossen.", "natural language is not a dump"),
+        dn("dlp.content.database_dump", "de", DUMP_ROWS, "INSERT INTO kunden VALUES (1, 'Ada');", "single statement without a dump header"),
+        dn(
+            "dlp.content.database_dump", "de", DUMP_HEADER,
+            "--\n-- PostgreSQL database dump\n--\n-- nur Schema (pg_dump --schema-only)\n\nCREATE TABLE public.kunden (\n"
+            "    id integer NOT NULL,\n    email text\n);\n",
+            "schema-only dump without rows", carrier="sql",
         ),
-        dp(
-            "dlp.content.database_dump", "en", "dlp_database_dump_header",
-            "sqlite> .dump\n", "PRAGMA foreign_keys=OFF;", "\nBEGIN TRANSACTION;\n", carrier="cli",
+        dn(
+            "dlp.content.database_dump", "de", DUMP_ROWS,
+            "-- migrationen/V7__kunden_anlegen.sql\nCREATE TABLE kunden (id BIGINT PRIMARY KEY, name TEXT, email TEXT);\n"
+            "INSERT INTO kunden (id, name, email) VALUES (1, 'Verwaltung', 'admin@example.com');\n",
+            "migration with a seed row, no dump", carrier="sql",
         ),
-        dn("dlp.content.database_dump", "en", "dlp_database_dump_header", "$ mysqldump --no-data crm > schema.sql", "dump command, not dump content", carrier="cli"),
-        dn("dlp.content.database_dump", "en", "dlp_database_dump_insert", "Press Insert to add a new row.", "natural language is not a dump", carrier="prose"),
-        dn("dlp.content.database_dump", "en", "dlp_database_dump_header", "The nightly database dump finished in 4 minutes.", "natural language is not a dump", carrier="prose"),
-        dn("dlp.content.database_dump", "en", "dlp_database_dump_header", "Tables are created with CREATE TABLE by the ORM.", "prose mentioning a keyword", carrier="prose"),
+        dn(
+            "dlp.content.database_dump", "de", DUMP_ROWS,
+            "# tests/fixtures/kunden.sql (Testdaten für die ORM-Tests)\nINSERT INTO kunden (id, name, email) VALUES\n"
+            "  (1, 'Max Mustermann', 'max@example.com'),\n  (2, 'Erika Musterfrau', 'erika@example.com');\n",
+            "ORM test fixture with fake rows", carrier="code",
+        ),
+        dn(
+            "dlp.content.database_dump", "de", DUMP_ROWS,
+            "SQL-Tutorial, Schritt 2: einen Kunden anlegen mit\n\nINSERT INTO kunden (name, email) VALUES ('Alice', 'alice@example.com');\n",
+            "SQL tutorial statement", carrier="markdown",
+        ),
+        dn("dlp.content.database_dump", "de", DUMP_HEADER, "$ pg_dump --schema-only shop > schema.sql", "dump command, not dump content", carrier="cli"),
+        dn("dlp.content.database_dump", "de", DUMP_ROWS, "Die Insert-Taste ist kaputt.", "natural language is not a dump", carrier="prose"),
+        dn("dlp.content.database_dump", "de", DUMP_HEADER, "Die Sicherung der Datenbank läuft jede Nacht.", "natural language is not a dump", carrier="prose"),
+        dn("dlp.content.database_dump", "de", DUMP_HEADER, "Tabellen werden mit CREATE TABLE angelegt.", "prose mentioning a keyword", carrier="prose"),
+        dn(
+            "dlp.content.database_dump", "de", DUMP_HEADER,
+            "Hier der Anfang der Sicherung:\nCREATE TABLE mitarbeiter (\n  id INTEGER PRIMARY KEY,\n  gehalt INTEGER\n);\n",
+            "DDL is a schema, not a dump with rows", carrier="prose",
+        ),
     ],
     "dlp.content.system_log": [
         dp("dlp.content.system_log", "en", "dlp_structured_system_log", "", "2026-08-30T10:15:00Z ERROR database connection failed"),
