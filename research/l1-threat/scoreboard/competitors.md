@@ -6,8 +6,8 @@ Measured on Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux.
 
 | benchmark | classes | licence | system | benchmark metric | TPR@0.1% FPR | TPR drop obfuscated (zw / tags / b64 / leet / homoglyph) | TPR drop DE | source |
 |---|---|---|---|---|---|---|---|---|
-| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK rules only | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
-| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK L1 model | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
+| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK rules only | TPR@1% 15.0, TPR@0.1% 14.9 | 14.9 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | – | this run |
+| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK L1 model | TPR@1% 10.8, TPR@0.1% 10.2 | 10.2 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | – | this run |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | PromptGuard (mDeBERTa-v3-base) (published) | TPR@1% FPR % 12.78 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | PromptGuard (mDeBERTa-v3-base) (published) | TPR@0.1% FPR % 9.39 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
