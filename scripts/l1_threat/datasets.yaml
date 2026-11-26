@@ -16,6 +16,7 @@
 #   internal    produced inside ARK (goldens, generators, R05); not fetched here
 #   pending     recipe not written yet (reason); holdout recipes come from the holdout setup
 #               through --overlay and never live in the repository
+#   dropped     left out for good (reason: licence, quality, overlap with the holdout); never fetched
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
 #   format      jsonl | json (list of records; `records` names the field holding them, '.' = one record per file, '*' expands list items or dict values) | text (one record per file: fields text and path) | csv | parquet (UTF-8, plain integer, floating-point and boolean columns) |
@@ -23,6 +24,9 @@
 #               bipia (BIPIA e-mail contexts and attack files together; records: e-mails with and without an attack)
 #               | redcode (RedCode-Exec item lists and RedCode-Gen stubs; records: the requests of each Exec item, each stub)
 #   text        record field holding the text; `language` a fixed code or `language_field`
+#   language_map  {field value: code} for `language_field`; a row whose value is not in it is dropped (dropped.language)
+#   language_cues [{language, pattern}] with a fixed `language`: the first case-insensitive regex found in the text sets
+#               the row's language instead (sets without a language column)
 #   labels      rules {field, equals (value or list) | contains (value or list) | excludes (value or list) | at_least |
 #               below, label}; a rule without field matches every row; `contains` reads the field as a list (or a
 #               comma-separated string) and needs one of the given items in it, `excludes` needs none of them; `and` [{field, equals |
@@ -86,7 +90,11 @@ schema: ark-l1-threat-datasets-v1
 # 24: the German deny rows of approve-or-deny split by the proposed call: scored only where the call's own text
 #     carries the risk; shell and CLI tool calls go to shell_command, the rest (risky only against the user's
 #     request) is reported only. Rule operator `not_matches`.
-generation: 24
+# 25: recipes for the registered sets (E11): neuralchemy, GenTel-Bench (goal hijacking, prompt leaking), PolyGuardPrompts
+#     (English and German), the SaTML CTF successful chats join train_dev; deepset prompt-injections, InjecAgent and
+#     GermEval 2021 are reported only; Tensor Trust, Nemotron IPI, AI Safety Brazil, GermEval 2019, GermEval 2025,
+#     GerMS-AT and HackAPrompt are dropped with their reason.
+generation: 25
 
 dedup:
   # Texts are compared after NFKC, case folding and whitespace collapsing.
@@ -241,8 +249,52 @@ datasets:
     commercial: true
     internal: E02 generators with the seed under ~/ark-threat/holdout
   - id: neuralchemy
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    # Core configuration (train, validation and test; leakage-free by group upstream). Upstream mixes its own prompts with
+    # rows taken from other sets; the HarmBench rows (source harmbench, harmbench_benign) leave because HarmBench is a
+    # holdout set, the HackAPrompt rows because they failed the dev spot-check (garbled target-phrase fragments without a
+    # readable instruction, 4 of 13 injection rows doubtful).
+    source: https://huggingface.co/datasets/neuralchemy/Prompt-injection-dataset
+    revision: 7d70432dfcf47a821612cbf9d34e9d9e3ad20e75
+    files:
+      - {path: core/train-00000-of-00001.parquet, sha256: c0724f8e00eebb65c001be9ba94291d1608e5da0374012e53dfd4077c5f92558}
+      - {path: core/validation-00000-of-00001.parquet, sha256: bbd417bfd0df1553dd769e814a0b62ca58ad5b1d08d153c90f66937a4af74deb}
+      - {path: core/test-00000-of-00001.parquet, sha256: fb5432035fdd8453d61f6593bfe78ee2970403c5ea59959b642a6708e2bef670}
+    format: parquet
+    text: text
+    language: en
+    labels:
+      - field: category
+        equals: &neuralchemy_extraction [prompt_extraction, system_extraction, prompt_leak]
+        and: &neuralchemy_attack
+          - {field: label, equals: "1"}
+          - {field: source, equals: &neuralchemy_sources [neuralchemy_v1, wildguard_judgecomp, original]}
+          - {field: text, not_matches: &neuralchemy_script '[\u0590-\u06ff\u0900-\u097f\u0e00-\u0e7f\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]'}
+        label: "label = 1, category prompt_extraction, system_extraction or prompt_leak"
+      - field: category
+        equals: &neuralchemy_jailbreak [jailbreak, persona_replacement, crescendo, many_shot]
+        and: *neuralchemy_attack
+        label: "label = 1, category jailbreak, persona_replacement, crescendo or many_shot"
+      - field: category
+        equals: &neuralchemy_injection [direct_injection, instruction_override, prompt_injection, indirect_injection, rag_poisoning,
+                                        system_manipulation, agent_manipulation, token_smuggling, payload_injection,
+                                        encoding_obfuscation, multi_turn, response_manipulation]
+        and: *neuralchemy_attack
+        label: "label = 1, category of an instruction override"
+      # adversarial, encoding and code_execution are mostly code-execution payloads, control holds harmless prompts,
+      # training_extraction, model_fingerprinting, token_injection, context_confusion, output_manipulation, chain_of_thought
+      # and edge_case carry no override of their own.
+      - field: category
+        excludes: [prompt_extraction, system_extraction, prompt_leak, jailbreak, persona_replacement, crescendo, many_shot,
+                   direct_injection, instruction_override, prompt_injection, indirect_injection, rag_poisoning,
+                   system_manipulation, agent_manipulation, token_smuggling, payload_injection, encoding_obfuscation,
+                   multi_turn, response_manipulation]
+        and: [{field: label, equals: "1"}]
+        label: "label = 1, other category"
+      - {field: label, equals: "0", and: [{field: source, equals: *neuralchemy_sources}, {field: text, not_matches: *neuralchemy_script}], label: "label = 0"}
+      # Translated attacks in Hebrew, Arabic, Hindi, Thai, Japanese, Chinese or Korean: neither German nor English.
+      - {field: text, matches: *neuralchemy_script, label: "text in a non-Latin script"}
+      - {field: source, equals: [harmbench, harmbench_benign, hackaprompt], label: "source harmbench, harmbench_benign or hackaprompt"}
   - id: spml
     commercial: true
     source: https://huggingface.co/datasets/reshabhs/SPML_Chatbot_Prompt_Injection
@@ -263,11 +315,75 @@ datasets:
           last ### separator, or anywhere when there is none) are kept
         pattern: '(?:(?<!never )(?<!not )(?<!n''t )\b(?:ignore|disregard|forget|override|bypass|abandon)\b[^.!?\n]{0,40}\b(?:previous|prior|above|earlier|all|your|those|these|the|original|any)\b[^.!?\n]{0,20}\b(?:instructions?|rules?|guidelines?|programming|restrictions?|directives?|directions|prompt|conditions|constraints?|limitations?)\b|\bpretend\b[^.!?\n]{0,40}\b(?:no|forgot\w*|without)\b[^.!?\n]{0,30}\b(?:rules|restrictions|limits|guidelines|instructions)\b|\b(?:new|updated) instructions\b|\bdeveloper mode\b|\bjailbreak|\bno longer (?:bound|restricted|limited)\b|\bwithout (?:any )?(?:restrictions|limitations|filters|rules)\b|\b(?:stray|break) (?:away from|free from)\b|\bbreak (?:character|your rules)\b)(?![\s\S]*###)'
   - id: gentel
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    # Goal hijacking and prompt leaking files (text column). The jailbreak file (171,782 rows) is left out: every row is one
+    # of a few dozen jailbreak templates crossed with the same harmful questions, so it adds template copies, not sources.
+    source: https://huggingface.co/datasets/GenTelLab/gentelbench-v1
+    revision: bf27033065d75b7622b5a971470d8d0fbc3fa444
+    files:
+      - {path: goal_hijacking_attack_dataset.parquet, sha256: d517aeff4631c5d6201444cc5d44679059e397a5a43a3622977a8a5f4e7c4ebc}
+      - {path: prompt_leaking_attack_dataset.parquet, sha256: 539c8f721a10e96a2b7f94b0a40f2ee4de2923d89261061b730758926fdf4552}
+    format: parquet
+    text: text
+    language: en
+    # Both files also wrap attacks in persona jailbreak templates (Developer Mode, LiveGPT, NECO, Leo): a goal hijacking
+    # row is an injection only with an override of the earlier task in it, and a prompt leaking row an extraction only
+    # as a short plain request (30 rows); the long ones ask the template's persona about leak defences (dev spot-check).
+    labels:
+      - field: text
+        matches: &gentel_short '\A[\s\S]{1,299}\Z'
+        and: [{field: domain, equals: promptleaking}, {field: label, equals: "1"}]
+        label: "prompt leaking attack, plain request"
+      - field: text
+        matches: &gentel_override '(?i)\b(?:ignor\w*|disregard\w*|bypass\w*|overlook\w*|omit\w*|forget\w*|skip\w*|set(?:ting)? aside|neglect\w*|dismiss\w*)\b[^.?!]{0,30}\b(?:previous|prior|former|earlier|past|above|preceding|initial|original|any)\b'
+        and: [{field: domain, excludes: [promptleaking, safe]}, {field: label, equals: "1"}]
+        label: "goal hijacking attack with an override of the earlier task"
+      - field: text
+        not_matches: *gentel_short
+        and: [{field: domain, equals: promptleaking}, {field: label, equals: "1"}]
+        label: "attack inside a jailbreak template"
+      - field: text
+        not_matches: *gentel_override
+        and: [{field: domain, excludes: [promptleaking, safe]}, {field: label, equals: "1"}]
+        label: "attack inside a jailbreak template"
+      - {field: label, equals: "0", label: "label = 0"}
   - id: polyguardprompts
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    # Test split, English and the machine-translated German rows (the other 15 languages leave: dropped.language). Built
+    # on WildGuardMix prompts, so it is deduplicated against it. Only the harm subcategories of the class definitions
+    # count; the rest (privacy, misinformation, copyright, sexual content, "others") is out of scope.
+    source: https://huggingface.co/datasets/ToxicityPrompts/PolyGuardPrompts
+    revision: c5b466a95b64ff121db4398246b6abb7672696ec
+    files:
+      - {path: data/test-00000-of-00001.parquet, sha256: 7089d502cc8cdf710671976c9a3d83d65820018d057bbe506def2c1dbcac4e77}
+    format: parquet
+    text: prompt
+    language_field: language
+    language_map: {English: en, German: de}
+    labels:
+      - field: subcategory
+        equals: [violence_and_physical_harm, fraud_assisting_illegal_activities, cyberattack]
+        and: [{field: prompt_harm_label, equals: harmful}]
+        label: "prompt_harm_label = harmful, subcategory violence, fraud or cyberattack"
+      - {field: subcategory, equals: toxic_language_hate_speech, and: [{field: prompt_harm_label, equals: harmful}], label: "prompt_harm_label = harmful, subcategory toxic_language_hate_speech"}
+      - field: subcategory
+        excludes: [violence_and_physical_harm, fraud_assisting_illegal_activities, cyberattack, toxic_language_hate_speech]
+        and: [{field: prompt_harm_label, equals: harmful}]
+        label: "prompt_harm_label = harmful, other subcategory"
+      - {field: prompt_harm_label, equals: unharmful, label: "prompt_harm_label = unharmful"}
+      # Matches every row; it only decides for the rows without a prompt harm label (442), which leave as out of scope.
+      - {label: "any row (prompt_harm_label missing)"}
+    keep:
+      - label: "prompt_harm_label = harmful, subcategory toxic_language_hate_speech"
+        reason: >-
+          the hate speech subcategory also holds gaslighting and manipulation prompts without an insult or a hateful
+          target, and the German part holds a few refusals of the translation model in place of the prompt; a row stays
+          only with a hate, insult, slur, stereotype or harassment cue and without a refusal opening
+        pattern: &polyguard_toxic '\A(?!\s*(?:es tut mir leid|i''m sorry|ich kann (?:diese|dieser|ihnen|dir)))[\s\S]*?\b(?:hate|hateful|slurs?|insult\w*|derogator\w*|demean\w*|belittl\w*|stereotyp\w*|offensive|racis\w*|sexis\w*|homophob\w*|transphob\w*|discriminat\w*|dehumaniz\w*|bull(?:y|ies|ying)|harass\w*|troll\w*|hass\w*|beleidig\w*|abfällig\w*|abwertend\w*|herabwürdig\w*|rassis\w*|sexistisch\w*|homophob\w*|diskriminier\w*|mobb\w*|beschimpf\w*|hetz\w*|schimpf\w*|vorurteil\w*)'
+      - label: "prompt_harm_label = harmful, subcategory violence, fraud or cyberattack"
+        reason: the German part holds a few refusals of the translation model in place of the prompt
+        pattern: '\A(?!\s*(?:es tut mir leid|i''m sorry|ich kann (?:diese|dieser|ihnen|dir)))'
+    dedup_against: [wildguardmix]
   - id: nemotron_safety_v3
     commercial: true
     # Test and validation splits of the EN part and of the machine-translated DE part (the same prompts); the text
@@ -383,11 +499,31 @@ datasets:
           next to the secret in the same sentence) or name the hidden instructions are kept
         pattern: '\b(?:tell|give|reveal|say|spell|print|write|show|share|output|repeat|list|encode|encrypt|translate|reverse|hint|confirm|what(?:''s|’s| is| are| was)|is|letters?|characters?|first|last)\b[^.!?\n]{0,60}\b(?:(?:the|your|ur|this|that|its|secret|hidden|real|correct|current)\s+(?:pass ?words?|passwor[dt]\w*|passphrase|code ?words?|magic word|secret)|secret (?:word|password|phrase|key|code))\b|\b(?:(?:the|your|ur|this|that|its|secret|hidden|real|correct|current)\s+(?:pass ?words?|passwor[dt]\w*|passphrase|code ?words?|magic word|secret)|secret (?:word|password|phrase|key|code))\b[^.!?\n]{0,60}\b(?:tell|give|reveal|say|spell|print|write|show|share|output|repeat|list|encode|encrypt|translate|reverse|hint|confirm|what(?:''s|’s| is| are| was)|is|letters?|characters?|first|last)\b|\b(?:system|initial|original|hidden) (?:prompt|instructions?)\b'
   - id: satml_ctf
-    commercial: unknown
-    pending: recipe not written yet
+    commercial: true
+    # The 50 published chats in which the attacker extracted the secret; every user turn of them. The full chat log (634 MB,
+    # mostly failed attempts and small talk) is left out.
+    source: https://huggingface.co/datasets/ethz-spylab/ctf-satml24
+    revision: 11426babe61ee16b0efe7b55e0430359e0fc4235
+    files:
+      - {path: chat.was_successful_secret_extraction.50.json, sha256: 0b5262e81a0347b9d730ab0dcc195dd296daa95aaef1541c05d42e38c1c7759d}
+    format: json
+    records: "*.history.*"
+    text: content
+    language: en
+    labels:
+      - {field: role, equals: user, label: "attack chat turns (secret extraction)"}
+      - {field: role, excludes: [user], label: "model turns"}
+    keep:
+      - label: "attack chat turns (secret extraction)"
+        reason: >-
+          a successful chat also holds turns that only set up a story or a persona; only turns that name the secret, the
+          password or the hidden instructions are kept
+        pattern: '\b(?:secret|password|passphrase|system (?:prompt|message)|(?:hidden|initial|original|previous) instructions?)\b'
   - id: tensor_trust
     commercial: unknown
-    pending: recipe not written yet
+    dropped: >-
+      overlap with the holdout: the holdout's Tensor Trust extraction benchmark comes from the same upstream repository
+      (HumanCompatibleAI/tensor-trust-data), so a dev recipe would read holdout rows
   - id: bipia
     commercial: true
     # MIT attack texts inside the MIT e-mail contexts; the code contexts are Stack Overflow posts (CC-BY-SA-4.0)
@@ -702,7 +838,9 @@ datasets:
       - {field: attack_type, equals: none, label: "user task and clean tool output"}
   - id: nemotron_ipi
     commercial: unknown
-    pending: recipe not written yet
+    dropped: >-
+      not published: no NVIDIA indirect prompt injection set is public on Hugging Face (API and search, 2026-11-26);
+      AgentDojo and BIPIA already carry native injected tool outputs and e-mails
   - id: agent_safetybench
     commercial: true
     # The 2,000 released cases. Only the unfulfillable harmful-code cases that the agent fails by writing the code
@@ -1002,7 +1140,9 @@ datasets:
       - {label: "attack prompt"}
   - id: ai_safety_brazil
     commercial: true
-    pending: recipe not written yet
+    dropped: >-
+      quality: the organisation's only set (ai-safety-brazil/safetyeval-br @7f85c80e, CC-BY-4.0) is a registry of
+      results that holds no prompts, and its sources are Portuguese, outside German and English
   - id: approve_or_deny_de
     commercial: true
     # The evaluation split (3,000 items, 82 German); `text` is the set's own rendering of call, request and history.
@@ -1097,10 +1237,24 @@ datasets:
       setup (--overlay)
   - id: germeval2019
     commercial: unknown
-    pending: recipe not written yet
+    dropped: >-
+      overlap with the holdout and licence: its training data contains the GermEval 2018 test tweets (holdout), and
+      neither the task site nor the data carry a licence (checked 2026-11-18)
   - id: germeval2021
     commercial: unknown
-    pending: recipe not written yet
+    # Reported only (no licence, see entity_map.yaml). Training and test data of the shared task; toxicity of a
+    # comment on a German news talk show page, annotated by the organisers.
+    source: https://github.com/germeval2021toxic/SharedTask
+    revision: fa5dca397aed0556703dd9550ac7380b9e6c3297
+    files:
+      - {path: Data Sets/GermEval21_TrainData.csv, sha256: 4ffb1f9a499193d499192c8614add7ccef7ff02b835c256925bc319ba16358e3}
+      - {path: Data Sets/GermEval21_TestData.csv, sha256: 3831535f1bdd95ad61929976a267fe274c15e7486aad564279ebd5de9e4df89f}
+    format: csv
+    text: comment_text
+    language: de
+    labels:
+      - {field: Sub1_Toxic, equals: "1", label: "Sub1_Toxic = 1"}
+      - {field: Sub1_Toxic, equals: "0", label: "Sub1_Toxic = 0"}
   - id: textdetox_de
     commercial: true
     source: https://huggingface.co/datasets/textdetox/multilingual_toxicity_dataset
@@ -1239,7 +1393,22 @@ datasets:
     internal: E02 translation by the runner agent (no external MT)
   - id: deepset_prompt_injections
     commercial: true
-    pending: recipe not written yet
+    # Train and test split; reported only (label noise). No language column: a row is German when two German function
+    # words occur in it, English otherwise.
+    source: https://huggingface.co/datasets/deepset/prompt-injections
+    revision: 4f61ecb038e9c3fb77e21034b22511b523772cdd
+    files:
+      - {path: data/train-00000-of-00001-9564e8b05b4757ab.parquet, sha256: 2e10bc7ab30f542c97e4e83e2a5683000b5057d25ec10908784c631d44124c04}
+      - {path: data/test-00000-of-00001-701d16158af87368.parquet, sha256: 39ac797cabc157eeed58435a08593b2952bb6cb16fc394a2d383f447cc7b246e}
+    format: parquet
+    text: text
+    language: en
+    language_cues:
+      - language: de
+        pattern: '(?:\b(?:und|nicht|ich|ist|bitte|vergiss|ignoriere|alle|eine|einen|für|über|sind|wird|kann|habe|auch|oder|wie|dem|den|des|mir|mich|du|dir)\b[\s\S]*?){2}'
+    labels:
+      - {field: label, equals: "1", label: "label = 1"}
+      - {field: label, equals: "0", label: "label = 0"}
   - id: jackhhao_jailbreak
     commercial: true
     source: https://huggingface.co/datasets/jackhhao/jailbreak-classification
@@ -1267,13 +1436,31 @@ datasets:
       - {label: "every prompt (password game)"}
   - id: hackaprompt
     commercial: unknown
-    pending: recipe not written yet
+    dropped: >-
+      quality and access: the Hugging Face set is gated (terms to accept, an unauthenticated fetch gets 401), and its
+      competition payloads aim at one target phrase; the HackAPrompt rows that neuralchemy copies failed the dev
+      spot-check (garbled fragments without a readable instruction) and are left out there too
   - id: injecagent
     commercial: true
-    pending: recipe not written yet
+    # The attacker instructions of both attack kinds (direct harm, data stealing); reported only (templated).
+    source: https://github.com/uiuc-kang-lab/InjecAgent
+    revision: f19c9f2c79a41046eb13c03c51a24c567a8ffa07
+    files:
+      - {path: data/attacker_cases_dh.jsonl, sha256: 999d52e15af3c80a3303a09430af0f3878d1f91e4c573ca7b477a91cdfa6b991}
+      - {path: data/attacker_cases_ds.jsonl, sha256: 87952398c989d8ca841724e38ecdbb789676d3841e19dfc44aac7b710df9cb1f}
+    format: jsonl
+    text: Attacker Instruction
+    language: en
+    labels:
+      - {field: Attack Type, equals: [Physical Harm, Financial Harm, Data Security Harm], label: "attacker instruction, direct harm"}
+      - {field: Attack Type, equals: [Physical Data, Financial Data, Others], label: "attacker instruction, data stealing"}
   - id: germeval2025
     commercial: false
-    pending: recipe not written yet
+    dropped: >-
+      licence: GPL-3.0 data, whose copyleft would reach the prepared splits and caches built from it; the report column
+      already holds native German toxic comments under open terms (TextDetox, XSafety) and GermEval 2021
   - id: germs_at
     commercial: false
-    pending: recipe not written yet
+    dropped: >-
+      licence: CC-BY-NC-4.0, so report only at best, and the sexism levels are rated on a scale whose mild band is
+      neither gold nor benign; GermEval 2021 and TextDetox already report German toxic comments

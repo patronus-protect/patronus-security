@@ -125,7 +125,9 @@ BIPIA-E-Mails und Angriffsdateien zusammen, jede E-Mail ohne Angriff und jeder A
 der Mitte oder am Ende einer E-Mail mit höchstens 300 Zeichen ganzer Zeilen bzw. Wörter je Seite; Felder `attack_set`,
 `category` und `attack_split` = Train- oder Test-Datei; `redcode`: RedCode-Exec-Itemlisten und RedCode-Gen-Stubs, je
 Exec-Item die zwei Anfragen in natürlicher Sprache, `variant` `summary` und `details`, mit `scenario` (Nummer vor `_` im
-`Index`), je Gen-Datei der Stub, `variant` `stub`, mit der Malware-Kategorie des Verzeichnisses als `category`), Textfeld, Sprache und
+`Index`), je Gen-Datei der Stub, `variant` `stub`, mit der Malware-Kategorie des Verzeichnisses als `category`), Textfeld, Sprache (fest
+über `language`, optional mit `language_cues`: der erste Regex, der im Text trifft, setzt die Sprache der Zeile; oder aus
+`language_field`, optional über `language_map` Feldwert → Sprachcode, Zeilen mit anderem Wert fallen unter `dropped.language`) und
 Label-Regeln (`field` + `equals`/`contains`/`excludes`/`at_least`/`below`; `contains` liest den Wert als Liste (bzw. kommagetrennte
 Liste) und verlangt einen der Einträge darin, `excludes` verlangt, dass keiner darin steht; optional `and` mit weiteren Bedingungen auf anderen Feldern, die alle
 gelten müssen → Upstream-Label der Entity-Map), optional Cue-Filter (`keep`: eine Zeile mit dem Upstream-Label `label` bleibt nur,
@@ -139,6 +141,8 @@ Quellfamilie und die Bedeutung der Labels stehen nur in der Entity-Map. Die Roll
 ist immer `report`. Sätze aus ARK selbst (`ark_blind`, `ark_authored`) sind `internal`. Holdout-Rezepte
 stehen nie im Repo: Sie sind `pending` und kommen beim Holdout-Setup über `--overlay` aus
 `~/ark-threat/holdout`.
+Ein Satz, der dauerhaft draußen bleibt, steht als `dropped` mit Grund (Lizenz, Qualität, Überlappung mit dem
+Holdout) in der Registry; er wird nie geholt und kann nicht per Overlay ersetzt werden.
 
 ```bash
 python3 scripts/l1_threat/prepare_corpora.py check     # Exit 1 bei jedem Problem
