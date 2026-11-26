@@ -24,21 +24,33 @@ use regex::Regex;
 
 use super::config_keys::{ConfigFormat, ConfigValue};
 
+/// A table name, optionally with its schema: bare parts and quoted
+/// identifiers (`"customer records"`, `` `kunden` ``, `[dbo]`) that may hold
+/// blanks.
+const TABLE: &str = r#"(?:"[^"\r\n]*"|`[^`\r\n]*`|\[[^\]\r\n]*\]|[^\s("`\[]+)+"#;
+
 /// The head of an `INSERT` statement at the start of a line up to the first
-/// tuple: table name, optional column list (group 1) and `VALUES`. Matched
-/// at the start of a line that holds `INTO` ([`line_starts`]).
+/// tuple: table name ([`TABLE`]), optional column list (group 1) and
+/// `VALUES`. Matched at the start of a line that holds `INTO`
+/// ([`line_starts`]).
 static INSERT_HEAD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?i)\A[ \t]*(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+[^\s(]+[ \t]*(?:\(([^();]*)\)\s*)?VALUES\s*",
-    )
+    Regex::new(&format!(
+        r"(?i)\A[ \t]*(?:INSERT(?:[ \t]+(?:IGNORE|OR[ \t]+[A-Z]+))?|REPLACE)[ \t]+INTO[ \t]+{TABLE}[ \t]*(?:\(([^();]*)\)\s*)?VALUES\s*",
+    ))
     .unwrap()
 });
 
 /// A pg_dump `COPY table (columns) FROM stdin;` line; the rows follow.
 static COPY_HEAD: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?m)\ACOPY[ \t]+[^\s(]+[ \t]*\(([^()\r\n]*)\)[ \t]+FROM[ \t]+stdin;[ \t]*\r?$")
-        .unwrap()
+    Regex::new(&format!(
+        r"(?m)\ACOPY[ \t]+{TABLE}[ \t]*\(([^()\r\n]*)\)[ \t]+FROM[ \t]+stdin;[ \t]*\r?$"
+    ))
+    .unwrap()
 });
+
+/// The header of a dump ([`super::rules::DUMP_HEADER`]).
+static DUMP_HEADER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(super::rules::DUMP_HEADER).unwrap());
 
 /// Longest key field in bytes, as for a quoted config key.
 const MAX_KEY_FIELD: usize = 64;
@@ -132,6 +144,13 @@ pub fn statements(text: &str) -> Vec<Statement> {
         }
     }
     statements
+}
+
+/// T35: whether `text` is a dump with data: a dump header and at least one
+/// statement with rows. DDL alone (a schema-only dump, a migration) and SQL
+/// rows without a header (a tutorial, a test fixture) are no dump.
+pub fn is_dump(text: &str, statements: &[Statement]) -> bool {
+    !statements.is_empty() && DUMP_HEADER.is_match(text)
 }
 
 /// The starts of the lines that hold a statement head literal
@@ -328,6 +347,51 @@ fn copy_rows(text: &str, at: usize) -> Vec<Vec<Option<Range<usize>>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn dump(text: &str) -> bool {
+        is_dump(text, &statements(text))
+    }
+
+    /// T35: a dump is a dump header with rows.
+    #[test]
+    fn a_dump_is_a_header_with_rows() {
+        let rows = "INSERT INTO `kunden` VALUES (1,'Anna Berger','anna.berger@posteo.de');\n";
+        assert!(dump(&format!(
+            "-- MySQL dump 10.13  Distrib 8.0.36\n{rows}"
+        )));
+        assert!(dump(&format!("-- MariaDB dump 10.19\n{rows}")));
+        assert!(dump(&format!(
+            "--\n-- PostgreSQL database dump\n--\n{rows}"
+        )));
+        assert!(dump(&format!(
+            "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n{rows}"
+        )));
+        assert!(dump(
+            "-- PostgreSQL database dump\nCOPY public.kunden (id, email) FROM stdin;\n1\ta@b.de\n\\.\n"
+        ));
+        // Quoted table names with a blank, a single-column COPY block.
+        assert!(dump(
+            "PRAGMA foreign_keys=OFF;\nINSERT INTO \"customer records\" VALUES('Anna Berger','anna.berger@posteo.de');\n"
+        ));
+        assert!(dump(
+            "-- MySQL dump 10.13\nINSERT INTO `customer records` VALUES (1,'Anna Berger');\n"
+        ));
+        assert!(dump(
+            "-- PostgreSQL database dump\nCOPY public.\"Kunden Liste\" (id, email) FROM stdin;\n1\ta@b.de\n\\.\n"
+        ));
+        assert!(dump(
+            "-- PostgreSQL database dump\nCOPY public.customers (email) FROM stdin;\na@b.de\n\\.\n"
+        ));
+        // Rows without a header, a header without rows.
+        assert!(!dump(rows));
+        assert!(!dump(
+            "-- MySQL dump 10.13\nCREATE TABLE `kunden` (`id` int);\n"
+        ));
+        assert!(!dump(
+            "-- PostgreSQL database dump\nCOPY public.kunden (id, email) FROM stdin;\n\\.\n"
+        ));
+        assert!(!dump(&format!("The nightly MySQL dump finished.\n{rows}")));
+    }
 
     fn pairs(text: &str) -> Vec<(&str, &str)> {
         let key = Regex::new(r"(?i)(?:password|secret|token|zugangsdaten)").unwrap();

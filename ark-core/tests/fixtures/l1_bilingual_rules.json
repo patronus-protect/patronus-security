@@ -6315,8 +6315,8 @@
   {
     "category": "dlp",
     "rule_id": "dlp_database_dump_insert",
-    "de": "INSERT INTO kunden VALUES (1, 'Ada');",
-    "en": "INSERT INTO customers VALUES (1, 'Ada');",
+    "de": "-- MySQL dump 10.13  Distrib 8.0.36\n-- Sicherung der Kundendatenbank\nINSERT INTO `kunden` VALUES (1,'Anna Berger','anna.berger@posteo.de'),(2,'Jonas Weber','j.weber@gmx.net');\n",
+    "en": "-- MySQL dump 10.13  Distrib 8.0.36\n-- Backup of the customer database\nINSERT INTO `customers` VALUES (1,'Anna Berger','anna.berger@posteo.de'),(2,'Jonas Weber','j.weber@gmx.net');\n",
     "language_neutral": false
   },
   {
@@ -6371,9 +6371,9 @@
   {
     "category": "dlp",
     "rule_id": "dlp_database_dump_header",
-    "de": "-- PostgreSQL database dump",
-    "en": "-- PostgreSQL database dump",
-    "language_neutral": true
+    "de": "--\n-- PostgreSQL database dump\n--\n-- Sicherung der Kundendatenbank\nCOPY public.kunden (id, name, email) FROM stdin;\n1\tAnna Berger\tanna.berger@posteo.de\n\\.\n",
+    "en": "--\n-- PostgreSQL database dump\n--\n-- Backup of the customer database\nCOPY public.customers (id, name, email) FROM stdin;\n1\tAnna Berger\tanna.berger@posteo.de\n\\.\n",
+    "language_neutral": false
   },
   {
     "category": "dlp",

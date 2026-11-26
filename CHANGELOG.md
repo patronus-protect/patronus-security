@@ -47,6 +47,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Detection changes
 
+- **Detection change (opt-in DLP database dumps):** `dlp_database_dump_header` now recognises the
+  header that mysqldump and MariaDB actually write (`-- MySQL dump 10.13 …`), and
+  `dlp_database_dump_insert` reports multi-row `INSERT` statements with one tuple per line and the
+  rows of a pg_dump `COPY … FROM stdin;` block. Both rules now report only a dump with data: a dump
+  header together with at least one statement that holds rows. Schema-only dumps, migrations,
+  `CREATE TABLE` alone, test fixtures and tutorial statements without a dump header are no longer
+  reported as dumps.
+- **Detection change (opt-in DLP database dumps):** a dump whose table name is a quoted identifier
+  with a blank (`INSERT INTO "customer records" …`, `COPY public."Kunden Liste" (…) FROM stdin;`) and
+  a pg_dump `COPY` block of a single-column table now count as a dump with rows;
+  `dlp_database_dump_insert` reports single-column `COPY` rows up to the `\.` line.
 - **Detection change (`exfiltration`, `unsafe_action` and the other opt-in attack classes):**
   a request hidden from a human reader is now read for every attack class, not only for prompt
   injection and prompt extraction: text spelled with zero-width characters between its letters,

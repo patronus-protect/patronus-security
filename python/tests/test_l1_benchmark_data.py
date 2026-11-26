@@ -296,10 +296,14 @@ class L1BenchmarkDataTests(unittest.TestCase):
                 self.assertEqual(row["span_unit"], "unicode_code_point", row["id"])
                 self.assertIn(row["provenance"]["origin"], {"synthetic", "derived_existing_fixture"})
                 if row["case_type"] == "positive":
-                    # A split secret has one entity per fragment; everything else has one
-                    # target entity plus every other real entity in the text (T02).
+                    # A split secret has one entity per fragment and a SQL dump one per dump
+                    # rule (T35); everything else has one target entity plus every other real
+                    # entity in the text (T02).
                     targets = [e for e in row["entities"] if e["label"] == row["target_label"]]
-                    if "template" in row:
+                    if any("rule_id" in e for e in targets):
+                        self.assertTrue(all("rule_id" in e for e in targets), row["id"])
+                        self.assertIn(row["rule_id"], {e["rule_id"] for e in targets}, row["id"])
+                    elif "template" in row:
                         self.assertEqual(targets, row["entities"], row["id"])
                         self.assertGreaterEqual(len(targets), 1, row["id"])
                     else:
