@@ -1518,7 +1518,7 @@ def render_confusion(tables: dict[str, dict[str, dict[str, dict[str, Any]]]], so
              *([source, ""] if source else []), *inputs_lines(inputs),
              "Rows: the true labels of the rows (a row with two classes counts under each). Columns: the share of "
              "those rows in percent that each class reports (`detected` at the class's detect cut: the heuristic "
-             "for rules only, the shipped cuts of the built-in L1 models in the cascade config). The diagonal is "
+             "for rules only, the built-in L1 models at the cuts of `cascade-config.json` otherwise). The diagonal is "
              "the class's recall; off the diagonal, a class may only report the rows of its allowed neighbours "
              "(`research/l1-threat/README.md`, Klassengrenzen) and stays at its benign FPR budget elsewhere.", ""]
     for system, table in tables.items():
