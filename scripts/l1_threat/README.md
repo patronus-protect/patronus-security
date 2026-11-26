@@ -125,7 +125,9 @@ BIPIA-E-Mails und Angriffsdateien zusammen, jede E-Mail ohne Angriff und jeder A
 der Mitte oder am Ende einer E-Mail mit höchstens 300 Zeichen ganzer Zeilen bzw. Wörter je Seite; Felder `attack_set`,
 `category` und `attack_split` = Train- oder Test-Datei; `redcode`: RedCode-Exec-Itemlisten und RedCode-Gen-Stubs, je
 Exec-Item die zwei Anfragen in natürlicher Sprache, `variant` `summary` und `details`, mit `scenario` (Nummer vor `_` im
-`Index`), je Gen-Datei der Stub, `variant` `stub`, mit der Malware-Kategorie des Verzeichnisses als `category`), Textfeld, Sprache und
+`Index`), je Gen-Datei der Stub, `variant` `stub`, mit der Malware-Kategorie des Verzeichnisses als `category`), Textfeld, Sprache (fest
+über `language`, optional mit `language_cues`: der erste Regex, der im Text trifft, setzt die Sprache der Zeile; oder aus
+`language_field`, optional über `language_map` Feldwert → Sprachcode, Zeilen mit anderem Wert fallen unter `dropped.language`) und
 Label-Regeln (`field` + `equals`/`contains`/`excludes`/`at_least`/`below`; `contains` liest den Wert als Liste (bzw. kommagetrennte
 Liste) und verlangt einen der Einträge darin, `excludes` verlangt, dass keiner darin steht; optional `and` mit weiteren Bedingungen auf anderen Feldern, die alle
 gelten müssen → Upstream-Label der Entity-Map), optional Cue-Filter (`keep`: eine Zeile mit dem Upstream-Label `label` bleibt nur,
@@ -139,6 +141,8 @@ Quellfamilie und die Bedeutung der Labels stehen nur in der Entity-Map. Die Roll
 ist immer `report`. Sätze aus ARK selbst (`ark_blind`, `ark_authored`) sind `internal`. Holdout-Rezepte
 stehen nie im Repo: Sie sind `pending` und kommen beim Holdout-Setup über `--overlay` aus
 `~/ark-threat/holdout`.
+Ein Satz, der dauerhaft draußen bleibt, steht als `dropped` mit Grund (Lizenz, Qualität, Überlappung mit dem
+Holdout) in der Registry; er wird nie geholt und kann nicht per Overlay ersetzt werden.
 
 ```bash
 python3 scripts/l1_threat/prepare_corpora.py check     # Exit 1 bei jedem Problem
@@ -473,14 +477,40 @@ Referenzzeile (nach TPR@1 %, mit TPR@1 % / 0,1 %), dazu die Versionen. Jede erwa
 Cache steht mit Namen und Grund unter „Not in the columns“ (kein Cache, etwa weil der Klon nicht geholt werden
 konnte, oder die fehlenden Sätze); die übrigen Spalten erscheinen trotzdem. Den Cache legt man außerhalb des
 Repos ab (z. B. `~/.cache/ark-l1-threat/baselines`), damit ihn spätere Läufe wiederverwenden.
-Aktueller Stand von main auf Dev: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
+Aktueller Stand von main auf dem Mix: [`research/l1-threat/scoreboard/baseline.md`](../../research/l1-threat/scoreboard/baseline.md).
+
+### Faire Messung auf einem Mix
+
+```bash
+python3 scripts/l1_threat/scoreboard.py mix --dev DEV --out MIX [--force]
+python3 scripts/l1_threat/scoreboard.py fair --dev DEV --mix MIX --predictions rules=PRED_L1 \
+    [--predictions l1_model=PRED_MODEL] [--predictions cascade=PRED_CASCADE] [--baseline-cache CACHE] \
+    --output fair.json [--scoreboard research/l1-threat/scoreboard]
+```
+
+`mix` (`mix.py`) friert einen breiten Mix ein: die gegateten Dev-Sätze (Benign-Pool samt Hard-Benigns; für eine
+Klasse zählen die Positiven aller anderen Klassen als Negative), PII- und DLP-Texte (die eingecheckten L1-Goldens
+`python/patronus_ark/benchmark_data/{pii,dlp}_l1.jsonl`, DE und EN, Rezeptzeilen materialisiert) und Trigger-Wort-Hard-Negatives im
+NotInject-Stil aus einem eigenen DE/EN-Generator (`trigger_negatives`; NotInject, XSTest und OR-Bench-Hard bleiben
+reine Holdout-Sets). Die Zusatzsätze liegen als eingefrorenes Verzeichnis `MIX/mix`, die Teilung in `MIX/parts.json`:
+zeilenweise, geschichtet nach Quelle (Satz-ID), innerhalb der Quelle nach normalisiertem Text gruppiert (Leerraum
+zusammengefasst, Groß-/Kleinschreibung egal), nach Sprache und Klassen geordnet und mit gesätem SHA-256 des Texts im
+Muster 3 Train : 1 Kalibrierung : 1 Messung ausgeteilt; ein schon in einer früheren Quelle ausgeteilter Text behält
+seinen Teil, gleiche Texte liegen also nie in zwei Teilen. Jede Quelle ab fünf neuen Texten liegt in allen drei
+Teilen, keine Zeile in zweien; kleinere Quellen nennt `short_sources`. `fair` misst
+Regeln allein (L1-Score-Kurve), L1-Modell und Kaskade (L1-Score der Kaskade), Prompt Guard 2 22M und die beste
+Heuristik (je Klasse und Sprache auf dem Kalibrier-Teil gewählt) auf denselben Zeilen: der Schnitt kommt nur aus
+den Negativen des Kalibrier-Teils (je Klasse und Sprache, 0,1 % entscheidend, 1 % daneben), TPR, FPR und
+Hard-Negative-FPR nur aus dem Mess-Teil, dazu Pflichtspalten TPR/FPR auf den Report-Sätzen (außerhalb des Mixes) am
+selben Schnitt und die Zahl der Quellen hinter den Positiven.
 
 `refresh` hält das Scoreboard von main aktuell: im Checkout `--tree` (Standard: dieses Repo) baut es den
-Predictor von HEAD (Cache wie `gate`, Builds und Vorhersagen werden geteilt), rendert
-`research/l1-threat/scoreboard/baseline.md` aus `--dev` (L1-Kaskade, mit `--baseline-cache` die Baseline-Spalten)
-und, wenn der Checkout `research/l1-threat/scoreboard/cascade-config.json` enthält (Ausgabe von `calibrate`),
-`cascade.md` an deren Arbeitspunkt; der Kopf nennt den Commit und den Fingerabdruck der Eingaben (SHA-256 aller
-Sätze des Dev-Splits, für `baseline.md` dazu die Liste der gecachten Baseline-Vorhersagen). Mit `--since SHA`
+Predictor von HEAD (Cache wie `gate`, Builds und Vorhersagen werden geteilt), friert den Mix im Cache ein, sagt
+ihn samt Report-Sätzen mit `L1_CASCADE` und, wenn der Checkout `research/l1-threat/scoreboard/cascade-config.json`
+enthält, mit dieser Konfiguration vorher und rendert mit `fair` `baseline.md`, `cascade.md`, `builtin-models.md`
+und `fasttext-all-classes.md` unter `research/l1-threat/scoreboard/`; der Kopf nennt den Commit und den
+Fingerabdruck der Eingaben (SHA-256 aller Sätze des Mixes und der Report-Sätze, dazu die Liste der gecachten
+Baseline-Vorhersagen). Mit `--since SHA`
 (Commit des letzten Renderns) läuft nichts, solange sich zwischen SHA und HEAD keine Datei unter `REFRESH_PATHS`
 geändert hat (`ark-core`, Cargo-Dateien, `scripts/l1_threat/`, `research/l1-threat/entity_map.yaml`,
 `gold-dev.json`, `gold-leakage.json`, `cascade-config.json`) und jeder Bericht die aktuellen Eingaben nennt: ein neu

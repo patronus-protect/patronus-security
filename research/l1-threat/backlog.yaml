@@ -1,6 +1,7 @@
 # L1-Threat backlog. One scheduled run completes exactly one task (a task may be a bundle).
 # Selection (deterministic, ark-l1 --program threat next): first task in file order with
-# status: todo, all deps done, all ext_deps merged to main and no open needs_decision.
+# no status line (todo; the runner inserts `status: done` under `- id:` itself), all deps done, all
+# ext_deps merged to main and no open needs_decision.
 # status: todo | in_progress | done | blocked | manual | deferred | bundled
 # ext_deps: tasks of other programs, form <program>:<id> (e.g. pii:K06); must be on main.
 #
@@ -708,7 +709,7 @@ tasks:
   # cascade FPR 2.1% (jailbreak) and 4.2% (toxic_language). Goal: one broad mix on which every L1 model is
   # trained, calibrated and measured. Model and cascade tasks wait for E10; rule work goes on.
   - id: E10
-    status: todo
+    status: done
     title: "Fair measurement on one broad mix: every L1 model and the cascade trained, calibrated and measured on one mix (benign pool, positives of the other ten classes as negatives, PII and DLP texts, trigger-word hard negatives in the NotInject style, DE + EN), split row-wise and stratified by source into train / calibration / measurement; cut only from calibration, FPR and TPR only from measurement; report sets kept outside the mix"
     type: eval-infra
     deps: [E09]
@@ -723,7 +724,7 @@ tasks:
       baseline.md are regenerated and their old numbers replaced, not extended; unit tests in
       scripts/tests for the split (stratification, disjointness, cut only from calibration)
   - id: E11
-    status: todo
+    status: done
     title: "More sources and native German in the dev set: write the recipes for the registered but unwritten sets (deepset prompt-injections, hackaprompt, GermEval 2019/2021/2025, GERMS-AT, InjecAgent, TensorTrust, GenTel, PolyGuardPrompts, NeurAlchemy, SaTML CTF, nemotron IPI, AI Safety Brazil), licence checked; today prompt_extraction EN is ~all mosscap, injection EN mostly spml, the four agent classes are only synthetic and injection, prompt_extraction, harmful_content and toxic_language have no native German positive"
     type: eval-infra
     deps: [E10]
@@ -734,21 +735,26 @@ tasks:
       DEV and the expected positives and sources per class and language afterwards; after the owner run,
       gold.md shows the new source counts and no class loses its go
 
-  # Owner, 2026-11-26: E10 (#495) built the mix, the split and the report but measured the built-in L1
-  # models only as an upper bound (trained before the mix, partly on its calibration and measurement rows)
-  # and left the cascade, Prompt Guard 2 and the best heuristic unmeasured. E10b finishes E10's accept.
+  # Owner, 2026-11-26: training data stays fixed and never belongs to an evaluation. E10 (#495) re-dealt the
+  # whole dev data into a new train / calibration / measurement split, so part of the shipped models' training
+  # rows now sits in its calibration and measurement parts and its model numbers are not valid. No retraining:
+  # the evaluation is cleaned instead. Rules-only numbers are unaffected (rules are not trained).
   - id: E10b
-    title: "Finish the fair measurement: retrain all eleven L1 models on the mix's train part only, cache Prompt Guard 2 (22M, 86M), ProtectAI v2 and the heuristic baselines for every set of the mix and the report sets, measure the cascade, and drop the upper-bound note"
+    title: "Clean evaluation without retraining: training data of the shipped L1 models stays as it is; the mix loses its train part, every row any shipped model was trained on is removed from calibration and measurement, and the cascade, Prompt Guard 2, ProtectAI v2 and the best heuristic are measured on the clean parts"
     type: eval-infra
     deps: [E10, E11]
     accept: >-
-      every built-in L1 model is retrained on the mix's train part only (no calibration or measurement row in
-      its training data, checked by a test in scripts/tests) and its bundle re-pinned; cut per class and
-      language from the calibration part; rules only, L1 model, cascade, Prompt Guard 2 and the best heuristic
-      each have a number (or n/r with the reason) in every cell of cascade.md, builtin-models.md,
-      fasttext-all-classes.md and baseline.md at 0.1% and 1% FPR, with the report-set column; the upper-bound
-      note is gone; if E11's new sets are in DEV, the mix is rebuilt on them first; the PR lists every accept
-      point of E10 and E10b as met or not met with its number
+      no model is retrained and no training set changes; mix.py has only calibration and measurement parts
+      (stratified by source, seeded and frozen); every row in the training data of any built-in L1 model
+      (matched by the SHA-256 text key against each model's recorded training rows or, where none were
+      recorded, against the split its training script used) is excluded from both parts, with the excluded
+      count per source in the report; a test in scripts/tests fails if any training row of any shipped model
+      is in calibration or measurement; rules only, L1 model, cascade, Prompt Guard 2 (22M, 86M), ProtectAI v2
+      and the best heuristic each have a number (or n/r with the reason) in every cell of cascade.md,
+      builtin-models.md, fasttext-all-classes.md and baseline.md at 0.1% and 1% FPR, with the report-set
+      column; the upper-bound note and every number from E10's train part are gone; if E11's new sets are in
+      DEV they join the mix first; the PR lists every accept point of E10 and E10b as met or not met with
+      its number
 
   # Owner, 2026-11-26: besides the baselines on our data, compare on the competitors' own benchmarks under
   # their protocol, next to their published numbers. Census of 2026-11-26: only these have open data and
@@ -901,6 +907,7 @@ tasks:
       instruction_injection TPR@0.1% on the AgentDojo rows up at 0 hard-benign FP and 0 FP on the clean
       AgentDojo outputs; BIPIA and templates unchanged
   - id: T33
+    status: done
     title: "unsafe_action German scope: all scored German positives outside the templates are approve-or-deny tool-call rows (35 native, 54 in carriers, 33 obfuscated; 3 of 122 found) whose risk sits in the proposed call (destructive SQL on production tables, removing volumes, publish-all click, remote exec) and often only in the contrast with the user's request; decide which rows are L1 text (keep), shell_command (K26, like the RedCode Bash part) or request-vs-action (report only), then rules for the text-decidable forms and a native German prose source"
     type: eval-infra
     deps: [T21, T22]
@@ -923,14 +930,20 @@ tasks:
   # reports agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on
   # text without any tool description; the example therefore turns on only six models.
   - id: T34
-    title: "Cross-class firing of the built-in L1 models: a plain instruction_injection input also flags agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on text without a tool or MCP description — every model must stay quiet on the other classes' positives and on text without its carrier"
+    title: "Cross-class firing of rules and built-in L1 models, with clear class borders: a plain instruction_injection input also flags agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on text without a tool or MCP description — every model must stay quiet on the other classes' positives and on text without its carrier"
     type: precision-fix
     deps: [E10b]
     accept: >-
-      a cross-class confusion table (rows: true class, columns: each model's flag rate at its detect cut) on the
-      mix's measurement part and the report sets, in research/l1-threat/scoreboard/; each model's flag rate on
-      every other class's positives at most its benign FPR budget (0.1% per language), or the exception named
-      with its number; the carrier-bound classes (tool_poisoning, agent_config_tampering, memory_poisoning)
+      multi-label gold: rows that really carry two classes (an injection that exfiltrates, an extraction asked
+      for by injection, ...) get every class they carry, as a label file by row id like
+      labels/harmful_subclass.jsonl (id, labels, reason code; agent-labelled with a 5 % second-pass check);
+      a class's negatives never include rows labelled with that class; research/l1-threat/README.md states
+      per class which neighbour classes it may report together with (allowed overlap) and which never; a
+      confusion table for rules only and for each model (rows: true labels, columns: flag rate at the detect
+      cut) on the mix's measurement part and the report sets, in research/l1-threat/scoreboard/; rules and
+      models flag a row of a class outside their allowed overlap at most at their benign FPR budget (0.1%
+      per language), or the exception is named with its number; instruction_injection and unsafe_action EN
+      reach a cut at 0.1% (no n/r); the carrier-bound classes (tool_poisoning, agent_config_tampering, memory_poisoning)
       score only text with their structural carrier (tool or MCP description, agent config or rules file,
       memory or RAG write) via a structural prefilter in ark-core, so plain chat never reaches their model;
       goldens with the user's example (injection input, all eleven models on: only instruction_injection)
@@ -955,7 +968,7 @@ tasks:
       dumps on; the DLP dev scoreboard (scripts/l1_dlp) shows no regression and no new FP on its hard
       negatives; DLP 100 KiB p95 within budget (scripts/l1_dlp/latency.py)
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
-  - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03]}
+  - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
   - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35]}

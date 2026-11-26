@@ -365,6 +365,57 @@ mod tests {
         );
     }
 
+    /// Points are monotone: a higher severity, a stronger validator, more
+    /// required anchors or a better context never lower a score, and every
+    /// score is an exact two-digit fraction in the unit interval.
+    #[test]
+    fn scores_are_monotone_in_every_component() {
+        let severities = ["info", "low", "medium", "high", "critical"];
+        let strengths = [
+            ValidatorStrength::None,
+            ValidatorStrength::Format,
+            ValidatorStrength::Structure,
+            ValidatorStrength::Checksum,
+        ];
+        // Contexts from worst to best; a support term counts more the nearer it is.
+        let mut contexts = vec![Context::Counter, Context::None];
+        contexts.extend((0..=64).rev().map(|gap| Context::Support { gap }));
+        contexts.push(Context::Field);
+        let points = |severity: usize, strength: usize, anchors: usize, context: usize| {
+            let rule = RulePoints::for_severity(severities[severity], strengths[strength], anchors);
+            score(&rule, contexts[context])
+        };
+        for severity in 0..severities.len() {
+            for strength in 0..strengths.len() {
+                for anchors in 0..=MAX_SCORED_ANCHORS + 1 {
+                    for context in 0..contexts.len() {
+                        let value = points(severity, strength, anchors, context);
+                        assert!((0.0..=1.0).contains(&value));
+                        assert_eq!((value * 100.0).round() / 100.0, value);
+                        let steps = [
+                            (severity + 1 < severities.len())
+                                .then(|| points(severity + 1, strength, anchors, context)),
+                            (strength + 1 < strengths.len())
+                                .then(|| points(severity, strength + 1, anchors, context)),
+                            Some(points(severity, strength, anchors + 1, context)),
+                            (context + 1 < contexts.len())
+                                .then(|| points(severity, strength, anchors, context + 1)),
+                        ];
+                        for higher in steps.into_iter().flatten() {
+                            assert!(
+                                higher >= value,
+                                "{severity} {strength} {anchors} {context}: {higher} < {value}"
+                            );
+                        }
+                        // Normalisation never lowers an attack score.
+                        assert!(normalised_score(value, Category::Threat) >= value);
+                        assert!(normalised_score(value, Category::Injection) >= value);
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn normalisation_lowers_pii_and_raises_attack_categories() {
         assert_eq!(normalised_score(0.75, Category::Pii), 0.65);

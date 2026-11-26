@@ -100,10 +100,15 @@ INTERNAL_FAMILIES = ("ark_blind", "ark_authored")
 SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
 ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
-OPTIONAL_KEYS = {"training", "internal", "pending", "language", "language_field", "cap", "keep", "dedup_against", "records", "columns"}
+OPTIONAL_KEYS = {
+    "training", "internal", "pending", "dropped", "language", "language_field", "language_map", "language_cues", "cap", "keep",
+    "dedup_against", "records", "columns",
+}
+# Registry states besides a recipe: produced inside ARK, recipe not written yet, or left out for good (reason).
+STATES = ("internal", "pending", "dropped")
 KEEP_KEYS = {"label", "pattern", "reason"}
-RULE_OPS = ("equals", "contains", "excludes", "matches", "at_least", "below")
-LIST_OPS = ("equals", "contains", "excludes", "matches")
+RULE_OPS = ("equals", "contains", "excludes", "matches", "not_matches", "at_least", "below")
+LIST_OPS = ("equals", "contains", "excludes", "matches", "not_matches")
 SHA1 = re.compile(r"[0-9a-f]{40}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 # Mersenne prime 2^31 - 1: a * h + b stays below 2^63 for a, b, h < P (int64 without overflow).
@@ -138,7 +143,7 @@ def apply_overlay(registry: dict[str, Any], overlay: dict[str, Any]) -> dict[str
 
 
 def is_ready(entry: dict[str, Any]) -> bool:
-    return "internal" not in entry and "pending" not in entry
+    return not any(state in entry for state in STATES)
 
 
 def role(dataset: dict[str, Any], entry: dict[str, Any]) -> str:
@@ -191,11 +196,12 @@ def _check_condition(where: str, rule: dict[str, Any]) -> list[str]:
     for op in ("at_least", "below"):
         if op in rule and (isinstance(rule[op], bool) or not isinstance(rule[op], (int, float))):
             problems.append(f"{where}: {op} must be a number")
-    if "matches" in rule:
-        try:
-            re.compile(rule["matches"])
-        except (re.error, TypeError):
-            problems.append(f"{where}: matches must be a regular expression")
+    for op in ("matches", "not_matches"):
+        if op in rule:
+            try:
+                re.compile(rule[op])
+            except (re.error, TypeError):
+                problems.append(f"{where}: {op} must be a regular expression")
     return problems
 
 
@@ -227,6 +233,18 @@ def _check_recipe(where: str, entry: dict[str, Any], labels: set[str]) -> list[s
         problems.append(f"{where}: columns needs format csv and a non-empty list of column names (for files without a header row)")
     if ("language" in entry) == ("language_field" in entry):
         problems.append(f"{where}: exactly one of language / language_field")
+    language_map = entry.get("language_map")
+    if language_map is not None and ("language_field" not in entry or not isinstance(language_map, dict) or not language_map
+                                     or not all(isinstance(code, str) and code for code in language_map.values())):
+        problems.append(f"{where}: language_map needs language_field and maps field values to language codes")
+    for index, cue in enumerate(entry.get("language_cues") or []):
+        if "language" not in entry or not isinstance(cue, dict) or set(cue) != {"language", "pattern"}:
+            problems.append(f"{where} language_cues[{index}]: needs a fixed language and exactly language and pattern")
+            continue
+        try:
+            re.compile(cue["pattern"])
+        except re.error as error:
+            problems.append(f"{where} language_cues[{index}]: pattern does not compile ({error})")
     rules = entry["labels"]
     if not isinstance(rules, list) or not rules:
         return problems + [f"{where}: labels must be a non-empty list"]
@@ -307,9 +325,9 @@ def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
                 problems.append(f"{where}: dedup_against {other!r} must be another train_dev or report set")
         if entry.get("training") is False and dataset["split"] == "train_dev":
             problems.append(f"{where}: an evaluation-only set (training: false) cannot be train_dev")
-        kinds = [key for key in ("internal", "pending") if key in entry] + (["recipe"] if RECIPE_KEYS & set(entry) else [])
+        kinds = [key for key in STATES if key in entry] + (["recipe"] if RECIPE_KEYS & set(entry) else [])
         if len(kinds) != 1:
-            problems.append(f"{where}: exactly one of internal, pending or a recipe (found {kinds or 'none'})")
+            problems.append(f"{where}: exactly one of internal, pending, dropped or a recipe (found {kinds or 'none'})")
             continue
         internal = dataset["family"] in INTERNAL_FAMILIES
         if internal != (kinds[0] == "internal"):
@@ -367,6 +385,9 @@ def rule_matches(rule: dict[str, Any], record: dict[str, Any]) -> bool:
     if "matches" in rule:
         # A regular expression searched in the field's text (e.g. a label encoded in a file path).
         return re.search(rule["matches"], _text_value(value)) is not None
+    if "not_matches" in rule:
+        # The complement, so that ordered buckets of one upstream label stay disjoint.
+        return re.search(rule["not_matches"], _text_value(value)) is None
     for op in ("contains", "excludes"):
         if op in rule:
             wanted = rule[op] if isinstance(rule[op], list) else [rule[op]]
@@ -696,6 +717,15 @@ def cap_rows(rows: list[dict[str, Any]], cap: int, seed: str, dataset_id: str) -
     return [row for i, row in enumerate(rows) if i in keep]
 
 
+def row_language(entry: dict[str, Any], record: dict[str, Any], text: str, cues: list[tuple[str, re.Pattern[str]]]) -> str | None:
+    """Language code of a row: the first language cue that finds its pattern in the text, else the fixed `language`;
+    or the `language_field` value, read through `language_map` when there is one (``None``: a value outside the map)."""
+    if "language" in entry:
+        return next((language for language, cue in cues if cue.search(text)), entry["language"])
+    value = str(_field(record, entry["language_field"]))
+    return entry["language_map"].get(value) if "language_map" in entry else value
+
+
 def load_set(
     entry: dict[str, Any], dataset: dict[str, Any], root: Path, dedup: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], Counter[str]]:
@@ -704,6 +734,7 @@ def load_set(
     rows: list[dict[str, Any]] = []
     dropped: Counter[str] = Counter()
     filters = keep_filters(entry)
+    cues = [(cue["language"], re.compile(cue["pattern"], re.IGNORECASE)) for cue in entry.get("language_cues") or []]
     for number, record in enumerate(read_records(entry, root)):
         text = _field(record, entry["text"])
         if not isinstance(text, str) or not text.strip():
@@ -716,6 +747,10 @@ def load_set(
         if any(label in outcome["labels"] and not cue.search(text) for label, cue in filters):
             dropped["no_cue"] += 1
             continue
+        language = row_language(entry, record, text, cues)
+        if language is None:
+            dropped["language"] += 1
+            continue
         kind, matched, signature = index.match(text)
         if kind is not None:
             dropped[kind] += 1
@@ -723,7 +758,6 @@ def load_set(
                 dropped["label_conflicts"] += 1
             continue
         index.add(text, signature)
-        language = entry["language"] if "language" in entry else str(_field(record, entry["language_field"]))
         rows.append({"id": f"{entry['id']}:{number:07d}", "dataset": entry["id"], "text": text, "language": language, **outcome})
     return rows, dropped
 
@@ -772,7 +806,7 @@ def build(
 
     members = [i for i, entry in entries.items() if datasets[i]["split"] == split and is_ready(entry)]
     skipped = {
-        i: entry.get("internal") or entry.get("pending")
+        i: entry.get("internal") or entry.get("pending") or f"dropped: {entry['dropped']}"
         for i, entry in entries.items()
         if datasets[i]["split"] == split and not is_ready(entry)
     }
@@ -1017,7 +1051,7 @@ def listing(registry: dict[str, Any], emap: dict[str, Any]) -> str:
     lines = ["| Dataset | Split | Family | Role | Commercial | State |", "|---|---|---|---|---|---|"]
     for entry in registry["datasets"]:
         dataset = datasets[entry["id"]]
-        state = "internal" if "internal" in entry else ("pending" if "pending" in entry else f"ready @{entry['revision'][:12]}")
+        state = next((key for key in STATES if key in entry), None) or f"ready @{entry['revision'][:12]}"
         lines.append(f"| {entry['id']} | {dataset['split']} | {dataset['family']} | {role(dataset, entry)} | {_text_value(entry["commercial"])} | {state} |")
     return "\n".join(lines)
 

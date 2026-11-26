@@ -584,14 +584,19 @@ datasets:
   # ── train / dev ──────────────────────────────────────────────────────────────────────────────
   - id: neuralchemy
     name: neuralchemy prompt-injection set
-    source: hf:neuralchemy
-    licence: unknown
+    source: hf:neuralchemy/Prompt-injection-dataset
+    licence: Apache-2.0
     languages: [en]
     split: train_dev
     family: neutral
     labels:
-      - {label: "label = 1 (injection / jailbreak)", classes: [instruction_injection, jailbreak]}
+      - {label: "label = 1, category prompt_extraction, system_extraction or prompt_leak", classes: [prompt_extraction]}
+      - {label: "label = 1, category jailbreak, persona_replacement, crescendo or many_shot", classes: [jailbreak]}
+      - {label: "label = 1, category of an instruction override", classes: [instruction_injection]}
+      - {label: "label = 1, other category", out_of_scope: "code-execution payloads, harmless control prompts or no override of their own"}
+      - {label: "text in a non-Latin script", out_of_scope: "neither German nor English"}
       - {label: "label = 0", benign: true}
+      - {label: "source harmbench, harmbench_benign or hackaprompt", out_of_scope: "rows taken from HarmBench (a holdout set) or HackAPrompt (garbled target-phrase fragments)"}
   - id: spml
     name: SPML chatbot prompt injection
     source: hf:reshabhs/SPML_Chatbot_Prompt_Injection
@@ -604,25 +609,29 @@ datasets:
       - {label: "Prompt injection = 0", benign: true}
   - id: gentel
     name: GenTel-Bench
-    source: GenTel-Safe benchmark
-    licence: unknown
+    source: hf:GenTelLab/gentelbench-v1
+    licence: Apache-2.0
     languages: [en]
     split: train_dev
     family: neutral
     labels:
-      - {label: "attack, scenario prompt injection / goal hijacking / prompt leaking", classes: [instruction_injection]}
-      - {label: "attack, scenario jailbreak", classes: [jailbreak]}
-      - {label: "benign", benign: true}
+      - {label: "goal hijacking attack with an override of the earlier task", classes: [instruction_injection]}
+      - {label: "prompt leaking attack, plain request", classes: [prompt_extraction]}
+      - {label: "attack inside a jailbreak template", classes: [jailbreak]}
+      - {label: "label = 0", benign: true}
   - id: polyguardprompts
     name: PolyGuardPrompts
     source: hf:ToxicityPrompts/PolyGuardPrompts
-    licence: unknown
+    licence: CC-BY-4.0
     languages: [de, en]
     split: train_dev
     family: neutral
     labels:
-      - {label: "prompt_harm_label = harmful", classes: [harmful_content]}
+      - {label: "prompt_harm_label = harmful, subcategory violence, fraud or cyberattack", classes: [harmful_content]}
+      - {label: "prompt_harm_label = harmful, subcategory toxic_language_hate_speech", classes: [toxic_language]}
+      - {label: "prompt_harm_label = harmful, other subcategory", out_of_scope: "privacy, misinformation, copyright, sexual content and others are outside the class definitions"}
       - {label: "prompt_harm_label = unharmful", benign: true}
+      - {label: "any row (prompt_harm_label missing)", out_of_scope: "no prompt harm label upstream"}
     translated: true
     note: the German part is machine-translated
   - id: nemotron_safety_v3
@@ -680,13 +689,13 @@ datasets:
   - id: satml_ctf
     name: SaTML 2024 LLM CTF
     source: hf:ethz-spylab/ctf-satml24
-    licence: unknown
+    licence: MIT
     languages: [en]
     split: train_dev
     family: neutral
     labels:
       - {label: "attack chat turns (secret extraction)", classes: [prompt_extraction]}
-      - {label: "defence prompts", benign: true}
+      - {label: "model turns", out_of_scope: "model answers, not input"}
   - id: tensor_trust
     name: Tensor Trust extraction attacks (candidate)
     source: github:HumanCompatibleAI/tensor-trust-data
@@ -863,7 +872,15 @@ datasets:
     split: train_dev
     family: neutral
     labels:
-      - {label: "deny", classes: [unsafe_action]}
+      - {label: "deny, risk visible in the proposed call", classes: [unsafe_action]}
+      - {label: "deny, shell or CLI tool call", handoff: shell_command}
+      - label: "deny, risk only against the user request"
+        classes: [unsafe_action]
+        decides: false
+        reason: >-
+          T33 gold review: the proposed call (a DELETE on a table the user only asked to inspect, a force push for a
+          typo fix, a publish-all click) is routine on its own; the risk lies in the contrast with the user's
+          request, not in the text of one input
       - {label: "category = self_permission_tamper (deny)", classes: [agent_config_tampering], family: permission_widening}
       - {label: "category = credential_exfiltration (deny)", classes: [exfiltration]}
       - {label: "approve", benign: true}
@@ -1142,7 +1159,7 @@ datasets:
   - id: hackaprompt
     name: HackAPrompt
     source: hf:hackaprompt/hackaprompt-dataset
-    licence: unknown
+    licence: MIT
     languages: [en]
     split: report
     family: report_only

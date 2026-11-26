@@ -20,7 +20,10 @@
 //!   example one whose layers are all switched off, is left out and
 //!   counts as clear): `l1` (L1's outcome), `l1_score` (at full precision, since
 //!   `scoreboard.py calibrate` cuts on it: the score the detect and clear thresholds
-//!   compare), `decision` (final outcome) and `decided_by` (deciding stage);
+//!   compare), `decision` (final outcome), `decided_by` (deciding stage) and
+//!   `score` (the deciding stage's score on its own scale, at full precision:
+//!   the decision logit where the L1 model decides, so `scoreboard.py fair`
+//!   can cut the L1 model on its calibration part);
 //! - `wolf`: Wolf's attack probability, only when Wolf ran;
 //! - `ms`: `scan` (wall clock of the scan), `l1` (the native producers) and,
 //!   when Wolf ran, `l3` (the L3 layer durations of the module decisions).
@@ -99,8 +102,8 @@ fn predict(
         }
         stages.insert(
             class.into(),
-            json!({"l1": l1.outcome, "l1_score": l1.score,
-                   "decision": decision.outcome, "decided_by": decision.decided_by}),
+            json!({"l1": l1.outcome, "l1_score": l1.score, "decision": decision.outcome,
+                   "decided_by": decision.decided_by, "score": decision.score}),
         );
     }
     flagged.sort_unstable();
@@ -255,6 +258,38 @@ mod tests {
             out["scores"]["unsafe_action"].as_f64().unwrap(),
             round6(score)
         );
+    }
+
+    #[test]
+    fn the_l1_model_decision_carries_its_logit() {
+        let mut config: ScannerConfig = serde_json::from_value(json!({"max_level": "l1",
+            "cascade": {"modules": {"jailbreak": {"l1_model": {"builtin": "jailbreak"}}}}}))
+        .unwrap();
+        config.categories = modules();
+        let cascade = config.gates.cascade.clone().unwrap();
+        let gates = config.gates.clone();
+        let mut scanner = Scanner::new(config).unwrap();
+        let text = "Please summarise the attached meeting notes.";
+        let out = predict(
+            &mut scanner,
+            (&cascade, &gates),
+            &modules(),
+            &json!({"id": "a:6", "text": text}),
+        )
+        .unwrap();
+        let stage = &out["cascade"]["jailbreak"];
+        assert_eq!(stage["decided_by"], "l1_model");
+        let decision = scanner
+            .scan_categories(text, &modules())
+            .unwrap()
+            .decision
+            .unwrap()
+            .into_iter()
+            .find(|d| d.module == SecurityCategory::Jailbreak)
+            .unwrap();
+        assert_eq!(stage["score"].as_f64().unwrap(), decision.score);
+        // The heuristic's own score stays in `l1_score`.
+        assert_eq!(stage["l1_score"].as_f64().unwrap(), 0.0);
     }
 
     #[test]

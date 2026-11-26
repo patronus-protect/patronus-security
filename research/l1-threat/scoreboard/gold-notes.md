@@ -356,6 +356,60 @@ The sets of each round were summarised with `gold.py summary` on its dev pool an
 provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the
 review fields of the earlier sets are unchanged.
 
+## Findings (registered sets with written recipes, 2026-11-26)
+
+Registry generation 25 writes the recipes of the registered sets. Four join `train_dev`, three are reported only and
+seven are dropped with their reason in `datasets.yaml`. The new sets were built locally from the pinned files with the
+registry recipes (PolyGuardPrompts deduplicated against the frozen WildGuardMix rows, as the owner's run does),
+sampled with `gold.py sample` and reviewed by the runner. Every row was read in full. The report sets were reviewed
+by a second agent. Notes describe requests and never repeat their content.
+
+- **neuralchemy (EN, Apache-2.0): 2 of 52 (3.8 %).** The first recipe failed at 6 of 52. Upstream copies rows from
+  HackAPrompt (garbled target-phrase fragments without a readable instruction) and from HarmBench (a holdout set);
+  both now leave. The `adversarial`, `encoding` and `code_execution` categories are mostly code-execution payloads
+  (run `whoami`, eval, a hex-encoded delete). The `control` category holds harmless prompts labelled as attacks. The
+  rows in non-Latin scripts are neither German nor English. All of these leave too. Injection is scored from an
+  explicit list of override categories, jailbreak from the persona and multi-turn categories, and prompt_extraction
+  from the extraction categories. Flags: a request to write an attack prompt (unclear), and an override plus
+  extraction request filed under jailbreak upstream (wrong).
+- **GenTel-Bench (EN, Apache-2.0): 0 of 52.** Both files also wrap their attacks in persona jailbreak templates
+  (Developer Mode, LiveGPT, NECO, Leo, Void). In the first recipe, 12 of 17 prompt-leaking rows were such templates
+  around questions about leak defences, and 3 of 17 goal-hijacking rows were persona jailbreaks. Injection now needs
+  an override of the earlier task ("…, ignoring the previous instructions, and instead …"). Prompt extraction is now
+  the 30 short plain requests for the system prompt. Every template row is scored as jailbreak. The 171,782-row
+  jailbreak file is left out: it is a few dozen templates crossed with the same questions.
+- **PolyGuardPrompts (EN and the machine-translated DE part, CC-BY-4.0): 2 of 51 (3.9 %).** The first recipe failed
+  at 6 of 51. The hate-speech subcategory also holds gaslighting and manipulation prompts, and one German row was the
+  translation model's refusal. toxic_language now needs a hate, insult, slur, stereotype or harassment cue, and no
+  positive may open with a refusal. Only violence, fraud and cyberattack count as harmful_content; privacy,
+  misinformation, copyright, sexual content and "others" are out of scope. Flags: a dominance plan for a TV plot and
+  a vague evasion of platform rules (both unclear). 490 English benign rows duplicate WildGuardMix and leave
+  (`dedup_against`).
+- **SaTML CTF (EN, MIT): 0 of 7.** These are the user turns of the 50 published chats in which the secret was
+  extracted, kept only when they name the secret, the password or the hidden instructions.
+- **Reported only:**
+  - deepset prompt-injections: 8 of 50 doubtful (persona or opinion requests without an override).
+  - InjecAgent: 6 of 50 unclear (low-harm actions or data sharing, counted under unsafe_action).
+  - GermEval 2021: 24 of 50. Its toxic label covers political criticism and complaints, so it stays far from our
+    toxic_language. 1,194 of its rows duplicate TextDetox-DE, which is built from it.
+
+What the new sets bring to the dev pool:
+
+| Class | Lang | Rows | Source |
+|---|---|---:|---|
+| instruction_injection | en | 1,643 | neuralchemy 276, GenTel 1,367 |
+| jailbreak | en | 770 | neuralchemy 285, GenTel 485 |
+| prompt_extraction | en | 73 | neuralchemy 36, GenTel 30, SaTML 7 |
+| harmful_content | de | 145 | PolyGuardPrompts (translated) |
+| harmful_content | en | 148 | PolyGuardPrompts |
+| toxic_language | de | 16 | PolyGuardPrompts (translated) |
+| toxic_language | en | 28 | PolyGuardPrompts |
+
+None of these sets is native German; PolyGuardPrompts' German part is machine-translated. Open native German
+sources stay out for their licence or holdout overlap: GermEval 2019 shares the GermEval 2018 test tweets of the
+holdout, GermEval 2021 has no licence and failed the spot-check, GermEval 2025 is GPL-3.0, and GerMS-AT is
+non-commercial. The agent classes gain native English rows only in the report column (InjecAgent).
+
 ## How this report is made
 
 ```bash

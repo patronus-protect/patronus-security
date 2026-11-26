@@ -515,7 +515,8 @@ QUIET = {"l1": "escalate", "l1_score": 0.0, "decision": "clear", "decided_by": "
 
 
 def stage(l1, decision, decided_by, l1_score=0.5):
-    return {"l1": l1, "l1_score": l1_score, "decision": decision, "decided_by": decided_by}
+    return {"l1": l1, "l1_score": l1_score, "decision": decision, "decided_by": decided_by,
+            "score": 1.0 if decision == "detected" else 0.0}
 
 
 def cascade_pred(item, ms_l3=None, **stages):
@@ -802,28 +803,47 @@ def main_tree(tmp_path, monkeypatch):
     return tree, first, built
 
 
-def test_refresh_renders_baseline_of_head_with_the_commit_and_both_tprs(split, tmp_path, main_tree, capsys):
+@pytest.fixture
+def mix_split(tmp_path):
+    """A dev split whose sources are large enough to reach every part of the mix."""
+    root = tmp_path / "mixdev"
+    freeze(root / "train_dev", [row("attacks", i, ["exfiltration"]) for i in range(20)]
+           + [row("benign", i, benign=True) for i in range(40)])
+    freeze(root / "report", [row("rep", 0, ["exfiltration"]), row("rep", 1, benign=True)], role="report")
+    freeze(root / "generated", [row("gen", i, ["tool_poisoning"]) for i in range(10)],
+           schema=CORPORA.GENERATED_SCHEMA)
+    return root
+
+
+def all_mix_sets(split, cache):
+    MODULE.build_mix(split, cache / "threat-scoreboard" / "mix")
+    sets, report_sets = MODULE.mix_sets(split, cache / "threat-scoreboard" / "mix")
+    return sets + report_sets
+
+
+def test_refresh_renders_the_fair_files_of_head_with_the_commit(mix_split, tmp_path, main_tree, capsys):
     tree, first, built = main_tree
     cache = tmp_path / "bcache"
-    sets = MODULE.split_sets(split)
-    cache_baseline(cache, "atr", "v1", sets, 1)
-    assert MODULE.main(["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "cache"),
+    cache_baseline(cache, "atr", "v1", all_mix_sets(mix_split, tmp_path / "cache"), 1)
+    assert MODULE.main(["refresh", "--tree", str(tree), "--dev", str(mix_split), "--cache", str(tmp_path / "cache"),
                         "--baseline-cache", str(cache)]) == 0
     text = (tree / MODULE.SCOREBOARD_DIR / "baseline.md").read_text()
-    assert f"{MODULE.RENDERED_FROM} `{first[:12]}` on the dev split." in text
-    assert "| TPR@1% | 95% CI | TPR@0.1% |" in text and "hard-benign FPR" in text
-    assert "| 100.0 / 100.0 (atr) |" in text
-    # Without a calibrated cascade config only baseline.md is rendered, with the L1 build.
-    assert not (tree / MODULE.SCOREBOARD_DIR / "cascade.md").exists() and built == [(first, False)]
-    assert "rewrote research/l1-threat/scoreboard/baseline.md" in capsys.readouterr().out
+    assert f"{MODULE.RENDERED_FROM} `{first[:12]}` on the mix." in text
+    assert "## At 0.1% FPR (decisive)" in text and "report TPR / FPR" in text
+    assert "| exfiltration | all | 4 | 1 |" in text and "100.0 / 0.00 (atr)" in text
+    # Without a calibrated cascade config only the rules are predicted, with the L1 build.
+    assert built == [(first, False)]
+    out = capsys.readouterr().out
+    assert all(f"research/l1-threat/scoreboard/{name}" in out for name in MODULE.FAIR_FILES)
 
 
-def test_refresh_skips_commits_without_detector_scorer_or_gold_change(split, tmp_path, main_tree, capsys):
+def test_refresh_skips_commits_without_detector_scorer_or_gold_change(mix_split, tmp_path, main_tree, capsys):
     tree, first, built = main_tree
-    args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]
+    args = ["refresh", "--tree", str(tree), "--dev", str(mix_split), "--cache", str(tmp_path / "c")]
     assert MODULE.main(args) == 0 and len(built) == 1
-    rendered = (tree / MODULE.SCOREBOARD_DIR / "baseline.md").read_text()
-    first = commit_files(tree, {str(MODULE.SCOREBOARD_DIR / "baseline.md"): rendered}, "scoreboard")
+    rendered = {str(MODULE.SCOREBOARD_DIR / name): (tree / MODULE.SCOREBOARD_DIR / name).read_text()
+                for name in MODULE.FAIR_FILES}
+    first = commit_files(tree, rendered, "scoreboard")
     commit_files(tree, {"README.md": "docs only\n"}, "docs")
     args += ["--since", first]
     capsys.readouterr()
@@ -833,58 +853,40 @@ def test_refresh_skips_commits_without_detector_scorer_or_gold_change(split, tmp
         commit_files(tree, {path: f"// {path}\n"}, path)
         assert path in MODULE.changed_paths(tree, first, "HEAD")
     assert MODULE.main(args) == 0 and len(built) == 2
-    # A new subclass label file changes the cascade report's subclass section.
-    labels = str(MODULE.HARMFUL_SUBCLASS.LABELS_PATH.relative_to(MODULE.ROOT))
-    assert any(labels.startswith(path) for path in MODULE.REFRESH_PATHS)
 
 
-def test_refresh_rerenders_after_a_dev_refreeze_or_new_cached_baselines_without_code_change(split, tmp_path,
+def test_refresh_rerenders_after_a_dev_refreeze_or_new_cached_baselines_without_code_change(mix_split, tmp_path,
                                                                                             main_tree, capsys):
     tree, first, built = main_tree
     cache = tmp_path / "bcache"
-    args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c"),
+    args = ["refresh", "--tree", str(tree), "--dev", str(mix_split), "--cache", str(tmp_path / "c"),
             "--baseline-cache", str(cache)]
     assert MODULE.main(args) == 0
     path = tree / MODULE.SCOREBOARD_DIR / "baseline.md"
     recorded = MODULE.recorded_inputs(path)
-    assert recorded == MODULE.inputs_fingerprint(MODULE.split_sets(split), cache)
-    since = commit_files(tree, {str(MODULE.SCOREBOARD_DIR / "baseline.md"): path.read_text()}, "scoreboard")
+    assert recorded == MODULE.inputs_fingerprint(all_mix_sets(mix_split, tmp_path / "c"), cache)
+    since = commit_files(tree, {str(MODULE.SCOREBOARD_DIR / name): (tree / MODULE.SCOREBOARD_DIR / name).read_text()
+                                for name in MODULE.FAIR_FILES}, "scoreboard")
     args += ["--since", since]
     assert MODULE.main(args) == 0 and len(built) == 1
     # The dev split is re-frozen with a new set; main's code is unchanged.
-    freeze(split / "generated", [row("gen", 0, ["tool_poisoning"]), row("gen", 1, benign=True, twin_of="gen:0000000"),
-                                 row("gen2", 0, ["memory_poisoning"])], schema=CORPORA.GENERATED_SCHEMA)
+    freeze(mix_split / "generated", [row("gen", i, ["tool_poisoning"]) for i in range(10)]
+           + [row("gen2", i, ["memory_poisoning"]) for i in range(10)], schema=CORPORA.GENERATED_SCHEMA)
     capsys.readouterr()
     assert MODULE.main(args) == 0 and len(built) == 2
     assert "rewrote research/l1-threat/scoreboard/baseline.md" in capsys.readouterr().out
-    assert '"gen2"' in path.read_text() and MODULE.recorded_inputs(path) != recorded
+    assert "| memory_poisoning | all |" in path.read_text() and MODULE.recorded_inputs(path) != recorded
     # Baselines cached for the new split re-render the baseline column, again without a code change.
     recorded = MODULE.recorded_inputs(path)
-    cache_baseline(cache, "atr", "v1", MODULE.split_sets(split), 1)
+    cache_baseline(cache, "atr", "v1", all_mix_sets(mix_split, tmp_path / "c"), 1)
     assert MODULE.main(args) == 0 and len(built) == 3
-    assert "| 100.0 / 100.0 (atr) |" in path.read_text() and MODULE.recorded_inputs(path) != recorded
+    assert "(atr)" in path.read_text() and MODULE.recorded_inputs(path) != recorded
     assert MODULE.main(args) == 0 and len(built) == 3
 
 
-def test_refresh_rerenders_after_a_set_moves_between_dev_and_report_with_the_same_contents(split, tmp_path,
-                                                                                          main_tree, capsys):
-    tree, first, built = main_tree
-    args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]
-    assert MODULE.main(args) == 0
-    path = tree / MODULE.SCOREBOARD_DIR / "baseline.md"
-    recorded = MODULE.recorded_inputs(path)
-    since = commit_files(tree, {str(MODULE.SCOREBOARD_DIR / "baseline.md"): path.read_text()}, "scoreboard")
-    args += ["--since", since]
-    # The report set is re-frozen into dev scope: same JSONL bytes and hashes, only its role changes.
-    freeze(split / "report", [row("rep", 0, ["jailbreak"]), row("rep", 1, benign=True)], role="dev")
-    capsys.readouterr()
-    assert MODULE.main(args) == 0 and len(built) == 2
-    assert MODULE.recorded_inputs(path) != recorded
-
-
-def test_refresh_keeps_a_report_whose_numbers_did_not_change(split, tmp_path, main_tree, capsys):
+def test_refresh_keeps_a_report_whose_numbers_did_not_change(mix_split, tmp_path, main_tree, capsys):
     tree, first, _ = main_tree
-    args = ["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]
+    args = ["refresh", "--tree", str(tree), "--dev", str(mix_split), "--cache", str(tmp_path / "c")]
     assert MODULE.main(args) == 0
     path = tree / MODULE.SCOREBOARD_DIR / "baseline.md"
     commit_files(tree, {"ark-core/src/lib.rs": "// v2\n"}, "same numbers")
@@ -893,7 +895,7 @@ def test_refresh_keeps_a_report_whose_numbers_did_not_change(split, tmp_path, ma
     assert MODULE.write_rendered(path, path.read_text().replace("100.0", " 99.0")) is True
 
 
-def test_refresh_renders_cascade_md_from_the_calibrated_config_of_main(split, tmp_path, main_tree, monkeypatch):
+def test_refresh_predicts_the_calibrated_config_of_main_as_the_cascade(mix_split, tmp_path, main_tree, monkeypatch):
     tree, _, built = main_tree
     config = {"scanner": {"cascade": {"modules": {"injection": {"clear_threshold": 0.2}}},
                           "wolf": {"bundle_dir": "/private/models/wolf"}}}
@@ -905,10 +907,9 @@ def test_refresh_renders_cascade_md_from_the_calibrated_config_of_main(split, tm
         (fake_predict if config == MODULE.L1_CASCADE else fake_cascade)(sets, out, config)
 
     monkeypatch.setattr(MODULE, "predict_split", predict)
-    assert MODULE.main(["refresh", "--tree", str(tree), "--dev", str(split), "--cache", str(tmp_path / "c")]) == 0
+    assert MODULE.main(["refresh", "--tree", str(tree), "--dev", str(mix_split), "--cache", str(tmp_path / "c")]) == 0
     text = (tree / MODULE.SCOREBOARD_DIR / "cascade.md").read_text()
-    assert f"Cascade config `{MODULE.config_hash(config)[:12]}`" in text and f"`{head[:12]}`" in text
-    assert "/private/models" not in text
+    assert f"`{head[:12]}`" in text and "cascade TPR / FPR" in text and "/private/models" not in text
     assert seen == [MODULE.L1_CASCADE, config] and built == [(head, False), (head, True)]
 
 

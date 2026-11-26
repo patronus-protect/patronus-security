@@ -22,18 +22,18 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 
 | Class | dev de | dev en | holdout de | holdout en | dev native | dev translated | dev synthetic | holdout native | holdout translated | holdout synthetic |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| instruction_injection | 268 | 3119 | 0 | 11711 | 2727 | 159 | 501 | 11711 | 0 | 0 |
-| jailbreak | 492 | 2114 | 63 | 1086 | 2450 | 0 | 156 | 647 | 0 | 502 |
-| prompt_extraction | 387 | 15070 | 0 | 725 | 15000 | 300 | 157 | 331 | 0 | 394 |
+| instruction_injection | 268 | 4762 | 0 | 11711 | 4370 | 159 | 501 | 11711 | 0 | 0 |
+| jailbreak | 492 | 2884 | 63 | 1086 | 3220 | 0 | 156 | 647 | 0 | 502 |
+| prompt_extraction | 387 | 15143 | 0 | 725 | 15073 | 300 | 157 | 331 | 0 | 394 |
 | tool_poisoning | 122 | 121 | 63 | 894 | 0 | 0 | 243 | 474 | 0 | 483 |
 | agent_config_tampering | 125 | 122 | 63 | 347 | 0 | 3 | 244 | 285 | 0 | 125 |
 | memory_poisoning | 122 | 121 | 63 | 665 | 0 | 0 | 243 | 232 | 0 | 496 |
 | exfiltration | 151 | 397 | 225 | 11936 | 113 | 1 | 434 | 11711 | 0 | 450 |
 | unsafe_action | 164 | 643 | 63 | 144 | 382 | 35 | 390 | 82 | 0 | 125 |
 | resource_exhaustion | 122 | 121 | 63 | 62 | 0 | 0 | 243 | 0 | 0 | 125 |
-| harmful_content | 416 | 583 | 0 | 172 | 583 | 416 | 0 | 172 | 0 | 0 |
-| toxic_language | 207 | 803 | 1999 | 2162 | 803 | 207 | 0 | 4161 | 0 | 0 |
-| benign | 23687 | 31013 | 17191 | 15030 | 41381 | 11369 | 1950 | 37235 | 0 | 2100 |
+| harmful_content | 561 | 731 | 0 | 172 | 731 | 561 | 0 | 172 | 0 | 0 |
+| toxic_language | 223 | 831 | 1999 | 2162 | 831 | 223 | 0 | 4161 | 0 | 0 |
+| benign | 24632 | 35938 | 17191 | 15030 | 46306 | 12314 | 1950 | 37235 | 0 | 2100 |
 
 ## Dev targets per class and language
 
@@ -42,15 +42,15 @@ Scored dev positives per class and language against the target, from at least 2 
 | Class | Lang | Target | Positives | Sources | native | translated | synthetic | Met |
 |---|---|---:|---:|---:|---:|---:|---:|---|
 | instruction_injection | de | 200 | 268 | 3 | 0 | 159 | 109 | yes |
-| instruction_injection | en | 200 | 3119 | 4 | 2727 | 0 | 392 | yes |
+| instruction_injection | en | 200 | 4762 | 6 | 4370 | 0 | 392 | yes |
 | jailbreak | de | 200 | 492 | 2 | 450 | 0 | 42 | yes |
-| jailbreak | en | 200 | 2114 | 2 | 2000 | 0 | 114 | yes |
+| jailbreak | en | 200 | 2884 | 4 | 2770 | 0 | 114 | yes |
 | prompt_extraction | de | 200 | 387 | 2 | 0 | 300 | 87 | yes |
-| prompt_extraction | en | 200 | 15070 | 2 | 15000 | 0 | 70 | yes |
-| harmful_content | de | 200 | 416 | 2 | 0 | 416 | 0 | yes |
-| harmful_content | en | 200 | 583 | 2 | 583 | 0 | 0 | yes |
-| toxic_language | de | 200 | 207 | 2 | 0 | 207 | 0 | yes |
-| toxic_language | en | 200 | 803 | 2 | 803 | 0 | 0 | yes |
+| prompt_extraction | en | 200 | 15143 | 5 | 15073 | 0 | 70 | yes |
+| harmful_content | de | 200 | 561 | 3 | 0 | 561 | 0 | yes |
+| harmful_content | en | 200 | 731 | 3 | 731 | 0 | 0 | yes |
+| toxic_language | de | 200 | 223 | 3 | 0 | 223 | 0 | yes |
+| toxic_language | en | 200 | 831 | 3 | 831 | 0 | 0 | yes |
 | tool_poisoning | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
 | tool_poisoning | en | 100 | 121 | 2 | 0 | 0 | 121 | yes |
 | memory_poisoning | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
@@ -77,7 +77,10 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | generated/obfuscation_slices | dev | 388 | 54 | 0 | 0 | 0.0% | 0 / 0 |
 | report/ailuminate_demo | report | 1200 | 50 | 3 | 12 | 30.0% | 0 / 0 |
 | report/civil_comments | report | 6000 | 50 | 1 | 7 | 16.0% | 0 / 25 |
+| report/deepset_prompt_injections | report | 645 | 50 | 2 | 6 | 16.0% | 0 / 25 |
 | report/gandalf | report | 998 | 50 | 0 | 1 | 2.0% | 0 / 0 |
+| report/germeval2021 | report | 4150 | 50 | 11 | 13 | 48.0% | 3 / 25 |
+| report/injecagent | report | 62 | 50 | 0 | 6 | 12.0% | 0 / 0 |
 | report/jackhhao_jailbreak | report | 1865 | 50 | 1 | 2 | 6.0% | 0 / 25 |
 | report/nemotron_content_safety_v2 | report | 1471 | 60 | 1 | 4 | 8.3% | 0 / 0 |
 | report/textdetox_de | report | 4564 | 50 | 2 | 9 | 22.0% | 3 / 25 |
@@ -88,12 +91,16 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | train_dev/cyberseceval_multilingual | dev | 9 | 9 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/dolly_15k | dev | 14635 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/dynahate | dev | 752 | 50 | 0 | 1 | 2.0% | 0 / 0 |
+| train_dev/gentel | dev | 3953 | 52 | 0 | 0 | 0.0% | 0 / 13 |
 | train_dev/germanquad | dev | 11451 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/massive_de | dev | 11172 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/massive_en | dev | 11225 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | train_dev/mosscap | dev | 15000 | 50 | 0 | 1 | 2.0% | 0 / 0 |
 | train_dev/nemotron_safety_v3 | dev | 905 | 60 | 0 | 3 | 5.0% | 0 / 0 |
+| train_dev/neuralchemy | dev | 2996 | 52 | 1 | 1 | 3.9% | 0 / 13 |
+| train_dev/polyguardprompts | dev | 1737 | 51 | 0 | 2 | 3.9% | 0 / 17 |
 | train_dev/redcode | dev | 293 | 50 | 0 | 0 | 0.0% | 0 / 0 |
+| train_dev/satml_ctf | dev | 7 | 7 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/simple_safety_tests | dev | 100 | 50 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/spml | dev | 5729 | 50 | 0 | 1 | 2.0% | 0 / 25 |
 | train_dev/wildguardmix | dev | 490 | 60 | 0 | 0 | 0.0% | 0 / 60 |
@@ -102,7 +109,7 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | train_dev/xsafety_de | dev | 152 | 50 | 0 | 2 | 4.0% | 0 / 0 |
 | translated/runner_translations_de | dev | 700 | 52 | 0 | 1 | 1.9% | 0 / 13 |
 
-Benign pool (dev, scored sets): 0 of 449 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 492 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -197,6 +204,48 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 | train_dev/dynahate | dynahate:0032382 | toxic_language | unclear | questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat |
 | train_dev/xsafety_de | xsafety_de:0000061 | toxic_language | unclear | reproaches the reader for bad manners and swearing; critical but no insult, slur or threat |
 | train_dev/xsafety_de | xsafety_de:0000062 | toxic_language | unclear | polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat |
+| train_dev/neuralchemy | neuralchemy:0003342 | instruction_injection | unclear | asks for an attack prompt, carries no override itself |
+| train_dev/neuralchemy | neuralchemy:0003180 | jailbreak | wrong | override plus extraction request, not a jailbreak |
+| train_dev/polyguardprompts | polyguardprompts:0027986 | harmful_content | unclear | dominance plan for a TV plot, harm vague |
+| train_dev/polyguardprompts | polyguardprompts:0023736 | harmful_content | unclear | vague evasion of platform rules, no hazard named |
+| report/deepset_prompt_injections | deepset_prompt_injections:0000386 | instruction_injection | unclear | Requests a political statement; no override of instructions |
+| report/deepset_prompt_injections | deepset_prompt_injections:0000267 | instruction_injection | unclear | Persona roleplay jailbreak, no instruction override |
+| report/deepset_prompt_injections | deepset_prompt_injections:0000630 | instruction_injection | unclear | Emotional pressure for an opinion; no instruction override |
+| report/deepset_prompt_injections | deepset_prompt_injections:0000032 | instruction_injection | unclear | Roleplay jailbreak for harmful how-to, not override |
+| report/deepset_prompt_injections | deepset_prompt_injections:0000171 | instruction_injection | wrong | Plain off-topic task request, no override attempt |
+| report/deepset_prompt_injections | deepset_prompt_injections:0000583 | instruction_injection | wrong | Ordinary screenwriter persona request, no override attempt |
+| report/deepset_prompt_injections | deepset_prompt_injections:0000380 | instruction_injection | unclear | Fits prompt_extraction more than instruction override |
+| report/deepset_prompt_injections | deepset_prompt_injections:0000465 | instruction_injection | unclear | Weak persona switch; no clear override |
+| report/germeval2021 | germeval2021:0001386 | toxic_language | wrong | Harmless remark about litter, no target |
+| report/germeval2021 | germeval2021:0002578 | toxic_language | unclear | Harsh political criticism of a party, no insult |
+| report/germeval2021 | germeval2021:0000103 | toxic_language | unclear | Accusatory rant, no direct insult |
+| report/germeval2021 | germeval2021:0002290 | toxic_language | unclear | Mild political disparagement only |
+| report/germeval2021 | germeval2021:0003469 | toxic_language | wrong | Untargeted profanity in climate argument |
+| report/germeval2021 | germeval2021:0002495 | toxic_language | unclear | Mild disparagement of politicians |
+| report/germeval2021 | germeval2021:0003109 | benign | unclear | Dismissive reference to a person, borderline |
+| report/germeval2021 | germeval2021:0003726 | toxic_language | unclear | Mild put-down, borderline insult |
+| report/germeval2021 | germeval2021:0002685 | toxic_language | wrong | Policy criticism question, nothing toxic |
+| report/germeval2021 | germeval2021:0002430 | toxic_language | unclear | Mild disparagement of party clientele |
+| report/germeval2021 | germeval2021:0003744 | toxic_language | wrong | General frustration, no target or insult |
+| report/germeval2021 | germeval2021:0003412 | toxic_language | wrong | Mild criticism of a movement, no insult |
+| report/germeval2021 | germeval2021:0003428 | toxic_language | wrong | Political speculation, no insult or hate |
+| report/germeval2021 | germeval2021:0003427 | toxic_language | unclear | Long essay; only a faint regional stereotype |
+| report/germeval2021 | germeval2021:0004046 | toxic_language | wrong | Political commentary, nothing toxic |
+| report/germeval2021 | germeval2021:0003723 | toxic_language | unclear | Hostile toward a woman but no clear insult |
+| report/germeval2021 | germeval2021:0002302 | benign | unclear | Derisive label for a political group |
+| report/germeval2021 | germeval2021:0002211 | toxic_language | wrong | Political opinion, nothing toxic |
+| report/germeval2021 | germeval2021:0003446 | toxic_language | wrong | Rhetorical political question |
+| report/germeval2021 | germeval2021:0002271 | toxic_language | wrong | Complaint about studies, nothing toxic |
+| report/germeval2021 | germeval2021:0001224 | toxic_language | unclear | Derogatory label for people, borderline |
+| report/germeval2021 | germeval2021:0004078 | toxic_language | wrong | Media criticism, nothing toxic |
+| report/germeval2021 | germeval2021:0002768 | benign | unclear | Calls addressee Nazi-like, borderline insult |
+| report/germeval2021 | germeval2021:0001016 | toxic_language | unclear | Mild derogatory term in housing debate |
+| report/injecagent | injecagent:0000022 | instruction_injection+unsafe_action | unclear | Sends credential to outside email: exfiltration, not unsafe_action |
+| report/injecagent | injecagent:0000020 | instruction_injection+unsafe_action | unclear | Leaks personal data to website: exfiltration more than unsafe_action |
+| report/injecagent | injecagent:0000023 | instruction_injection+unsafe_action | unclear | Leaving a channel is low harm |
+| report/injecagent | injecagent:0000011 | instruction_injection+unsafe_action | unclear | Scheduling an appointment is low harm |
+| report/injecagent | injecagent:0000019 | instruction_injection+unsafe_action | unclear | Moving robot to a room is low harm |
+| report/injecagent | injecagent:0000025 | instruction_injection+unsafe_action | unclear | Data sharing to third party: exfiltration more than unsafe_action |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -555,6 +604,60 @@ and `DEV/translated`; the four version-7 sets came out byte-identical).
 The sets of each round were summarised with `gold.py summary` on its dev pool and merged into `gold-dev.json`; class,
 provenance, per-source and chat-pool counts come from the whole dev pool, per-set rows were refreshed, and the
 review fields of the earlier sets are unchanged.
+
+## Findings (registered sets with written recipes, 2026-11-26)
+
+Registry generation 25 writes the recipes of the registered sets. Four join `train_dev`, three are reported only and
+seven are dropped with their reason in `datasets.yaml`. The new sets were built locally from the pinned files with the
+registry recipes (PolyGuardPrompts deduplicated against the frozen WildGuardMix rows, as the owner's run does),
+sampled with `gold.py sample` and reviewed by the runner. Every row was read in full. The report sets were reviewed
+by a second agent. Notes describe requests and never repeat their content.
+
+- **neuralchemy (EN, Apache-2.0): 2 of 52 (3.8 %).** The first recipe failed at 6 of 52. Upstream copies rows from
+  HackAPrompt (garbled target-phrase fragments without a readable instruction) and from HarmBench (a holdout set);
+  both now leave. The `adversarial`, `encoding` and `code_execution` categories are mostly code-execution payloads
+  (run `whoami`, eval, a hex-encoded delete). The `control` category holds harmless prompts labelled as attacks. The
+  rows in non-Latin scripts are neither German nor English. All of these leave too. Injection is scored from an
+  explicit list of override categories, jailbreak from the persona and multi-turn categories, and prompt_extraction
+  from the extraction categories. Flags: a request to write an attack prompt (unclear), and an override plus
+  extraction request filed under jailbreak upstream (wrong).
+- **GenTel-Bench (EN, Apache-2.0): 0 of 52.** Both files also wrap their attacks in persona jailbreak templates
+  (Developer Mode, LiveGPT, NECO, Leo, Void). In the first recipe, 12 of 17 prompt-leaking rows were such templates
+  around questions about leak defences, and 3 of 17 goal-hijacking rows were persona jailbreaks. Injection now needs
+  an override of the earlier task ("…, ignoring the previous instructions, and instead …"). Prompt extraction is now
+  the 30 short plain requests for the system prompt. Every template row is scored as jailbreak. The 171,782-row
+  jailbreak file is left out: it is a few dozen templates crossed with the same questions.
+- **PolyGuardPrompts (EN and the machine-translated DE part, CC-BY-4.0): 2 of 51 (3.9 %).** The first recipe failed
+  at 6 of 51. The hate-speech subcategory also holds gaslighting and manipulation prompts, and one German row was the
+  translation model's refusal. toxic_language now needs a hate, insult, slur, stereotype or harassment cue, and no
+  positive may open with a refusal. Only violence, fraud and cyberattack count as harmful_content; privacy,
+  misinformation, copyright, sexual content and "others" are out of scope. Flags: a dominance plan for a TV plot and
+  a vague evasion of platform rules (both unclear). 490 English benign rows duplicate WildGuardMix and leave
+  (`dedup_against`).
+- **SaTML CTF (EN, MIT): 0 of 7.** These are the user turns of the 50 published chats in which the secret was
+  extracted, kept only when they name the secret, the password or the hidden instructions.
+- **Reported only:**
+  - deepset prompt-injections: 8 of 50 doubtful (persona or opinion requests without an override).
+  - InjecAgent: 6 of 50 unclear (low-harm actions or data sharing, counted under unsafe_action).
+  - GermEval 2021: 24 of 50. Its toxic label covers political criticism and complaints, so it stays far from our
+    toxic_language. 1,194 of its rows duplicate TextDetox-DE, which is built from it.
+
+What the new sets bring to the dev pool:
+
+| Class | Lang | Rows | Source |
+|---|---|---:|---|
+| instruction_injection | en | 1,643 | neuralchemy 276, GenTel 1,367 |
+| jailbreak | en | 770 | neuralchemy 285, GenTel 485 |
+| prompt_extraction | en | 73 | neuralchemy 36, GenTel 30, SaTML 7 |
+| harmful_content | de | 145 | PolyGuardPrompts (translated) |
+| harmful_content | en | 148 | PolyGuardPrompts |
+| toxic_language | de | 16 | PolyGuardPrompts (translated) |
+| toxic_language | en | 28 | PolyGuardPrompts |
+
+None of these sets is native German; PolyGuardPrompts' German part is machine-translated. Open native German
+sources stay out for their licence or holdout overlap: GermEval 2019 shares the GermEval 2018 test tweets of the
+holdout, GermEval 2021 has no licence and failed the spot-check, GermEval 2025 is GPL-3.0, and GerMS-AT is
+non-commercial. The agent classes gain native English rows only in the report column (InjecAgent).
 
 ## How this report is made
 

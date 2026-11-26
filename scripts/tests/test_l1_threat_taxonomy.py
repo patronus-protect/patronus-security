@@ -221,6 +221,14 @@ def test_backlog_task_ids_rejects_duplicate_keys(tmp_path):
         MODULE.backlog_task_ids(backlog)
 
 
+def test_open_backlog_tasks_carry_no_status_line():
+    # The runner marks a finished task by inserting `status: done` under its `- id:` line; an explicit
+    # `status: todo` would then become a duplicate key and break every backlog reader.
+    backlog = yaml.safe_load(MODULE.BACKLOG_PATH.read_text(encoding="utf-8"))
+    explicit_todo = [task["id"] for task in backlog["tasks"] if task.get("status") == "todo"]
+    assert explicit_todo == []
+
+
 def test_backlog_task_ids_reads_tasks_and_recurring(tmp_path):
     backlog = tmp_path / "backlog.yaml"
     backlog.write_text("tasks:\n  - id: M07\nrecurring:\n  - id: TRIAGE\n", encoding="utf-8")
