@@ -37,6 +37,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -285,6 +286,40 @@ def system_result(entry: dict[str, Any], rows: list[dict[str, Any]], predictions
     return out
 
 
+def reference_result(entry: dict[str, Any], rows: list[dict[str, Any]], model: Any) -> dict[str, Any] | None:
+    """A reference classifier (``run_baselines.ReferenceBaseline``) on one benchmark under its protocol, deciding at
+    0.5 like its model card; None when it scores none of the benchmark's classes."""
+    classes = [cls for cls in entry["classes"] if cls in model.classes]
+    if not classes:
+        return None
+    every = rows + variants(rows)
+    scores = {row["id"]: max(out["scores"][cls] for cls in classes)
+              for row, out in zip(every, model.score([row["text"] for row in every]))}
+    pos = [r["id"] for r in rows if r["positive"]]
+    neg = [r["id"] for r in rows if not r["positive"]]
+    out = evaluate(entry, [scores[i] for i in pos], [scores[i] for i in neg], [scores[i] >= 0.5 for i in pos],
+                   [scores[i] >= 0.5 for i in neg])
+    clean = [scores[i] >= 0.5 for i in pos]
+    out["drops"] = {kind: tpr_drop(clean, [scores[f"{i}~{kind}"] >= 0.5 for i in pos]) for kind in OBFUSCATION_KINDS}
+    return out
+
+
+def reference_latency(texts: list[str], model: Any) -> dict[str, Any]:
+    """p50 / p95 ms per window and the 1 KiB throughput of a reference classifier (onnxruntime on CPU)."""
+    row: dict[str, Any] = {}
+    for name, (size, count) in WINDOWS.items():
+        ms = []
+        for text in windows(texts, size, count):
+            started = time.perf_counter()
+            model.score([text])
+            ms.append((time.perf_counter() - started) * 1000.0)
+        if ms:
+            row[name] = SCOREBOARD._quantiles(ms)
+            if name == "1KiB":
+                row["throughput"] = round(1000.0 * len(ms) / sum(ms))
+    return row
+
+
 # Latency windows: UTF-8 sizes, and how many windows of each the benchmark texts are packed into.
 WINDOWS = {"1KiB": (1024, 200), "100KiB": (100 * 1024, 20)}
 
@@ -319,9 +354,10 @@ def latency(texts: list[str], binary: Path, work: Path) -> dict[str, Any]:
     return out
 
 
-def run(registry: dict[str, Any], binary: Path, sources: Path, work: Path, offline: bool = False) -> dict[str, Any]:
-    """Every live benchmark through every ``run_systems`` system: the ``results`` that ``scoreboard.py competitors``
-    renders."""
+def run(registry: dict[str, Any], binary: Path, sources: Path, work: Path, offline: bool = False,
+        references: list[Any] = ()) -> dict[str, Any]:
+    """Every live benchmark through every ``run_systems`` system and every reference classifier (``references``,
+    ``run_baselines.reference_baselines``): the ``results`` that ``scoreboard.py competitors`` renders."""
     machine = PII_LATENCY.machine_info()
     results: dict[str, Any] = {"benchmarks": {},
                                "machine": f"{machine['cpu']}, {machine['cpus_usable']} usable CPUs, {machine['system']}"}
@@ -335,9 +371,15 @@ def run(registry: dict[str, Any], binary: Path, sources: Path, work: Path, offli
         for system, config in run_systems().items():
             predictions = predict(rows + variants(rows), binary, config, work / system)
             systems[system] = system_result(entry, rows, predictions, curve=system == "rules")
+        for model in references:
+            result = reference_result(entry, rows, model)
+            if result is not None:
+                systems[model.id] = result
         results["benchmarks"][entry["id"]] = {"rows": len(rows), "positives": sum(r["positive"] for r in rows),
                                               "systems": systems}
     results["latency"] = latency(texts, binary, work)
+    for model in references:
+        results["latency"][dict(SCOREBOARD.FAIR_SYSTEMS)[model.id]] = reference_latency(texts, model)
     return results
 
 
@@ -359,6 +401,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--sources", type=Path, required=True, help="download cache of the benchmark files")
     r.add_argument("--work", type=Path, required=True, help="scratch directory")
     r.add_argument("--offline", action="store_true")
+    r.add_argument("--models", type=Path, help="reference models (ONNX), e.g. ~/ark-threat/baselines/models")
+    r.add_argument("--reference", action="append", default=[], choices=sorted(BASELINES.REFERENCE_MODELS),
+                   help="reference classifier to run next to ARK (repeatable; needs --models)")
     r.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     registry, published = load()
@@ -367,7 +412,8 @@ def main(argv: list[str] | None = None) -> int:
         print(problem, file=sys.stderr)
     if problems or args.command == "check":
         return 1 if problems else 0
-    results = run(registry, args.predictor, args.sources, args.work, args.offline)
+    references = BASELINES.reference_baselines(read(ENTITY_MAP), args.models, set(args.reference)) if args.reference else []
+    results = run(registry, args.predictor, args.sources, args.work, args.offline, references)
     args.output.write_text(json.dumps(results, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 

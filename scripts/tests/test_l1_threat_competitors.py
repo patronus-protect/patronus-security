@@ -209,3 +209,19 @@ def test_system_result_scores_the_benchmark_classes_and_the_obfuscation_drop():
     assert out["f1"]["f1"] == 1.0
     assert out["drops"]["leetspeak"] == 0.0 and out["drops"]["base64"] == 1.0
     assert [v["text"] for v in MODULE.variants([{"id": "p", "text": "hi", "positive": True}])][2] == "aGk="
+
+
+class FakeReference:
+    id = "prompt_guard_2_22m"
+    classes = ["instruction_injection", "jailbreak"]
+
+    def score(self, texts):
+        return [{"scores": {cls: 0.9 if "attack" in t else 0.1 for cls in self.classes}} for t in texts]
+
+
+def test_a_reference_classifier_decides_at_one_half_and_skips_foreign_classes():
+    rows = [{"id": "p", "text": "attack", "positive": True}, {"id": "n", "text": "hello", "positive": False}]
+    out = MODULE.reference_result(benchmark(), rows, FakeReference())
+    assert out["f1"]["f1"] == 1.0 and set(out["drops"].values()) == {1.0}
+    assert MODULE.reference_result(benchmark(classes=["toxic_language"]), rows, FakeReference()) is None
+    assert set(MODULE.reference_latency(["x" * 2000], FakeReference())) == {"1KiB", "throughput"}

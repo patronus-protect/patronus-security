@@ -1584,7 +1584,10 @@ def competitor_lines(registry: dict[str, Any], published: dict[str, Any], result
         if state:
             lines.append(f"| {head} | ARK | {state}: {bench[state]} | | | | |")
         else:
+            names = {**dict(COMPETITOR_SYSTEMS), **dict(FAIR_SYSTEMS)}
             lines += [_competitor_row(head, name, runs.get(system)) for system, name in COMPETITOR_SYSTEMS]
+            lines += [_competitor_row(head, f"{names.get(system, system)} (measured)", run)
+                      for system, run in sorted(runs.items()) if system not in dict(COMPETITOR_SYSTEMS)]
         for number in published.get("numbers") or []:
             if number["benchmark"] == bench["id"]:
                 lines.append(f"| {head} | {number['system']} (published) | {number['metric']} "
@@ -1618,7 +1621,7 @@ def render_competitors(registry: dict[str, Any], published: dict[str, Any], resu
                        gaps: list[str]) -> str:
     lead = ["# L1 threat: head-to-head on the competitors' benchmarks", "",
             "Each benchmark is scored under its own protocol (metric and threshold rule of its paper) and, where "
-            "it has negatives, at TPR 0.1 % FPR. Benchmarks are evaluation only: never in training or calibration, "
+            "it has negatives, by its TPR at 0.1 % FPR; reference classifiers measured here decide at 0.5. Benchmarks are evaluation only: never in training or calibration, "
             "no holdout source. Published competitor numbers are quoted only with the table they were read from. "
             f"`{NOT_RUN}`: not measured yet.", ""]
     return "\n".join(lead + competitor_lines(registry, published, results, gaps)) + "\n"
