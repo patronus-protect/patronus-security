@@ -1044,11 +1044,29 @@ tasks:
       0.1% FPR); all threat categories together at 100 KiB p95 <= 10 ms (rules) and <= 15 ms (rules + L1
       models) on the VPS, measured with scripts/benchmark_injection_l1.py and the E12 latency table re-run;
       no quality change on dev, holdout and goldens
+  # Owner, 2026-11-27: E14 (#512) brought the agent classes to 521-525 dev positives per language from 4-5
+  # sources, but gold.md counts every one of them as synthetic; E14's accept asked for at least one source
+  # that is not a generator. The clean evaluation was not re-rendered after E14 either.
+  - id: E14b
+    title: "A real, non-generator source for the agent classes: tool_poisoning, agent_config_tampering, memory_poisoning and resource_exhaustion (and exfiltration) have 521-525 dev positives per language after E14, all synthetic; add at least one licence-checked real-world source per class and re-render the clean evaluation on the new data"
+    type: eval-infra
+    deps: [E14]
+    accept: >-
+      per class at least one source whose positives are not produced by a generator and that gold.md counts
+      as native (for example public MCP registry tool descriptions, rules and agent-config files from open
+      repositories, issue reports and advisories with real poisoned descriptions or memory writes, each
+      positive labelled with reason code and spot-checked at <= 5% errors), with matching real benign
+      counterparts from the same source as hard negatives; licence, revision and commercial flag in
+      scripts/l1_threat/datasets.yaml; nothing from the holdout sources (MCPTox and the others in
+      entity_map.yaml); gold.md shows the native count per class and language; the clean evaluation
+      (cascade.md, builtin-models.md, fasttext-all-classes.md, baseline.md) re-rendered on E14's and E14b's
+      data, with the measured positives per class and language and the rules-only and L1-model TPR on the
+      native rows reported separately from the synthetic ones
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, T36, T38]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T38]}
 
 recurring:
   - id: TRIAGE
