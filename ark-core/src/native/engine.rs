@@ -141,7 +141,7 @@ impl NativeEngine {
             outputs.push((producer.scored(), result));
         }
         Ok(crate::injection_l1::category_results(
-            category, text, outputs,
+            category, prepared, outputs,
         ))
     }
 }

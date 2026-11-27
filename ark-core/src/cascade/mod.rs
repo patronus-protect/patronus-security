@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::detectors::text::{Finding, L1ModelConfig, L1TextModel};
+use crate::detectors::text::{Finding, L1ModelConfig, L1TextModel, SharedFacts};
 use crate::native::ScoreMode;
 use crate::{LayerResult, ScanControl, ScanError, SecurityCategory};
 
@@ -367,28 +367,31 @@ impl Cascade {
     /// module is then clear of evidence), else [`Self::l1_off`]; then the
     /// module's L1 model ([`Self::l1_model`]) on an escalation
     /// ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
-    /// scan: the model reads their rule findings, as in training.
-    pub fn l1_scan_answer<'a>(
+    /// scan: the model reads their rule findings, as in training. `facts`
+    /// are shared by the L1 models of every module of the scan.
+    pub fn l1_scan_answer<'a, 't>(
         &self,
         levels: &LayerExecution,
         module: SecurityCategory,
         ran: bool,
         scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
-        text: &str,
+        text: &'t str,
+        facts: &SharedFacts<'t>,
     ) -> L1Stage {
         if !levels.allows_level(SecurityLevel::L1) {
             return self.l1_off(module);
         }
-        self.l1_answer(module, levels.gates().mode(module), ran, scan, text)
+        self.l1_answer(module, levels.gates().mode(module), ran, scan, text, facts)
     }
 
-    fn l1_answer<'a>(
+    fn l1_answer<'a, 't>(
         &self,
         module: SecurityCategory,
         mode: ScoreMode,
         heuristic: bool,
         scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
-        text: &str,
+        text: &'t str,
+        facts: &SharedFacts<'t>,
     ) -> L1Stage {
         let model = self.l1_model(module);
         let stage = if heuristic {
@@ -408,7 +411,7 @@ impl Cascade {
         } else {
             Vec::new()
         };
-        self.l1_model_stage(stage, model, text, &findings)
+        self.l1_model_stage(stage, model, text, findings, facts)
     }
 
     /// Run `model`, the module's L1 model, on an input the heuristic
@@ -416,18 +419,20 @@ impl Cascade {
     /// Escalate passes on. A decided stage or no model leaves `stage` as is.
     /// `findings` are the scan's rule findings as the model is trained on
     /// them (the accepted Threat points findings, see
-    /// [`crate::detectors::threat::facts_findings`]).
-    pub fn l1_model_stage(
+    /// [`crate::detectors::threat::facts_findings`]); the model reads their
+    /// facts from `facts`.
+    pub fn l1_model_stage<'t>(
         &self,
         mut stage: L1Stage,
         model: Option<&L1TextModel>,
-        text: &str,
-        findings: &[Finding<'_>],
+        text: &'t str,
+        findings: Vec<Finding<'static>>,
+        facts: &SharedFacts<'t>,
     ) -> L1Stage {
         let Some(model) = model.filter(|_| stage.outcome == StageOutcome::Escalate) else {
             return stage;
         };
-        let answer = model.evaluate(text, findings, &[]);
+        let answer = model.evaluate_with(text, || facts.of(text, findings));
         stage.layers.push(answer.layer_result());
         stage.outcome = answer.outcome;
         stage.score = answer.score;

@@ -4,10 +4,10 @@ use std::time::Instant;
 
 use serde::Serialize;
 
-use crate::detectors::context_lexica::ContextLexica;
 use crate::detectors::injection::candidate::L1Candidate;
 use crate::detectors::injection::scorer::{score_candidate, scorer_config};
 use crate::detectors::threat::counter_context;
+use crate::threat::NativeText;
 use crate::{
     DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
     DecisionResult, DecisionTerminality, EvidenceSpan, LabelScore, LayerResult, NativeResult,
@@ -41,10 +41,11 @@ struct ScoredL1Candidate {
 /// producer failed; a class without a match keeps the verdicts of its own detectors.
 /// The scorer accepts a candidate at its shipped cut or above; a module's
 /// cascade `detect_threshold` re-cuts the decision score
-/// ([`crate::cascade::ModuleConfig`]).
+/// ([`crate::cascade::ModuleConfig`]). `prepared` is the scanned text; its
+/// context scan is shared with the producers.
 pub fn category_results(
     category: SecurityCategory,
-    text: &str,
+    prepared: &NativeText<'_>,
     outputs: Vec<(bool, NativeResult)>,
 ) -> Vec<NativeResult> {
     let (scored, direct): (Vec<_>, Vec<_>) = outputs.into_iter().partition(|(scored, _)| *scored);
@@ -54,7 +55,7 @@ pub fn category_results(
         .collect::<Vec<_>>();
     if !scored.is_empty() {
         let scored = scored.into_iter().map(|(_, result)| result).collect();
-        let result = aggregate(category, text, scored);
+        let result = aggregate(category, prepared, scored);
         if category == SecurityCategory::Injection || reports_candidates_or_errors(&result) {
             results.push(result);
         }
@@ -77,9 +78,10 @@ fn reports_candidates_or_errors(result: &NativeResult) -> bool {
 /// `category` into one decision.
 fn aggregate(
     category: SecurityCategory,
-    text: &str,
+    prepared: &NativeText<'_>,
     producer_results: Vec<NativeResult>,
 ) -> NativeResult {
+    let text = prepared.text();
     let mut metrics = crate::diagnostics::PhaseMetricScope::new("l1_aggregation_detail", "");
     let aggregation_started = Instant::now();
     let producer_duration_ms: f64 = producer_results
@@ -112,11 +114,11 @@ fn aggregate(
     // Outside `injection` the rules meet the negative context of their class:
     // documentation, quotation, test code or negation around the match.
     if category != SecurityCategory::Injection && !candidates.is_empty() {
-        let scan = ContextLexica::shared().scan(text);
+        let scan = prepared.context();
         candidates.retain(|entry| {
             let span = entry.candidate.start_byte..entry.candidate.end_byte;
             !counter_context(
-                &scan,
+                scan,
                 text,
                 span.clone(),
                 category,

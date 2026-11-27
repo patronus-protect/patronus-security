@@ -24,10 +24,14 @@ fn category_results(
         .into_iter()
         .map(|(scored, result)| (scored, result.native))
         .collect();
-    patronus_ark_core::injection_l1::category_results(category, text, results)
-        .into_iter()
-        .map(Into::into)
-        .collect()
+    patronus_ark_core::injection_l1::category_results(
+        category,
+        &patronus_ark_core::threat::NativeText::new(text),
+        results,
+    )
+    .into_iter()
+    .map(Into::into)
+    .collect()
 }
 #[cfg(test)]
 mod tests {

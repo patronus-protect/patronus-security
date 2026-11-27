@@ -31,5 +31,6 @@ These are not usage examples. The evaluation and benchmark scripts run them:
 - `threat_cascade.rs`: runs the cascade over the L1-Threat scoreboard rows.
 - `text_facts.rs`: adds the text facts the L1 model training reads.
 - `text_model_latency.rs`: times a text category model on the latency windows.
+- `threat_profile.rs`: times every attack-class detector and L1 model at four input sizes.
 - `wolf_benchmark.rs`: Wolf latency and memory on one warm scanner.
 - `prepare_wolf_bundle.rs`: builds a local Wolf bundle from existing assets.
