@@ -251,10 +251,13 @@ ohne Anker-Gate: 10 der 98 Threat-Regeln — `hc_howto_hazard`, `hc_evasion`, `u
 `prompt_armor_95e532e` und `skillspector.*`) und exaktes Beschneiden der Modelle. Ziel
 (100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit Modellen) ist nicht Teil von T38 (Teil a) und nicht erreicht.
 
-Qualität: Die Codepfade sind die der zweiten Runde (Base `f1bf35ba` gegen Head: 0 abweichende
-Vorhersagen über 88 677 Dev-Zeilen mit `cascade-config.json`, je 11 156 markierte Zeilen) plus die
-Suchwege der ersten Runde (0 Abweichungen gegen `main` `3d726a49`, Regeln und Modelle). Unit-Test: für
-alle elf eingebauten Modelle ist der Score mit geteilten Facts bitgleich zur eigenen Extraktion.
+Qualität: `threat_cascade` (Release) von `main` (`004583a5`) und diesem Branch über alle 109 632
+Zeilen unter `$ARK_L1_DEV_DATA` (`train_dev`, `generated`, `translated`, `report`), mit der
+Regel-Konfiguration und mit `cascade-config.json`: 0 abweichende Vorhersagen (Scores, `flagged`,
+Kaskadenentscheidung, Logit; nur `ms` ausgenommen), je 12 290 markierte Zeilen. Die Goldens
+(`13_l1_golden_eval -- all`) bestehen unverändert. Unit-Test: für alle elf eingebauten Modelle ist
+der Score mit geteilten Facts bitgleich zur eigenen Extraktion. Holdout ist in der Sandbox nicht
+zugänglich; bei bitgleichen Scores auf jeder Zeile ändert er sich nicht.
 
 Scoreboard-Refresh: `scoreboard.py refresh` lief in der Sandbox (Runde 3) durch, aber nicht
 vergleichbar — der lokale Baseline-Cache enthält nur einen Teil der Baselines (ATR, Cisco YARA,
