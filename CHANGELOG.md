@@ -73,6 +73,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   place, look-alike letters, leetspeak and letter spacing folded, zero-width characters removed), and the
   fact that a text was obfuscated is no model feature. Obfuscated text scores like its plain form; plain
   text scores exactly as before.
+- **Detection change (decoded text, rules and built-in L1 models):** a base64 or hex run is now decoded
+  up to 64 KiB instead of its first 1 KiB, so a long encoded prompt is read whole; before, its undecoded rest
+  stayed in the text the L1 models score and could tip ordinary encoded text into a finding.
 
 - **Detection change (crash fix):** the threat scan no longer fails on text where a `\u` escape marker is
   followed by a multi-byte character (for example a Cyrillic look-alike letter); the request used to end with

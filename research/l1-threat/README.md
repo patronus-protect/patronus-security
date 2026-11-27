@@ -716,9 +716,14 @@ jedes Modell `TextViews::model_text` (dieselben Sichten wie die Regeln, einmal j
 Stelle ihrer Quelle, gefaltete bzw. entschleierte Sicht, ohne Nullbreiten- und Tag-Zeichen); Carrier-Gate, Sprache,
 Carrier und Terme lesen denselben Text, `obfuscated`/`decoded` geben kein Modell-Token mehr. Training liest denselben
 Text über das `text_facts`-Beispiel (Feld `model_text`). Messung je Modell, sauber und unter fünf Verschleierungen:
-[`scoreboard/model-obfuscation.md`](scoreboard/model-obfuscation.md) (`model_obfuscation.py run`). Offen: jailbreak DE
-unter base64 (91,5 → 72,0 % TPR; Dekodierung auf 1024 Bytes je Fragment begrenzt) und Modelle, deren saubere
-Benign-Rate auf dieser Stichprobe schon über 0,1 % liegt (jailbreak, prompt_extraction EN, unsafe_action EN u. a.).
+[`scoreboard/model-obfuscation.md`](scoreboard/model-obfuscation.md) (`model_obfuscation.py run --mix MIX`): Zeilen aus
+dem Mess-Teil des Mixes, Schnitt je Modell und Sprache bei 0,1 % FPR auf den sauberen Negativen des Kalibrier-Teils
+(wie `scoreboard.py fair`; die verschleierten Texte setzen keinen Schnitt). Base64- und Hex-Fragmente werden seit der
+zweiten T36-Runde bis 64 KiB dekodiert (vorher 1 KiB; der undekodierte Rest blieb als Rauschen im Modelltext:
+instruction_injection DE benign unter base64 0,03 → 0,80 %, jackhhao base64 −14 Punkte). Offen: Zellen, deren
+saubere Rate schon über 0,1 % liegt (vor allem Hard-Benigns: tool_poisoning EN 4,2 %, DE 3,0 %, agent_config_tampering
+EN 2,1 %, jailbreak DE 1,2 %; benign exfiltration DE 0,33 %); das ist Kalibrierung der Modelle, nicht Verschleierung.
+Leetspeak hebt agent_config_tampering DE hard 0,30 → 1,49 % und senkt unsafe_action DE TPR um 11,5 Punkte.
 Eine Aufbereitung je Text: `NativeText` hält die `TextViews` (dekodierte und gefaltete Sichten, Entschleierung lazy);
 die versteckten Sichten der Regeln, die Fakten (samt Kontext-Scan) und die Modelle lesen sie, und die Kaskade reicht
 die Aufbereitung des Regel-Scans an das Modell weiter (`L1TextModel::evaluate`, `Cascade::l1_scan_answer` nehmen
