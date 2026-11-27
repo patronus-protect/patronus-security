@@ -61,6 +61,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Detection changes
 
+- **Detection change (built-in L1 models, opt-in cascade, texts over 16 KiB):** an L1 model
+  reads at most 16 KiB of a text: windows of 1 KiB on each side of the rule findings and data
+  references, the rest filled from the start of the text (only the start when no rule fires).
+  Texts up to 16 KiB are read whole and score exactly as before. The models' cost no longer
+  grows with the text: on 100 KiB of German and English prose the eleven models together take
+  about 13 ms instead of about 48 ms (median). Scores of longer texts change; across our German
+  and English development rows, 1 of the 16 rows over 16 KiB changes its decision (a benign
+  agent transcript is now flagged as `unsafe_action`). Rust API: `L1TextModel::evaluate_with`
+  takes a `detectors::text::ModelInput` (the bounded `ModelView` and its facts), which
+  `SharedFacts::of` now returns.
 - **Detection change (crash fix):** the threat scan no longer fails on text where a `\u` escape marker is
   followed by a multi-byte character (for example a Cyrillic look-alike letter); the request used to end with
   a detector error instead of a result.
