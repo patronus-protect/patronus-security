@@ -733,6 +733,12 @@ zw / tags / b64 / leet / homoglyph; vorher in [`scoreboard/competitors.md`](scor
 −6,1 / −0,4 / 0,0 / 0,0 / −6,1 (vorher −70,7 bei zw), jackhhao −1,5 / −1,8 / −1,5 / −2,0 / −1,8 (vorher −77,2 bei zw;
 base64 14,0 vor der 64-KiB-Dekodiergrenze), OpenAI-Moderation 0,0 / −0,2 / 0,0 / 1,9 / 0,0, RP-Mod
 0,0 / 0,0 / 0,1 / 0,4 / 0,0.
+Saubere Messung nach T36 (`scoreboard.py refresh` auf `15b2c86f`, gegen den Stand `c7498eb6` vor T36): TPR bei
+0,1 % FPR des L1-Modells je Klasse und Sprache unverändert bis auf instruction_injection all/EN +0,1 Punkte;
+Regeln allein unverändert. Latenz (100 KiB, 19 Fenster aus deutschen gutartigen Dev-Zeilen, je 3 Wiederholungen,
+eine CPU, `threat_cascade` von main und Head abwechselnd, Median der p95 aus drei Läufen): Regeln 340 → 332 ms
+(−2,4 %), mit L1-Modell (`cascade-config.json`) 756 → 720 ms (−4,7 %); die geteilte Aufbereitung spart die zweite
+Normalisierung des Modells.
 
 **Kopf an Kopf auf den Benchmarks der Konkurrenz (E12).** Neben dem Mix misst `competitors.py` ARK auf den eigenen
 Sätzen der offenen Konkurrenten, nach deren Protokoll (Metrik und Schwellenregel des Papers), und stellt die
