@@ -22058,10 +22058,15 @@ CLASS_BORDER_CASES = {
 
 
 L1_MODEL_VIEWS_SCHEMA_VERSION = 1
+def _tags_ascii(text: str) -> str:
+    """Printable ASCII as Unicode tag characters; umlauts and line breaks stay as they are."""
+    return "".join(chr(0xE0000 + ord(ch)) if " " <= ch <= "~" else ch for ch in text)
+
+
 L1_MODEL_VIEWS_OBFUSCATIONS = {
     "clean": lambda text: text,
     "zero_width": ZWSP.join,
-    "unicode_tags": _tags,
+    "unicode_tags": _tags_ascii,
     "base64": _b64,
     "leetspeak": _leet,
     "homoglyph": _homoglyph,
