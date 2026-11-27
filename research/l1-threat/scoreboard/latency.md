@@ -219,7 +219,42 @@ Qualitätsänderung“. Die Sicht ist zurückgenommen; die Modelle lesen wieder 
 geteilten Facts (Stand Runde 2, Scores bitgleich zu `main`). Die schnelle Modellwertung kommt mit T38c
 als exaktes Beschneiden (gleicher Score auf jeder Zeile).
 
-MEASUREMENT_PLACEHOLDER
+Messung vor und nach (VPS, Intel Core Processor (Haswell, no TSX), 6 CPUs, Release, ein warmer
+Prozess, sequentiell ohne andere Last; `threat_profile` wie oben, 58 470 gutartige
+`train_dev`-Zeilen, Seed 38). Vorher = `main` (`004583a5`, mit derselben `threat_profile.rs`, ohne
+10 MiB), Nachher = dieser Branch (`1fff7a5d`). Alle elf Angriffsklassen in einem Scanner; Regeln allein
+`{"max_level": "l1", "cascade": {}}`, mit L1-Modellen `cascade-config.json`.
+
+| Größe | Regeln p50 / p95 ms vorher → nachher | Regeln + L1-Modelle p50 / p95 ms vorher → nachher | Summe L1-Modelle p50 ms vorher → nachher |
+|---|---:|---:|---:|
+| short (256 B) | 1.245 / 3.677 → 1.159 / 3.206 | 2.694 / 5.072 → 1.840 / 4.051 | 1.2 → 0.4 |
+| 4 KiB | 11.226 / 21.443 → 8.652 / 15.397 | 28.164 / 38.091 → 13.363 / 21.499 | 16.6 → 3.6 |
+| 100 KiB | 370.303 / 490.556 → 134.339 / 183.972 | 784.837 / 884.209 → 188.242 / 236.495 | 405.8 → 49.2 |
+| 10 MiB | — → 25 360 / 25 811 | — → 27 384 / 28 588 | — → 3 098 |
+
+L1-Modelle bei 100 KiB (p50 / p95 ms, vorher → nachher): injection 39.9 / 51.6 → 18.4 / 23.4 (extrahiert
+die Facts für alle), tool_poisoning → 4.2 / 6.2 (Träger-Gate über den ganzen Text), memory_poisoning
+42.6 / 47.4 → 3.4 / 4.6, unsafe_action 42.5 / 55.2 → 3.3 / 5.4, harmful_content 40.4 / 47.4 → 3.3 / 5.6,
+prompt_extraction 39.9 / 48.3 → 3.3 / 4.2, jailbreak 40.0 / 43.9 → 3.3 / 5.3, toxic_language
+39.9 / 46.7 → 3.3 / 4.7, exfiltration 40.4 / 49.3 → 3.3 / 3.8, agent_config_tampering 35.2 / 71.3 → nur
+mit Träger.
+
+Top-Hotspots nach diesem Stand (100 KiB, mit L1-Modellen, im Scan, p50 / p95 ms):
+`injection/injection_l1` 45.8 / 57.5 (davon Katalog 29.3 / 46.3), `unsafe_action/threat_l1` 18.5 / 26.3,
+L1-Modell `injection` (Fact-Extraktion für alle) 18.4 / 23.4, `jailbreak/injection_l1` 11.6 / 14.6,
+`exfiltration/threat_l1` 10.3 / 17.2, `toxic_language/threat_l1` 10.0 / 13.9, Katalog
+`prompt_extraction` 8.6 / 14.0, `harmful_content/threat_l1` 6.8 / 16.0. Weiter offen und als T38b/T38c
+im Backlog: ein gemeinsamer Aho-Corasick-Pass für alle Threat- und Katalogregeln (49 von 282 Regeln
+ohne Anker-Gate: 10 der 98 Threat-Regeln — `hc_howto_hazard`, `hc_evasion`, `ua_home_dir_delete`,
+`tp_secrecy`, `re_recursive_spawn`, `re_tool_flood`, `ex_send_directive`, `ex_secret_to_sink`,
+`ex_tool_param_egress`, `ex_dns_channel` — und 39 der 184 Katalogregeln, vor allem
+`prompt_armor_95e532e` und `skillspector.*`) und exaktes Beschneiden der Modelle. Ziel
+(100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit Modellen) ist nicht Teil von T38 (Teil a) und nicht erreicht.
+
+Qualität: Die Codepfade sind die der zweiten Runde (Base `f1bf35ba` gegen Head: 0 abweichende
+Vorhersagen über 88 677 Dev-Zeilen mit `cascade-config.json`, je 11 156 markierte Zeilen) plus die
+Suchwege der ersten Runde (0 Abweichungen gegen `main` `3d726a49`, Regeln und Modelle). Unit-Test: für
+alle elf eingebauten Modelle ist der Score mit geteilten Facts bitgleich zur eigenen Extraktion.
 
 Scoreboard-Refresh: `scoreboard.py refresh` lief in der Sandbox (Runde 3) durch, aber nicht
 vergleichbar — der lokale Baseline-Cache enthält nur einen Teil der Baselines (ATR, Cisco YARA,
