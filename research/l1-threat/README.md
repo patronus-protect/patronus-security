@@ -657,7 +657,9 @@ Eval-Split liegt in ARKs eigenen Dev-Daten, der Train-Split ist upstream gesperr
 2604.10534 fällt weg: seine Angriffe sind MCPTox (Holdout), seine gutartigen Tool-Beschreibungen sind nicht
 veröffentlicht. Gemessen werden Regeln allein und das L1-Modell (kalibrierte Kaskaden-Konfiguration, ohne Wolf),
 Prompt Guard 2 und ProtectAI v2 über onnxruntime (Entscheidung bei 0,5), dazu je System der TPR-Verlust unter fünf
-Verschleierungen (Nullbreite, Unicode-Tags, Base64, Leetspeak, Homoglyphen) an derselben Entscheidung und die
+Verschleierungen (Nullbreite, Unicode-Tags, Base64, Leetspeak, Homoglyphen) und in deutscher Übersetzung (eigene
+Übersetzung des Runners, `ark_authored`, 30 Positive je Benchmark mit englischen Zeilen in
+`competitors_de.yaml`; schon deutsche oder abgelehnte Zeilen fehlen) an derselben Entscheidung und die
 Latenz (p50/p95 bei 1 KiB und 100 KiB, Durchsatz) auf denselben Texten und derselben Maschine.
 
 **Kaskade statt vollem Stack (Owner 2026-11-19, ersetzt die L1+L2-Messung aus E07).** Gemessen wird ark-core

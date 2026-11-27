@@ -1641,7 +1641,9 @@ def render_competitors(registry: dict[str, Any], published: dict[str, Any], resu
             "it has negatives, by its TPR at 0.1 % FPR; reference classifiers measured here decide at 0.5. Benchmarks are evaluation only: never in training or calibration, "
             "no holdout source. Published competitor numbers are quoted only with the table they were read from. "
             f"`{NOT_RUN}`: not measured yet. Published values keep the unit of their source (percent or 0–1); measured "
-            "values are percent. A negative TPR drop means the obfuscated rows were caught more often than the clean ones.",
+            "values are percent. A negative TPR drop means the obfuscated rows were caught more often than the clean ones. "
+            "TPR drop DE: the sampled positives of a benchmark with English rows (up to 30, `competitors_de.yaml`) in "
+            "the runner's own German translation (ark_authored), against the same positives in the original.",
             ""] + ([f"Measured on {results['machine']}.", ""] if results.get("machine") else [])
     return "\n".join(lead + competitor_lines(registry, published, results, gaps)) + "\n"
 
