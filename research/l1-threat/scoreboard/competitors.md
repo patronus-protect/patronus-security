@@ -20,6 +20,9 @@ Measured on Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux.
 | deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ARK rules only | F1 22.9 | 14.1 | -8.4 / -0.8 / -0.8 / -0.4 / -7.6 | 0.0 | this run |
 | deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ARK L1 model | F1 38.0 | 19.4 | -70.7 / 3.0 / 6.5 / -15.6 / -20.5 | -4.5 | this run |
 | deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
+| deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | Prompt Guard 2 22M (measured) | F1 32.4 | 15.2 | 0.0 / 19.4 / 19.4 / 17.9 / 15.6 | 18.2 | this run |
+| deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | Prompt Guard 2 86M (measured) | F1 37.0 | 18.3 | 0.0 / 22.4 / 22.8 / 20.9 / 20.2 | 18.2 | this run |
+| deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ProtectAI v2 (measured) | F1 58.0 | 33.8 | -58.6 / 6.5 / -23.2 / -43.3 / -46.8 | -4.5 | this run |
 | deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ProtectAI v2 (published) | F1 0.536 | – | – | – | [Table 2](https://arxiv.org/pdf/2506.05446v1) |
 | deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | Sentinel (published) | F1 0.857 | – | – | – | [Table 2](https://arxiv.org/pdf/2506.05446v1) |
 | jackhhao jailbreak-classification (Sentinel protocol) | jailbreak | Apache-2.0 | ARK rules only | F1 18.0 | 11.7 | -1.5 / -1.4 / 8.3 / -1.5 / -1.8 | 10.0 | this run |
@@ -64,5 +67,7 @@ Latency, all on CPU, same texts and machine (Intel Core Processor (Haswell, no T
 
 | system | 1 KiB p50 / p95 ms | 100 KiB p50 / p95 ms | throughput docs/s (1 KiB) |
 |---|---:|---:|---:|
-| ARK L1 model | 12.065 / 32.378 | 967.813 / 1266.874 | 60 |
-| ARK rules only | 5.330 / 21.608 | 416.823 / 621.499 | 127 |
+| ARK L1 model | 11.377 / 16.301 | 753.396 / 945.499 | 74 |
+| ARK rules only | 4.123 / 10.035 | 307.270 / 436.749 | 171 |
+| Prompt Guard 2 22M | 631.194 / 865.738 | 42371.093 / 44209.937 | 2 |
+| ProtectAI v2 | 963.916 / 1162.288 | 70249.170 / 75331.124 | 1 |
