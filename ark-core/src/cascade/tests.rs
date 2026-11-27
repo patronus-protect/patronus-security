@@ -487,7 +487,7 @@ fn run_with_model(
     use crate::detectors::text::l1_model::test_model::TEXT;
     let cascade = cascade(None);
     let stage = cascade.l1_stage(SecurityCategory::Injection, ScoreMode::Strict, [heuristic]);
-    let stage = cascade.l1_model_stage(stage, Some(model), TEXT, &[]);
+    let stage = cascade.l1_model_stage(stage, Some(model), TEXT, Vec::new(), &Default::default());
     cascade
         .decide(
             &LayerExecution::default(),
@@ -735,7 +735,8 @@ fn every_escalation_signal_escalates() {
             stage,
             Some(&model),
             crate::detectors::text::l1_model::test_model::TEXT,
-            &[],
+            Vec::new(),
+            &Default::default(),
         );
         let signal = stage.escalation.expect("escalates");
         assert!(

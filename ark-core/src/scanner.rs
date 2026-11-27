@@ -376,6 +376,7 @@ impl Scanner {
         } else {
             crate::cascade::l1_gate_results(native)
         };
+        let facts = crate::detectors::text::SharedFacts::default();
         let mut decisions = Vec::with_capacity(modules.len());
         for module in modules {
             #[cfg(feature = "wolf")]
@@ -391,6 +392,7 @@ impl Scanner {
                 self.native.runs(module, execution.gates()),
                 native.iter(),
                 text,
+                &facts,
             );
             // A module no stage ran for (L1 off, nothing later) has no decision.
             decisions.extend(cascade.decide(
