@@ -255,3 +255,12 @@ Threat-Regeln: `hc_howto_hazard`, `hc_evasion`, `ua_home_dir_delete`, `tp_secrec
 `ex_tool_param_egress`, `ex_dns_channel`; 39 der 184 Katalogregeln, vor allem
 `prompt_armor_95e532e` und die `skillspector.*`-Regeln), deren Alternationen Wörter außerhalb der
 Anker-Lexika tragen.
+
+Scoreboard-Refresh: `scoreboard.py refresh` lief in der Sandbox durch, aber nicht vergleichbar —
+der lokale Baseline-Cache enthält nur einen Teil der Baselines (ATR, Cisco YARA, LlamaFirewall,
+NeMo, Pipelock, Prompt Guard, Vigil fielen auf „not run“), und der Mix kam mit 55 929 statt
+55 918 Zeilen heraus. `baseline.md`, `cascade.md` und die übrigen Berichte sind deshalb nicht neu
+eingecheckt; der Refresh gehört in die Owner-Umgebung mit vollem Baseline-Cache
+(`python3 scripts/l1_threat/scoreboard.py refresh --dev "$ARK_L1_DEV_DATA" --cache <gate-cache>
+--baseline-cache ~/ark-threat/baselines`). Da nur Texte über 16 KiB anders gelesen werden, ändert
+sich im Mix höchstens die eine oben genannte Zeile.
