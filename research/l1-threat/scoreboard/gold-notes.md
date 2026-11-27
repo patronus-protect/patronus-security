@@ -449,7 +449,8 @@ carrier for each.
 No set added; the counts above are unchanged. The agent classes still have 0 native dev positives in either
 language (table "Dev targets per class and language"). Searched: the Hugging Face dataset index (tool poisoning, MCP
 security and injection, memory poisoning and injection, rules and agent-config files, CLAUDE.md and AGENTS.md, rug
-pull, unbounded consumption, agent loops, skills) and the GitHub repositories the cards point to. Candidates opened,
+pull, unbounded consumption, agent loops, skills; second pass: AgentDojo, AgentPoison, overthinking and slowdown, sponge,
+indirect prompt injection, AGENTS.md) and the GitHub repositories the cards point to. Candidates opened,
 with licence and the revision looked at; none was registered:
 
 | Set | Licence, revision | Classes | Why not a native source |
@@ -464,9 +465,15 @@ with licence and the revision looked at; none was registered:
 | `PatrickJS/awesome-cursorrules` (GitHub) | CC0-1.0 | – | real rules files, usable as benign agent-config hard negatives, but no positive |
 | `emgena/*` (tool poisoning, rules tampering, agent loops, memory injection) | CC-BY-NC-4.0 | all five | non-commercial teasers: report only at best |
 | `invariantlabs-ai/mcp-injection-experiments` (GitHub) | none | tool_poisoning | no licence; three example servers |
+| `akumar0927/OverThink` | MIT, `8eaa479` | resource_exhaustion | the artefacts of the OverThink slowdown attack: 100 FreshQA and SQuAD questions with their real retrieved context (benign side) and 7 attack variants each that splice the same decoy MDP problem into that context; every positive is one decoy template placed by the attack's pipeline, EN only, about 36 KB per row: one source family of template output, not real-world agent traffic |
+| `pzarzycki/agents-claude-md-github-census-2026` | per repository, `7928665` | (agent_config_tampering) | census of the real root AGENTS.md and CLAUDE.md files of 6,006 popular GitHub repositories: benign agent-config counterparts (rows of MIT/Apache repositories only), but no positive and no label |
+| `nvidia/Nemotron-RL-Agentic-Indirect-Prompt-Injection-v1`, `thaki-AI/*trojan-return*` | CC-BY-4.0 | (instruction_injection, exfiltration) | generated agent environments and a seed-fixed template corpus (48 poisoned tool returns from six template families): synthetic, and tool returns are instruction_injection, not poisoned descriptions |
+| `lcycode/skill-injection` | gated, no licence on the card | (tool_poisoning) | access restricted; not usable without the owner's account and a licence |
 
-- **resource_exhaustion: no open source at all** outside the non-commercial teasers; no public set has real
-  prompts or tool descriptions that drive an agent into unbounded loops or spend.
+- **resource_exhaustion: no real-world source.** Outside the non-commercial teasers the only open set is OverThink
+  (MIT), whose positives are one decoy template spliced into real contexts by the attack; it could be registered as
+  a third-party EN attack source with its own base prompts as same-source benign counterparts, but it is template
+  output and closes neither DE nor the other four classes.
 - **Real-world positives for these classes are rare in the wild.** The one open audit of real agent extensions
   (skills-in-the-wild) found no clear attack among its rules files; the open sets with real poisoned descriptions or
   memory writes are the holdout sources (MCPTox, MalSkillBench, MemForm, autoredclaw, the MCP registry) and stay

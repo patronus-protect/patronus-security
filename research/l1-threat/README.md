@@ -839,7 +839,8 @@ E14b (2026-11-27, Quellensuche ohne Ergebnis): keine offene, lizenzgeprüfte, ni
 echten Positiven für die Agenten-Klassen gefunden; die geprüften Kandidaten (drei kleine Apache-2.0-Sätze, davon zwei
 aus Vorlagen bzw. selbst als synthetisch markiert, Scanner-Audits ohne Text, CC0-Rules-Dateien nur als Benign,
 CC-BY-NC-Teaser) mit Lizenz, Revision und Grund stehen in `scoreboard/gold.md` („Findings (E14b …)“);
-`resource_exhaustion` hat gar keine offene Quelle. Kein Satz registriert, keine Neubewertung; die Aufgabe braucht
+`resource_exhaustion` hat nur OverThink (MIT, eine Köder-Vorlage, nur EN); zweiter Suchdurchgang am selben Tag
+ohne neuen Treffer. Kein Satz registriert, keine Neubewertung; die Aufgabe braucht
 eine Owner-Entscheidung (handgelabelter Dev-Satz aus echten Dateien und Advisories oder Annahme der
 Drittanbieter-Sätze).
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
