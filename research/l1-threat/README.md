@@ -709,6 +709,17 @@ ein Teil der Report-Sätze), 86M und ProtectAI v2 sind nicht für
 alle Sätze des Mixes gecacht (Owner-Befehl oben); die Wolf-Stufe (L3) fehlt in der Kaskaden-Spalte, solange auf dem
 Host kein Wolf-Edge-fp32-Bundle vorbereitet ist.
 
+**L1-Modelle unter Verschleierung (T36).** Die eingebauten L1-Modelle lasen den Rohtext samt der Fakt-Tokens
+`F:OBF`/`F:DEC`; Nullbreitenzeichen allein ließen sie 65–99 % gutartiger Texte melden
+([`scoreboard/model-obfuscation-raw-text.md`](scoreboard/model-obfuscation-raw-text.md), Stand vor T36). Seit T36 liest
+jedes Modell `TextViews::model_text` (dieselben Sichten wie die Regeln, einmal je Text gebaut: dekodierte Sichten an
+Stelle ihrer Quelle, gefaltete bzw. entschleierte Sicht, ohne Nullbreiten- und Tag-Zeichen); Carrier-Gate, Sprache,
+Carrier und Terme lesen denselben Text, `obfuscated`/`decoded` geben kein Modell-Token mehr. Training liest denselben
+Text über das `text_facts`-Beispiel (Feld `model_text`). Messung je Modell, sauber und unter fünf Verschleierungen:
+[`scoreboard/model-obfuscation.md`](scoreboard/model-obfuscation.md) (`model_obfuscation.py run`). Offen: jailbreak DE
+unter base64 (91,5 → 72,0 % TPR; Dekodierung auf 1024 Bytes je Fragment begrenzt) und Modelle, deren saubere
+Benign-Rate auf dieser Stichprobe schon über 0,1 % liegt (jailbreak, prompt_extraction EN, unsafe_action EN u. a.).
+
 **Kopf an Kopf auf den Benchmarks der Konkurrenz (E12).** Neben dem Mix misst `competitors.py` ARK auf den eigenen
 Sätzen der offenen Konkurrenten, nach deren Protokoll (Metrik und Schwellenregel des Papers), und stellt die
 veröffentlichten Zahlen daneben: [`scoreboard/competitors.md`](scoreboard/competitors.md) (`scoreboard.py
