@@ -205,3 +205,52 @@ neu gerechnet.
 
 Stand gegen das Ziel (100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit L1-Modellen): Regeln 167 ms, mit
 Modellen 239 ms — weiter nicht erreicht.
+
+### T38 Runde 3 (2026-11-27): L1-Modelle lesen nur eine begrenzte Sicht
+
+Gleiches Werkzeug, gleiche Maschine und gleiche Texte wie oben (`threat_profile`, 58 470 gutartige
+`train_dev`-Zeilen, Seed 38, mit `cascade-config.json`). Vorher = Head der zweiten Runde
+(`7a169f32`), Nachher = dieser Branch.
+
+Änderung: ein L1-Modell liest höchstens 16 KiB eines Texts (`ModelView`,
+`ark-core/src/detectors/text/window.rs`). Texte bis 16 KiB liest es ganz (Sicht = Text, Scores
+bitgleich); längere nur in Fenstern von 1 KiB je Seite um die Regel-Findings und Datenreferenzen
+des Scans, der Rest des Budgets vom Textanfang (ohne Finding also ein gedeckeltes Präfix). Spans
+der Findings werden auf die Sicht abgebildet; Findings außerhalb der Fenster fallen weg. Die Sicht
+wird je Scan einmal gebaut und mit den Facts geteilt (`SharedFacts` → `ModelInput`). Das
+Träger-Gate der drei trägergebundenen Klassen (`carries_class`) liest weiter den ganzen Text.
+
+| Größe | Summe L1-Modelle p50 ms vorher → nachher | Regeln + L1-Modelle p50 / p95 ms nachher |
+|---|---:|---:|
+| short (256 B) | 0.4 → 0.4 | 1.804 / 3.911 |
+| 4 KiB | 3.6 → 3.5 | 12.934 / 19.272 |
+| 100 KiB | 48.0 → 13.2 | 146.247 / 183.490 |
+
+L1-Modelle bei 100 KiB (nachher, p50 / p95 ms): tool_poisoning 4.10 / 4.28 (Träger-Gate über den
+ganzen Text), injection 3.23 / 3.63 (baut Sicht und Facts für alle), memory_poisoning 0.77 / 0.95,
+die übrigen je 0.69 / 0.73–0.85, agent_config_tampering 0.27 / 0.97. Die Modelle liegen damit
+unter dem 15-ms-Anteil; die Regeln (≈ 137–146 ms p50) bleiben der Engpass.
+
+Erste Versuchsvariante (verworfen, Commit `dd6dfd84`): Fenster zusätzlich um jeden lexikalischen
+Anker. Auf langen gutartigen Agenten-Transkripten (`approve_or_deny_de`) verdichtete das die
+Signalwörter und hob exfiltration/unsafe_action über den Detect-Schnitt (7 von 16 langen Zeilen
+mit anderer Entscheidung, 5 neue gutartige Treffer). Daher Fenster nur um Findings und Daten, der
+Rest vom Anfang.
+
+Qualität (Kaskade mit `cascade-config.json`, Release, Vorher gegen Nachher): von allen 109 632
+Zeilen unter `$ARK_L1_DEV_DATA` (`train_dev`, `generated`, `translated`, `report`) sind nur 16
+länger als 16 KiB (approve_or_deny_de 11, jackhhao_jailbreak 2, agentdojo, mosscap,
+polyguardprompts je 1); alle übrigen lesen die Modelle unverändert. Von den 16 ändert genau eine
+Zeile ihre Entscheidung: `approve_or_deny_de:0000141` (gutartig) jetzt `unsafe_action` detected.
+Keine Positive verliert eine Erkennung → TPR-Änderung 0,00 pp je Klasse; FPR unsafe_action +1
+gutartige Zeile. Holdout ist in der Sandbox nicht zugänglich.
+
+Stand gegen das Ziel (100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit L1-Modellen): Regeln ≈ 167 ms,
+mit Modellen 183 ms — weiter nicht erreicht. Offen: die Regeln selbst (Injection-Katalog 29 ms,
+injection_l1 im Scan 43 ms, unsafe_action 19 ms, jailbreak 11 ms, exfiltration 10 ms,
+toxic_language 10 ms) und 49 von 282 Threat- und Katalogregeln ohne Anker-Gate (10 der 98
+Threat-Regeln: `hc_howto_hazard`, `hc_evasion`, `ua_home_dir_delete`, `tp_secrecy`,
+`re_recursive_spawn`, `re_tool_flood`, `ex_send_directive`, `ex_secret_to_sink`,
+`ex_tool_param_egress`, `ex_dns_channel`; 39 der 184 Katalogregeln, vor allem
+`prompt_armor_95e532e` und die `skillspector.*`-Regeln), deren Alternationen Wörter außerhalb der
+Anker-Lexika tragen.
