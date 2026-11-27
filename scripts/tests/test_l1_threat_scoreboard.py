@@ -1036,3 +1036,20 @@ def test_confusion_counts_flags_per_true_label_on_measurement_and_report_rows():
     assert lines[-1] == "| benign (1) | 0.0 | 0.0 | 0.0 | 0.0 |"
     text = MODULE.render_confusion({"rules": table})
     assert "## rules: measurement part of the mix" in text and "## rules: report sets" in text
+
+
+def test_multi_label_gold_makes_a_row_a_positive_of_every_label_and_no_negative(tmp_path, monkeypatch):
+    rows = [row("px", 0, ["prompt_extraction"]), row("px", 1, ["prompt_extraction"]), row("px", 2, benign=True)]
+    freeze(tmp_path / "dev", rows)
+    sets = MODULE.split_sets(tmp_path / "dev")
+    monkeypatch.setattr(MODULE.MULTI_LABEL, "load",
+                        lambda: {"px:0000000": ["prompt_extraction", "instruction_injection"]})
+    mixed = MODULE.mix_rows(sets, [], {r["id"]: "measurement" for r in rows})
+    labels = {item.row["id"]: MODULE.mix_label(item.row, "instruction_injection") for item in mixed}
+    # The labelled extraction row is an injection positive, the other one stays a negative of injection.
+    assert labels == {"px:0000000": True, "px:0000001": False, "px:0000002": False}
+    predictions = {entry.set_id: tmp_path / f"{entry.set_id}.pred.jsonl" for entry in sets}
+    predictions["px"].write_text("".join(json.dumps(pred(r, 0.9, (), "instruction_injection")) + "\n" for r in rows))
+    report = MODULE.score_pairs(MODULE.load_pairs(sets, predictions), classes=["instruction_injection"])
+    cell = report["gated"]["instruction_injection"]["all"]["all"]
+    assert (cell["positives"], cell["negatives"]) == (1, 1)

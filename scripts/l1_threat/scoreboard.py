@@ -146,6 +146,8 @@ DLP_SCOREBOARD = sys.modules.get("_ark_l1_dlp_scoreboard") or _load_file(
 HARMFUL_SUBCLASS = sys.modules.get("_ark_l1_threat_harmful_subclass") or _load_file(
     "_ark_l1_threat_harmful_subclass", HERE / "harmful_subclass.py")
 MIX = sys.modules.get("_ark_l1_threat_mix") or _load_file("_ark_l1_threat_mix", HERE / "mix.py")
+MULTI_LABEL = sys.modules.get("_ark_l1_threat_multi_label") or _load_file(
+    "_ark_l1_threat_multi_label", HERE / "multi_label.py")
 
 REPORT_SCHEMA = "ark-l1-threat-scoreboard-v3"
 CASCADE_SCHEMA = "ark-l1-threat-cascade-v1"
@@ -357,9 +359,10 @@ def predict_split(sets: list[SetFile], out: Path, binary: Path, config: dict[str
 
 
 def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[dict[str, Any], dict[str, Any], str]]:
-    """``(row, prediction, role)`` of every row with its provenance (``generators.is_translated``); a set
-    without predictions is an error."""
+    """``(row, prediction, role)`` of every row with its provenance (``generators.is_translated``) and the classes of
+    the multi-label gold (``multi_label.apply``); a set without predictions is an error."""
     translated = GENERATORS.translated_sets(CORPORA.entity_map.load())
+    labels = MULTI_LABEL.load()
     pairs = []
     for entry in sets:
         path = predictions.get(entry.set_id)
@@ -369,7 +372,8 @@ def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[
         for row in BASELINES.read_rows(entry.path):
             if row["id"] not in preds:
                 raise ValueError(f"set {entry.set_id}: no prediction for row {row['id']}")
-            pairs.append(({**row, "translated": GENERATORS.is_translated(row, translated)}, preds[row["id"]], entry.role))
+            pairs.append(({**MULTI_LABEL.apply(row, labels), "translated": GENERATORS.is_translated(row, translated)},
+                          preds[row["id"]], entry.role))
     return pairs
 
 
@@ -1193,10 +1197,13 @@ def load_parts(mix_root: Path, sets: list[SetFile]) -> dict[str, Any]:
 
 
 def mix_rows(sets: list[SetFile], report_sets: list[SetFile], parts: dict[str, str]) -> list[MixRow]:
-    """The rows of the mix with a part (training rows of a built-in model have none) and every report-set row."""
-    rows = [MixRow(row, entry.set_id, parts[row["id"]]) for entry in sets for row in BASELINES.read_rows(entry.path)
-            if row["id"] in parts]
-    return rows + [MixRow(row, entry.set_id, "report") for entry in report_sets for row in BASELINES.read_rows(entry.path)]
+    """The rows of the mix with a part (training rows of a built-in model have none) and every report-set row, with
+    the classes of the multi-label gold (``multi_label.apply``)."""
+    labels = MULTI_LABEL.load()
+    rows = [MixRow(MULTI_LABEL.apply(row, labels), entry.set_id, parts[row["id"]]) for entry in sets
+            for row in BASELINES.read_rows(entry.path) if row["id"] in parts]
+    return rows + [MixRow(MULTI_LABEL.apply(row, labels), entry.set_id, "report") for entry in report_sets
+                   for row in BASELINES.read_rows(entry.path)]
 
 
 def mix_label(row: dict[str, Any], cls: str) -> bool | None:
