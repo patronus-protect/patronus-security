@@ -33,6 +33,13 @@ detector (owner decision 2026-11-20; out of scope, so no row at all):
   has a benign look-alike directive in the same frame (none in a ``no_twin_frames`` frame: a knowledge-base
   chunk asking the assistant to remember something is no benign input). Its rows count as their own source in the gold
   (``source_family`` in the manifest), apart from the other generator sets.
+* ``agent_casebook`` and ``advisory_shapes``: a third and a fourth independent family for the agent classes and
+  exfiltration, dev only (``agent_casebook.py``, ``advisory_shapes.py``). The casebook has its own carriers (team chat
+  exports, tickets, CI logs, cluster manifests, vector-store calls) and phrasing; the advisory shapes rewrite public
+  attack write-ups and advisories (named in ``modelled_on``) as the form of the attack. An attack is composed of one
+  lead, one action and one cover drawn independently, its look-alike of two benign parts in the same carrier (benign
+  tool docs, ordinary rules files and memory writes, bounded batch jobs, exports the user asked for); a repeated attack
+  text is drawn again. Each set counts as its own source in the gold.
 
 Source filter (owner decision 2026-11-21): carrier insertion and obfuscation slices take an attack row
 only if each of its classes is visible in the row's own text (``payload_visible``, one literal or
@@ -97,6 +104,13 @@ CORPORA = _load_file("_ark_l1_threat_prepare_corpora", HERE / "prepare_corpora.p
 SYNTH = _load_file("_ark_l1_presidio_synth_goldset", HERE.parent / "l1_presidio" / "synth_goldset.py")
 # The L1 context lexica (support terms such as outside sinks), shared with ark-core.
 LEXICONS = _load_file("_ark_l1_threat_lexicons", HERE / "lexicons.py")
+# Composed template tables of the dev-only families: class -> modelled_on, frames, attack parts, benign parts.
+COMPOSED = {
+    "agent_casebook": _load_file("_ark_l1_threat_agent_casebook", HERE / "agent_casebook.py").AGENT_CASEBOOK,
+    "advisory_shapes": _load_file("_ark_l1_threat_advisory_shapes", HERE / "advisory_shapes.py").ADVISORY_SHAPES,
+}
+# Draws per row before a composed family gives up on a new attack text.
+COMPOSED_TRIES = 20
 entity_map = CORPORA.entity_map
 Rng = SYNTH.Rng
 
@@ -107,9 +121,10 @@ SCHEMA = CORPORA.GENERATED_SCHEMA
 # class template as JSON; v6: no benign twin for obfuscation slices and two class template families; v7: carrier and
 # obfuscation rows only from attack rows whose classes are visible in their own text (``payload_visible``); v8: the
 # ``agent_scenarios`` generator (a second, independent family for the agent classes), ``source_family`` per set;
-# v9: no benign twin for ``agent_scenarios`` rows in a ``no_twin_frames`` frame (kb_chunk).
+# v9: no benign twin for ``agent_scenarios`` rows in a ``no_twin_frames`` frame (kb_chunk); v10: the dev-only
+# ``agent_casebook`` and ``advisory_shapes`` families; a set with count 0 is not written.
 # A frozen output of a lower version is regenerated without --force.
-GENERATOR_VERSION = 9
+GENERATOR_VERSION = 10
 DEV_SEED = "ark-l1-threat-e02-generators-dev-v1"
 SEED_FILE = ".generators-seed"
 READY = CORPORA.READY
@@ -120,17 +135,19 @@ TRANSLATION_DATASET = "runner_translations_de"
 # Input corpus directories under the split root and the corpus split they must hold.
 INPUTS = {"dev": ("train_dev", TRANSLATED_DIR), "holdout": ("holdout",)}
 INPUT_SPLIT = {"dev": "train_dev", "holdout": "holdout"}
-GENERATORS = ("carrier_insertion", "exfil_lookalikes", "obfuscation_slices", "class_templates", "agent_scenarios")
+GENERATORS = ("carrier_insertion", "exfil_lookalikes", "obfuscation_slices", "class_templates", "agent_scenarios",
+              "agent_casebook", "advisory_shapes")
 # Independent generator families: their set counts as its own source in the gold targets (``source_family`` in the
 # manifest); every other generator set counts as the one source ``generators`` (``gold.py``).
-SOURCE_FAMILIES = {"agent_scenarios": "agent_scenarios"}
+SOURCE_FAMILIES = {"agent_scenarios": "agent_scenarios", "agent_casebook": "agent_casebook", "advisory_shapes": "advisory_shapes"}
 # Version in each generator's RNG stream: the version that last changed its rows. Raise an entry only with
 # that generator's output, so a set whose rows stay the same keeps its texts (and its gold review) per row id.
-STREAMS = {"carrier_insertion": 3, "exfil_lookalikes": 2, "obfuscation_slices": 3, "class_templates": 3, "agent_scenarios": 1}
+STREAMS = {"carrier_insertion": 3, "exfil_lookalikes": 2, "obfuscation_slices": 3, "class_templates": 3, "agent_scenarios": 1,
+           "agent_casebook": 1, "advisory_shapes": 1}
 DEFAULT_COUNTS = {"dev": {"carrier_insertion": 600, "exfil_lookalikes": 300, "obfuscation_slices": 400, "class_templates": 500,
-                          "agent_scenarios": 640},
+                          "agent_scenarios": 640, "agent_casebook": 2000, "advisory_shapes": 2000},
                   "holdout": {"carrier_insertion": 900, "exfil_lookalikes": 450, "obfuscation_slices": 600, "class_templates": 750,
-                              "agent_scenarios": 960}}
+                              "agent_scenarios": 960, "agent_casebook": 0, "advisory_shapes": 0}}
 LANGUAGES = ("de", "en")
 MAX_PAYLOAD_CHARS = 600
 # Per mille of a translation sheet the runner re-reads by hand (at least CHECK_MIN rows).
@@ -913,6 +930,26 @@ def check_families() -> list[str]:
             for lang in LANGUAGES:
                 if set(table["attacks"][split].get(lang) or []) & set(table["lookalikes"][split].get(lang) or []):
                     problems.append(f"agent scenarios {name} {split} ({lang}): an attack is also a look-alike")
+    other_frames = {f for t in AGENT_SCENARIOS.values() for frames in t["frames"].values() for f in frames}
+    other_frames |= {f for t in CLASS_TEMPLATES.values() for split in ("dev", "holdout") for f in t[split]}
+    for generator, tables in COMPOSED.items():
+        for name, table in tables.items():
+            where = f"{generator} {name}"
+            if not str(table.get("modelled_on") or "").strip():
+                problems.append(f"{where}: modelled_on names no public example")
+            if set(table["frames"]) & other_frames:
+                problems.append(f"{where}: a frame reuses a family of another generator")
+            other_frames |= set(table["frames"])
+            for family, frame in table["frames"].items():
+                if set(frame) != set(LANGUAGES) or any("{x}" not in frame[lang] for lang in frame):
+                    problems.append(f"{where} {family}: needs a frame with {{x}} in {LANGUAGES}")
+            for part, size in (("attack", 3), ("benign", 2)):
+                if set(table[part]) != set(LANGUAGES) or any(len(table[part][lang]) != size or not all(table[part][lang])
+                                                              for lang in table[part]):
+                    problems.append(f"{where} {part}: needs {size} non-empty part lists in {LANGUAGES}")
+            for lang in LANGUAGES:
+                if {p for parts in table["attack"].get(lang, []) for p in parts} & {p for parts in table["benign"].get(lang, []) for p in parts}:
+                    problems.append(f"{where} ({lang}): an attack part is also a benign part")
     for table in (EXFIL_DIRECTIVES, EXFIL_LOOKALIKES):
         for split in ("dev", "holdout"):
             other = "holdout" if split == "dev" else "dev"
@@ -1285,6 +1322,39 @@ def agent_scenarios(r: Any, split: str, dataset: str, label_of: Callable[[list[s
     return rows
 
 
+def composed_family(r: Any, generator: str, dataset: str, label_of: Callable[[list[str]], str | None],
+                    count: int) -> list[dict[str, Any]]:
+    """Composed attacks of a ``COMPOSED`` family and their look-alikes in the same carrier, classes and languages in turn.
+
+    Carrier, number, attack parts and look-alike parts are drawn independently; an attack text the set already has is
+    drawn again (up to ``COMPOSED_TRIES`` times, then the row is left out), so every attack row is a distinct text."""
+    rows: list[dict[str, Any]] = []
+    tables = COMPOSED[generator]
+    names = sorted(tables)
+    seen: set[str] = set()
+    for index in range(count):
+        name = names[index % len(names)]
+        lang = LANGUAGES[(index // len(names)) % len(LANGUAGES)]
+        table = tables[name]
+        for _ in range(COMPOSED_TRIES):
+            family = r.choice(sorted(table["frames"]))
+            values = {"n": str(r.randint(10, 999))}
+            attack_text = " ".join(r.choice(part) for part in table["attack"][lang]).format(**values)
+            twin_text = " ".join(r.choice(part) for part in table["benign"][lang]).format(**values)
+            frame = table["frames"][family]
+            text = _insert(frame, lang, values, attack_text)
+            if text not in seen:
+                break
+        else:
+            continue
+        seen.add(text)
+        base = {**_base(dataset, generator, family, lang, None), "modelled_on": table["modelled_on"]}
+        attack = {**base, "classes": [name], "text": text}
+        twin = {**base, "text": _insert(frame, lang, values, twin_text)}
+        rows.extend(_pair(dataset, generator, index, label_of([name]), attack, twin))
+    return rows
+
+
 def translated_sets(emap: dict[str, Any]) -> frozenset[str]:
     """Sets whose German part is translated (``translated: true`` in the entity map)."""
     return frozenset(d["id"] for d in emap["datasets"] if d.get("translated"))
@@ -1323,10 +1393,11 @@ def generate_split(split: str, seed: str, inputs: list[dict[str, Any]], emap: di
         "obfuscation_slices": lambda r: obfuscation_slices(r, split, dataset, label_of, attacks, benign, counts["obfuscation_slices"]),
         "class_templates": lambda r: class_templates(r, split, dataset, label_of, counts["class_templates"]),
         "agent_scenarios": lambda r: agent_scenarios(r, split, dataset, label_of, counts["agent_scenarios"]),
+        **{name: (lambda r, name=name: composed_family(r, name, dataset, label_of, counts[name])) for name in COMPOSED},
     }
     files: dict[str, bytes] = {}
     sets: dict[str, Any] = {}
-    for name in GENERATORS:
+    for name in (name for name in GENERATORS if counts[name]):
         # One stream per generator: changing one count leaves the other sets unchanged.
         rows = built[name](Rng(f"{seed}/{split}/{name}/v{STREAMS[name]}"))
         data = CORPORA.BENIGN_CODE._jsonl(rows)
@@ -1345,6 +1416,8 @@ def generate_split(split: str, seed: str, inputs: list[dict[str, Any]], emap: di
             "wrappers": sorted(WRAPPERS[split]),
             "class_templates": {name: sorted(table[split]) for name, table in sorted(CLASS_TEMPLATES.items())},
             "agent_scenarios": {name: sorted(table["frames"][split]) for name, table in sorted(AGENT_SCENARIOS.items())},
+            **{generator: {name: sorted(table["frames"]) if counts[generator] else [] for name, table in sorted(tables.items())}
+               for generator, tables in COMPOSED.items()},
         },
     }
     # The holdout seed is secret; its manifest only commits to it.
