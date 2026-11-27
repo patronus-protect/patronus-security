@@ -835,6 +835,13 @@ Quellen je Agenten-Klasse und Sprache, `exfiltration` DE 551. Owner-Befehl zum E
 anderen Generator-Sätze bleiben byte-gleich). Offen: eine nicht-generierte, lizenzgeprüfte Quelle mit gelabelten
 Positiven für diese Klassen auf der Dev-Seite; die bekannten offenen nativen Sätze (MCPTox, MalSkillBench, MemForm,
 autoredclaw, MCP-Registry) sind Holdout.
+E14b (2026-11-27, Quellensuche ohne Ergebnis): keine offene, lizenzgeprüfte, nicht generierte Quelle mit
+echten Positiven für die Agenten-Klassen gefunden; die geprüften Kandidaten (drei kleine Apache-2.0-Sätze, davon zwei
+aus Vorlagen bzw. selbst als synthetisch markiert, Scanner-Audits ohne Text, CC0-Rules-Dateien nur als Benign,
+CC-BY-NC-Teaser) mit Lizenz, Revision und Grund stehen in `scoreboard/gold.md` („Findings (E14b …)“);
+`resource_exhaustion` hat gar keine offene Quelle. Kein Satz registriert, keine Neubewertung; die Aufgabe braucht
+eine Owner-Entscheidung (handgelabelter Dev-Satz aus echten Dateien und Advisories oder Annahme der
+Drittanbieter-Sätze).
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).

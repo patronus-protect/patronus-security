@@ -444,6 +444,42 @@ carrier for each.
   unsafe_action DE 135), `approve_or_deny_de` 72 rows, `agent_scenarios` 1,229 rows (generator version 9 dropped the
   look-alikes of `kb_chunk`); the earlier reviews of those sets stand.
 
+## Findings (E14b: search for a real, non-generator source for the agent classes, 2026-11-27)
+
+No set added; the counts above are unchanged. The agent classes still have 0 native dev positives in either
+language (table "Dev targets per class and language"). Searched: the Hugging Face dataset index (tool poisoning, MCP
+security and injection, memory poisoning and injection, rules and agent-config files, CLAUDE.md and AGENTS.md, rug
+pull, unbounded consumption, agent loops, skills) and the GitHub repositories the cards point to. Candidates opened,
+with licence and the revision looked at; none was registered:
+
+| Set | Licence, revision | Classes | Why not a native source |
+|---|---|---|---|
+| `fevziegeyurtsevenler/mcp-tool-poisoning` | Apache-2.0, `9b7a108` | tool_poisoning (exfiltration) | 25 rows, every benign description is the placeholder "<Tool> — performs its stated function." and every poisoned one "<Tool>. <instruction>": template output, and the benign side is no real counterpart |
+| `msaleme/mcp-tool-poisoning-fixtures` | Apache-2.0, `2cb0e0d` | tool_poisoning | 23 test fixtures of a red-team harness ("ground truth by construction"): 3 poisoned tool definitions, 2 drift versions, 5 encoded strings; EN only and far below a measurable count |
+| `vgudur/memory-poisoning-attack-corpus` | Apache-2.0, `02a9255` | memory_poisoning, exfiltration | 75 rows, all 75 marked `source: synthetic` by the set itself; mostly injection and secret strings, not memory writes |
+| `CieveHe/mcp-security-benchmark` | MIT, `1654086` | – | 14 probe cases against live servers and their scorecards; the tool surfaces of five real servers are benign, no poisoned description |
+| `MCPShield/mcp-security-scan-2026` | CC-BY-4.0, `69f4f62` | – | 1,900 repository grades from a regex and LLM-judge scanner; findings hold rule id and title only, no text, and the labels are a detector's output |
+| `fevziegeyurtsevenler/skills-in-the-wild` | CC-BY-4.0, `39633a5` | (agent_config_tampering, tool_poisoning) | real Skills, MCP and rules files from GitHub (3,168 files by its card), but only paths and 742 scanner findings ship; the evidence lines are almost all scanner false positives (Greek symbols in formulas, "developer mode" in docs), the files carry each repository's own licence, and the labels are a scanner's |
+| `justrunme/airlock-agent-security-corpus` | MIT, `a8a4af1` | (unsafe_action) | proposed Python and bash actions for a policy gate: unsafe actions, none of the five classes |
+| `PatrickJS/awesome-cursorrules` (GitHub) | CC0-1.0 | – | real rules files, usable as benign agent-config hard negatives, but no positive |
+| `emgena/*` (tool poisoning, rules tampering, agent loops, memory injection) | CC-BY-NC-4.0 | all five | non-commercial teasers: report only at best |
+| `invariantlabs-ai/mcp-injection-experiments` (GitHub) | none | tool_poisoning | no licence; three example servers |
+
+- **resource_exhaustion: no open source at all** outside the non-commercial teasers; no public set has real
+  prompts or tool descriptions that drive an agent into unbounded loops or spend.
+- **Real-world positives for these classes are rare in the wild.** The one open audit of real agent extensions
+  (skills-in-the-wild) found no clear attack among its rules files; the open sets with real poisoned descriptions or
+  memory writes are the holdout sources (MCPTox, MalSkillBench, MemForm, autoredclaw, the MCP registry) and stay
+  there.
+- **What would close the gap (owner decision):** (1) a hand-labelled dev set built from real files: benign
+  counterparts from CC0 or MIT/Apache rules files and tool manifests (awesome-cursorrules, the MIT servers of
+  `modelcontextprotocol/servers`, whose descriptions may overlap the MCP registry holdout source, so leakage would
+  have to be checked), positives only from public incident reports and
+  advisories whose poisoned artefact is quoted verbatim (few per class, licence per advisory), or (2) accepting the
+  three Apache-2.0 sets above as third-party, non-ARK sources for tool_poisoning and memory_poisoning, knowing that
+  two of them are template or self-declared synthetic and that agent_config_tampering and resource_exhaustion stay
+  without one. Neither fits this task's accept as written.
+
 ## How this report is made
 
 ```bash
