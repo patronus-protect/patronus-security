@@ -733,6 +733,15 @@ Varianten) und jackhhao (lange Jailbreak-Prompts) brauchen mit einem 512-Token-F
 mehrere Stunden. Die Latenz der Referenzmodelle lief parallel zu den anderen Referenzläufen (ARK auf leerer
 Maschine), ist also zu ihren Ungunsten verzerrt; 86M fehlt dort.
 
+**Eine Zahl in jeder Zelle (E13).** Erreicht ein System die FPR-Stufe einer Tabelle nicht (mehr
+Kalibrier-Negative, als die Stufe erlaubt, teilen seinen Höchstwert), trägt die Zelle statt `n/r: budget` TPR / FPR
+am Schnitt der niedrigsten erreichbaren Stufe der festen Leiter 0,2 %, 0,5 %, 1 %, 2 %, 5 % oberhalb der
+Tabellenstufe (`scoreboard.ladder_cut`); auch dieser Schnitt kommt nur aus dem Kalibrier-Teil, gemessen wird am
+Mess-Teil und an den Report-Sätzen. Solche Zellen stehen kursiv und nennen ihre Stufe (`*41.2 / 0.18 @0.2%*`); sie
+sind keine 0,1-%-Zahlen, entscheidend bleiben die geraden Zellen der 0,1-%-Tabelle. Die beste Heuristik wird nur auf
+Schnitten der Tabellenstufe gewählt. `n/r: budget` bleibt nur, wenn keine Stufe der Leiter erreichbar ist;
+`n/r: not run` und `n/r: class` bleiben mit Grund.
+
 **Kaskade statt vollem Stack (Owner 2026-11-19, ersetzt die L1+L2-Messung aus E07).** Gemessen wird ark-core
 allein, und die Ebenen sind eine Kaskade: L1-Heuristik → L1-Modell → L3 (Wolf Defender für `injection`, mit
 seiner Standardschwelle); eine spätere Ebene läuft nur auf dem, was die früheren offen lassen. L2 gibt es nur in
