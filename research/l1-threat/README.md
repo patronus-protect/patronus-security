@@ -660,7 +660,11 @@ Prompt Guard 2 und ProtectAI v2 über onnxruntime (Entscheidung bei 0,5), dazu j
 Verschleierungen (Nullbreite, Unicode-Tags, Base64, Leetspeak, Homoglyphen) und in deutscher Übersetzung (eigene
 Übersetzung des Runners, `ark_authored`, 30 Positive je Benchmark mit englischen Zeilen in
 `competitors_de.yaml`; schon deutsche oder abgelehnte Zeilen fehlen) an derselben Entscheidung und die
-Latenz (p50/p95 bei 1 KiB und 100 KiB, Durchsatz) auf denselben Texten und derselben Maschine.
+Latenz (p50/p95 bei 1 KiB und 100 KiB, Durchsatz) auf denselben Texten und derselben Maschine. Offen: Die Referenzmodelle
+sind bisher nur auf deepset gemessen (Prompt Guard 2 22M und 86M, ProtectAI v2); PromptShield (rund 56 000 Texte mit
+Varianten) und jackhhao (lange Jailbreak-Prompts) brauchen mit einem 512-Token-Fenster nach dem anderen auf dieser CPU
+mehrere Stunden. Die Latenz der Referenzmodelle lief parallel zu den anderen Referenzläufen (ARK auf leerer
+Maschine), ist also zu ihren Ungunsten verzerrt; 86M fehlt dort.
 
 **Kaskade statt vollem Stack (Owner 2026-11-19, ersetzt die L1+L2-Messung aus E07).** Gemessen wird ark-core
 allein, und die Ebenen sind eine Kaskade: L1-Heuristik → L1-Modell → L3 (Wolf Defender für `injection`, mit
