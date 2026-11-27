@@ -974,11 +974,40 @@ tasks:
       the README and docs/ say in one sentence which DLP families are opt-in and show the rule ids that switch
       dumps on; the DLP dev scoreboard (scripts/l1_dlp) shows no regression and no new FP on its hard
       negatives; DLP 100 KiB p95 within budget (scripts/l1_dlp/latency.py)
+  # Owner, 2026-11-27: every cell gets a number. Where the 0.1% budget is not reachable on the calibration
+  # part (n/r: budget), report the TPR at the lowest FPR level that is reachable instead of n/r.
+  - id: E13
+    title: "A number in every cell: where 0.1% FPR is not reachable (n/r: budget), scoreboard.py reports TPR at the lowest reachable FPR level from a fixed ladder (0.2%, 0.5%, 1%, 2%, 5%) with that level named in the cell, for rules only, L1 model, cascade and every baseline"
+    type: eval-infra
+    deps: [E10b]
+    accept: >-
+      no n/r: budget cell remains in cascade.md, builtin-models.md, fasttext-all-classes.md and baseline.md;
+      each such cell shows TPR / measured FPR @ the ladder level whose cut came from the calibration part,
+      and the level is visible in the cell (e.g. 41.2 / 0.18 @0.2%); the 0.1% column stays the decisive one
+      and the fallback cells are marked so they are never read as 0.1% numbers; a unit test in scripts/tests
+      for the ladder (first reachable level wins, cut only from calibration); n/r stays only for systems that
+      were not run, with the reason
+  # Owner, 2026-11-27: the four agent classes have 11-53 measured positives per language from one or two
+  # synthetic generator families, so their 100% says little. More, and more varied, positives are needed.
+  - id: E14
+    title: "More positives for the agent classes: tool_poisoning, agent_config_tampering, memory_poisoning and resource_exhaustion (and exfiltration DE) have 11-53 measured positives per language from one or two synthetic generator families; build at least 300 dev positives per class and language from at least three independent sources, one of them not a generator"
+    type: eval-infra
+    deps: [E10b]
+    accept: >-
+      per class and language at least 300 dev positives and the matching hard negatives (benign tool and MCP
+      descriptions, real agent configs and rules files, ordinary memory or RAG writes, long but harmless
+      loops and batch jobs) from at least three independent sources: a third generator family with its own
+      carriers and phrasing (not a rewrite of the existing templates), attack write-ups and advisories
+      rewritten as goldens-style shapes (no working payloads), and at least one licence-checked open dataset
+      or real-world corpus (public MCP registry descriptions, rules files from open repositories) with
+      labelled positives; nothing from the holdout sources; gold spot-check per new set at <= 5% errors;
+      gold.md shows the new counts and sources; E10b's clean evaluation re-rendered on them, with the
+      measured positives per class and language in the report
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14]}
 
 recurring:
   - id: TRIAGE
