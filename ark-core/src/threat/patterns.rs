@@ -847,7 +847,7 @@ pub(super) fn sensitive_material_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?P<anchor_3>read|find|show|dump|retrieve|collect|print)\b(?:[ \t]+(?P<anchor_2>me|us|the|a|an|all|any|my|your|our|their|actual|real|raw|stored|available|current|aws)){0,4}[ \t]+(?:(?P<env>\.env)(?:[ \t,;:!?]|\.(?:[ \t]|$)|$)|(?P<anchor_1>\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+keys?\b|passwords?\b|credentials?\b|secret[ \t]+tokens?\b))",
+            r"\b(?P<anchor_3>read|find|show|dump|retrieve|collect|print)\b(?:[ \t]+(?P<anchor_2>me|us|the|a|an|all|any|my|your|our|their|actual|real|raw|stored|available|current|aws)){0,4}[ \t]+(?:(?P<env>\.env)(?:[ \t,;:!?]|\.(?:[ \t]|$)|$)|(?P<anchor_1>\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+keys?\b|passwords\b|credentials?\b|secret[ \t]+tokens?\b))",
         )
         .unwrap()
     })
@@ -857,7 +857,7 @@ pub(super) fn sensitive_material_passive_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?P<anchor_5>\.env\b|\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+keys?\b|passwords?\b|credentials?\b|secret[ \t]+tokens?\b)(?:[ \t]+(?P<anchor_4>file|files|value|values|contents?)){0,3}[ \t]+(?P<anchor_3>must|should|needs?[ \t]+to|has[ \t]+to|can[ \t]+be|please[ \t]+be)[ \t]+(?P<anchor_2>be[ \t]+)?(?P<anchor_1>read|found|shown|dumped|retrieved|collected|printed)\b|\b(?P<target_de>passwörter|passwoerter|zugangsdaten|private[ \t]+schl(?:ü|ue)ssel|api[ \t-]+(?:keys?|schl(?:ü|ue)ssel))\b[ \t]+(?P<obligation_de>müssen|muessen|sollen|sind)[ \t]+(?P<action_de>gelesen|gefunden|gezeigt|ausgegeben|abgerufen|gesammelt|gedruckt)(?:[ \t]+werden)?\b",
+            r"\b(?P<anchor_5>\.env\b|\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+keys?\b|passwords\b|credentials?\b|secret[ \t]+tokens?\b)(?:[ \t]+(?P<anchor_4>file|files|value|values|contents?)){0,3}[ \t]+(?P<anchor_3>must|should|needs?[ \t]+to|has[ \t]+to|can[ \t]+be|please[ \t]+be)[ \t]+(?P<anchor_2>be[ \t]+)?(?P<anchor_1>read|found|shown|dumped|retrieved|collected|printed)\b|\b(?P<target_de>passwörter|passwoerter|zugangsdaten|private[ \t]+schl(?:ü|ue)ssel|api[ \t-]+(?:keys?|schl(?:ü|ue)ssel))\b[ \t]+(?P<obligation_de>müssen|muessen|sollen|sind)[ \t]+(?P<action_de>gelesen|gefunden|gezeigt|ausgegeben|abgerufen|gesammelt|gedruckt)(?:[ \t]+werden)?\b",
         )
         .unwrap()
     })

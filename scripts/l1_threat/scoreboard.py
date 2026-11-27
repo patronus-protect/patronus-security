@@ -69,7 +69,8 @@ and DLP texts and the own DE/EN trigger-word hard negatives) and its row-wise sp
 calibration and measurement, without any row a built-in L1 model was trained on (``trained_keys``, matched by
 SHA-256 text key; the models are not retrained); ``fair`` scores rules only (the L1 score curve), the L1 model and
 the cascade (``decision_score``: their answer with the L1 model's logit), Prompt Guard 2 22M and 86M, ProtectAI v2
-and the best heuristic baseline (picked on the calibration part) on the same rows. For a class, the negatives are the benign rows and the positives of every other class. Every cut comes from
+and the best heuristic baseline (picked on the calibration part) on the same rows. For a class, the negatives are the benign rows and the positives of every other class (a row of the multi-label gold,
+``multi_label.py``, is a positive of each of its labels and never a negative of one). Every cut comes from
 the calibration part's negatives only, per class and language, at 0.1 % (decisive) and 1 % FPR; TPR, FPR and
 hard-negative FPR come from the measurement part and, at the same cut, from the report sets, which stay outside
 the mix; each cell names the sources behind its measured positives.
@@ -146,6 +147,8 @@ DLP_SCOREBOARD = sys.modules.get("_ark_l1_dlp_scoreboard") or _load_file(
 HARMFUL_SUBCLASS = sys.modules.get("_ark_l1_threat_harmful_subclass") or _load_file(
     "_ark_l1_threat_harmful_subclass", HERE / "harmful_subclass.py")
 MIX = sys.modules.get("_ark_l1_threat_mix") or _load_file("_ark_l1_threat_mix", HERE / "mix.py")
+MULTI_LABEL = sys.modules.get("_ark_l1_threat_multi_label") or _load_file(
+    "_ark_l1_threat_multi_label", HERE / "multi_label.py")
 
 REPORT_SCHEMA = "ark-l1-threat-scoreboard-v3"
 CASCADE_SCHEMA = "ark-l1-threat-cascade-v1"
@@ -357,9 +360,10 @@ def predict_split(sets: list[SetFile], out: Path, binary: Path, config: dict[str
 
 
 def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[dict[str, Any], dict[str, Any], str]]:
-    """``(row, prediction, role)`` of every row with its provenance (``generators.is_translated``); a set
-    without predictions is an error."""
+    """``(row, prediction, role)`` of every row with its provenance (``generators.is_translated``) and the classes of
+    the multi-label gold (``multi_label.apply``); a set without predictions is an error."""
     translated = GENERATORS.translated_sets(CORPORA.entity_map.load())
+    labels = MULTI_LABEL.load()
     pairs = []
     for entry in sets:
         path = predictions.get(entry.set_id)
@@ -369,7 +373,8 @@ def load_pairs(sets: list[SetFile], predictions: dict[str, Path]) -> list[tuple[
         for row in BASELINES.read_rows(entry.path):
             if row["id"] not in preds:
                 raise ValueError(f"set {entry.set_id}: no prediction for row {row['id']}")
-            pairs.append(({**row, "translated": GENERATORS.is_translated(row, translated)}, preds[row["id"]], entry.role))
+            pairs.append(({**MULTI_LABEL.apply(row, labels), "translated": GENERATORS.is_translated(row, translated)},
+                          preds[row["id"]], entry.role))
     return pairs
 
 
@@ -1193,10 +1198,13 @@ def load_parts(mix_root: Path, sets: list[SetFile]) -> dict[str, Any]:
 
 
 def mix_rows(sets: list[SetFile], report_sets: list[SetFile], parts: dict[str, str]) -> list[MixRow]:
-    """The rows of the mix with a part (training rows of a built-in model have none) and every report-set row."""
-    rows = [MixRow(row, entry.set_id, parts[row["id"]]) for entry in sets for row in BASELINES.read_rows(entry.path)
-            if row["id"] in parts]
-    return rows + [MixRow(row, entry.set_id, "report") for entry in report_sets for row in BASELINES.read_rows(entry.path)]
+    """The rows of the mix with a part (training rows of a built-in model have none) and every report-set row, with
+    the classes of the multi-label gold (``multi_label.apply``)."""
+    labels = MULTI_LABEL.load()
+    rows = [MixRow(MULTI_LABEL.apply(row, labels), entry.set_id, parts[row["id"]]) for entry in sets
+            for row in BASELINES.read_rows(entry.path) if row["id"] in parts]
+    return rows + [MixRow(MULTI_LABEL.apply(row, labels), entry.set_id, "report") for entry in report_sets
+                   for row in BASELINES.read_rows(entry.path)]
 
 
 def mix_label(row: dict[str, Any], cls: str) -> bool | None:
@@ -1372,7 +1380,9 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], source: str
              + (" (" + ", ".join(f"{source} {n}" for source, n in excluded.items()) + ")" if excluded else "")
              + ".", "",
              "For a class, the negatives are the benign rows (benign pool, hard benigns, PII and DLP texts, trigger-word "
-             "hard negatives) and the positives of every other class. Every cut comes from the calibration part's "
+             "hard negatives) and the positives of every other class; a row of the multi-label gold "
+             "(`research/l1-threat/labels/multi_label.jsonl`) is a positive of each of its labels and never a negative "
+             "of one of them. Every cut comes from the calibration part's "
              "negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, "
              f"the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. "
              f"`{NOT_RUN}`: the system was not measured (reason under Not measured). `{NO_CLASS}`: the system does not "
@@ -1470,6 +1480,62 @@ def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baselin
             "systems": systems, "missing": missing,
             "parts": {**{p: counted[p] for p in (*MIX.PARTS, "report")}, "rows": sum(counted[p] for p in MIX.PARTS),
                       "sources": len(sets)}}
+
+
+CONFUSION_FILE = "confusion.md"
+CONFUSION_PARTS = ("measurement", "report")
+
+
+def confusion(rows: list[MixRow], predictions: dict[str, dict[str, Any]],
+              classes: Iterable[str] = CLASSES) -> dict[str, dict[str, dict[str, Any]]]:
+    """Part -> true label -> rows and flags per class: how often each class's answer is ``detected`` (its detect cut)
+    on the rows of each true label (a row with two classes counts under both, a row flagged ``benign`` as ``benign``,
+    a row with neither, a reported-only label, not at all), on the mix's measurement part and the report sets. ``predictions`` maps a row id to its Core prediction."""
+    classes = list(classes)
+    table: dict[str, dict[str, dict[str, Any]]] = {part: {} for part in CONFUSION_PARTS}
+    for item in rows:
+        prediction = predictions.get(item.row["id"])
+        if item.part not in table or prediction is None:
+            continue
+        answers = prediction.get("cascade") or {}
+        flagged = [cls for cls in classes if answers.get(cls, NO_DECISION)["decision"] == "detected"]
+        for label in item.row["classes"] or (["benign"] if item.row["benign"] else []):
+            cell = table[item.part].setdefault(label, {"rows": 0, "flags": dict.fromkeys(classes, 0)})
+            cell["rows"] += 1
+            for cls in flagged:
+                cell["flags"][cls] += 1
+    return table
+
+
+def confusion_lines(table: dict[str, dict[str, Any]]) -> list[str]:
+    """One table: a row per true label (rows in brackets), a column per class's flag rate in percent."""
+    classes = list(next(iter(table.values()))["flags"]) if table else list(CLASSES)
+    labels = [label for label in (*classes, "benign") if label in table]
+    lines = ["| true label (rows) | " + " | ".join(classes) + " |", "|---|" + "---:|" * len(classes)]
+    for label in labels:
+        cell = table[label]
+        lines.append(f"| {label} ({cell['rows']}) | "
+                     + " | ".join(f"{100 * cell['flags'][cls] / cell['rows']:.1f}" for cls in classes) + " |")
+    return lines
+
+
+def render_confusion(tables: dict[str, dict[str, dict[str, dict[str, Any]]]], source: str | None = None,
+                     inputs: str | None = None) -> str:
+    """The confusion tables of every system (``rules``, ``l1_model``, ...) on the measurement part and the report
+    sets."""
+    lines = ["# Threat scoreboard: cross-class confusion", "",
+             "Generated by `scripts/l1_threat/scoreboard.py refresh`; do not edit by hand.", "",
+             *([source, ""] if source else []), *inputs_lines(inputs),
+             "Rows: the true labels of the rows (a row with two classes counts under each). Columns: the share of "
+             "those rows in percent that each class reports (`detected` at the class's detect cut: the heuristic "
+             "for rules only, the built-in L1 models at the cuts of `cascade-config.json` otherwise). The diagonal is "
+             "the class's recall; off the diagonal, a class may only report the rows of its allowed neighbours "
+             "(`research/l1-threat/README.md`, Klassengrenzen) and stays at its benign FPR budget elsewhere.", ""]
+    for system, table in tables.items():
+        for part in CONFUSION_PARTS:
+            title = "measurement part of the mix" if part == "measurement" else "report sets"
+            lines += [f"## {system}: {title}", "", *confusion_lines(table[part]), ""]
+    return "\n".join(lines)
 
 
 def baseline_reports(sets: list[SetFile], cache: Path) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
@@ -1772,6 +1838,15 @@ def refresh(tree: Path, since: str | None, dev: Path, cache: Path, baseline_cach
         predict_split(everything, directories[name], build.binary, config, jobs)
     report = fair_report(dev, cache / "mix", directories, baseline_cache)
     written = write_fair_files(report, tree / SCOREBOARD_DIR, f"{RENDERED_FROM} `{commit[:12]}` on the mix.", inputs)
+    rows = mix_rows(sets, report_sets, load_parts(cache / "mix", sets)["parts"])
+    tables = {}
+    for name, directory in directories.items():
+        found = core_predictions(everything, directory)
+        tables[name] = confusion(rows, {prediction["id"]: prediction for entry in everything
+                                        for prediction in BASELINES.read_rows(found[entry.set_id])})
+    if write_rendered(tree / SCOREBOARD_DIR / CONFUSION_FILE,
+                      render_confusion(tables, f"{RENDERED_FROM} `{commit[:12]}` on the mix.", inputs)):
+        written.append(CONFUSION_FILE)
     DLP_SCOREBOARD.prune(cache, builds)
     print(f"threat scoreboard refresh of {commit[:12]}: "
           + (f"rewrote {', '.join(str(SCOREBOARD_DIR / name) for name in written)}" if written else "numbers unchanged"))

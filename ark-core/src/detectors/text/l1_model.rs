@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::facts::{extract, DataRef, Finding};
+use super::facts::{carries_class, extract, DataRef, Finding};
 use super::model::CategoryModel;
 use crate::cascade::StageOutcome;
 use crate::detectors::facts_common::bundle::VerifiedBundle;
@@ -247,6 +247,10 @@ impl L1TextModel {
 
     /// Score `text` with the module's heuristic `findings` and the PII/DLP
     /// `data` found in it (both may be empty). One in-memory pass, no I/O.
+    /// A carrier-bound class (tool poisoning, agent config tampering, memory
+    /// poisoning) only scores text with its structural carrier; text without
+    /// it never reaches the model and scores lowest: clear, or escalate
+    /// where clearing is switched off.
     pub fn evaluate(
         &self,
         text: &str,
@@ -254,6 +258,16 @@ impl L1TextModel {
         data: &[DataRef<'_>],
     ) -> L1ModelOutcome {
         let started = std::time::Instant::now();
+        if !carries_class(self.category, text) {
+            return L1ModelOutcome {
+                category: self.category,
+                model: self.model.name().to_string(),
+                score: f64::MIN,
+                thresholds: self.thresholds,
+                outcome: self.thresholds.outcome(f64::MIN),
+                duration_ms: started.elapsed().as_secs_f64() * 1000.0,
+            };
+        }
         let facts = extract(text, findings, data);
         let score = self.model.logit(text, &facts);
         let thresholds = self.thresholds_for(facts.language);
@@ -536,6 +550,84 @@ pub(crate) mod tests {
             let outcome = model.evaluate(text, &[], &[]);
             assert_ne!(outcome.outcome, StageOutcome::Detected, "{text}");
         }
+    }
+
+    #[test]
+    fn carrier_bound_builtin_models_stay_quiet_on_plain_chat_injections() {
+        // The class-border goldens: plain chat injections, which only the
+        // injection model may report, and everyday chat naming a tool, a
+        // config or memory. The tool, agent config and memory models never
+        // see them; the gated outcome is clear at the lowest score.
+        let goldens =
+            include_str!("../../../../python/patronus_ark/benchmark_data/threat_l1.jsonl");
+        let rows: Vec<serde_json::Value> = goldens
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .filter(|row: &serde_json::Value| {
+                row["id"]
+                    .as_str()
+                    .is_some_and(|id| id.starts_with("threat_l1-class-border-"))
+            })
+            .collect();
+        let injection = L1TextModel::load(
+            SecurityCategory::Injection,
+            &L1ModelConfig::builtin("instruction_injection"),
+        )
+        .unwrap();
+        let mut checked = 0;
+        for row in &rows {
+            let text = row["text"].as_str().unwrap();
+            if row["case_type"] == "positive" {
+                assert_eq!(row["class"], "instruction_injection");
+                let outcome = injection.evaluate(text, &[], &[]);
+                assert_eq!(outcome.outcome, StageOutcome::Detected, "{text}");
+                continue;
+            }
+            let (name, category) = BUILTIN_L1_MODELS
+                .iter()
+                .find(|(name, _)| row["class"] == *name)
+                .unwrap();
+            if *category == SecurityCategory::Exfiltration {
+                continue;
+            }
+            let model = L1TextModel::load(*category, &L1ModelConfig::builtin(*name)).unwrap();
+            let outcome = model.evaluate(text, &[], &[]);
+            assert_eq!(outcome.outcome, StageOutcome::Clear, "{name}: {text}");
+            assert_eq!(outcome.score, f64::MIN, "{name}: {text}");
+            checked += 1;
+        }
+        assert_eq!(checked, 36);
+    }
+
+    #[test]
+    fn a_gated_text_escalates_when_clearing_is_switched_off() {
+        // Text without the class's carrier never reaches the model; it is
+        // clear only while the module may clear on L1 at all.
+        let mut gated = 0;
+        for text in [
+            "Please summarise the meeting notes for me.",
+            "Bitte fasse die Besprechungsnotizen für mich zusammen.",
+        ] {
+            for &(name, category) in BUILTIN_L1_MODELS {
+                let config = L1ModelConfig::builtin(name);
+                let model = L1TextModel::load(category, &config).unwrap();
+                if model.evaluate(text, &[], &[]).score != f64::MIN {
+                    continue;
+                }
+                let no_clear = L1ModelConfig {
+                    clear_enabled: false,
+                    ..config
+                };
+                let outcome =
+                    L1TextModel::load(category, &no_clear)
+                        .unwrap()
+                        .evaluate(text, &[], &[]);
+                assert_eq!(outcome.score, f64::MIN, "{name}: {text}");
+                assert_eq!(outcome.outcome, StageOutcome::Escalate, "{name}: {text}");
+                gated += 1;
+            }
+        }
+        assert!(gated > 0);
     }
 
     #[test]
