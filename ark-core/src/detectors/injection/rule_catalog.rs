@@ -561,7 +561,10 @@ fn push_regex_matches<'a>(
 ) {
     let rule = &compiled.catalog.rules[rule_index];
     let mut at = 0;
-    while let Some(captures) = word_boundary::captures_at(regex, relaxed, text, at) {
+    while let Some(captures) = (at <= text.len())
+        .then(|| word_boundary::captures_at(regex, relaxed, text, at))
+        .flatten()
+    {
         let matched = captures.get(0).unwrap();
         at = if matched.is_empty() {
             match text[matched.end()..].chars().next() {
