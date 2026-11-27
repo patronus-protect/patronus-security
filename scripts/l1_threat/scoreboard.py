@@ -1224,10 +1224,27 @@ def mix_cut(negatives: list[float], target: float) -> float:
     return math.nextafter(0.0, math.inf) if cut is None else cut
 
 
+# FPR levels a cell falls back to, lowest first, when its own level is not reachable.
+FPR_LADDER = (0.002, 0.005, 0.01, 0.02, 0.05)
+
+
+def ladder_cut(negatives: list[float], top: float, target: float) -> tuple[float, float, bool]:
+    """``(level, cut, reachable)``: the cut at ``target`` FPR of the calibration ``negatives`` when some calibration
+    score (``top`` is the highest) reaches it, else at the first level of ``FPR_LADDER`` above ``target`` that is
+    reachable; ``reachable`` is False (at ``target``) when no level is."""
+    for level in (target, *(level for level in FPR_LADDER if level > target)):
+        cut = mix_cut(negatives, level)
+        # Unreachable: more calibration negatives than the level allows share the system's top score.
+        if cut <= top:
+            return level, cut, True
+    return target, mix_cut(negatives, target), False
+
+
 def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes: Iterable[str]) -> dict[str, Any]:
-    """Per class, language and FPR level: the cut from the calibration part's negatives only, TPR, FPR and
-    hard-negative FPR on the measurement part at that cut, the same on the report sets, the TPR on the calibration
-    part (used only to pick the best heuristic) and the number of sources behind the measured positives.
+    """Per class, language and FPR level: the cut from the calibration part's negatives only (at the first reachable
+    level of ``ladder_cut``, named under ``level``), TPR, FPR and hard-negative FPR on the measurement part at that
+    cut, the same on the report sets, the TPR on the calibration part (used only to pick the best heuristic) and the
+    number of sources behind the measured positives.
     ``scores``: row id -> class -> score of one system (a missing row or class scores 0)."""
     part = np.asarray([r.part for r in rows])
     language_of = np.asarray([r.row.get("language") or "unknown" for r in rows])
@@ -1241,16 +1258,18 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
         values = np.asarray([float(scores.get(r.row["id"], {}).get(cls, 0.0)) for r in rows])
         for language in LANGUAGES:
             in_language = np.ones(len(rows), dtype=bool) if language == "all" else language_of == language
-            calibration_neg = values[negative & in_language & (part == "calibration")]
+            calibration = in_language & (part == "calibration")
+            calibration_neg = values[negative & calibration]
             if not len(calibration_neg):
                 continue
+            # Reachability looks at calibration scores only, so held-out rows never move the level or the cut.
+            top = float(values[calibration].max())
             measured = positive & in_language & (part == "measurement")
             cell: dict[str, Any] = {"sources": len(set(source[measured].tolist()))}
             for fpr in FPRS:
-                cut = mix_cut(calibration_neg.tolist(), fpr)
+                level, cut, reachable = ladder_cut(calibration_neg.tolist(), top, fpr)
                 hit = values >= cut
-                # Unreachable: more calibration negatives than the budget share the system's top score.
-                entry: dict[str, Any] = {"cut": cut, "reachable": bool(cut <= values.max())}
+                entry: dict[str, Any] = {"cut": cut, "level": f"{level:g}", "reachable": reachable}
                 for name in ("calibration", "measurement", "report"):
                     scope = in_language & (part == name)
                     pos, neg, hb = scope & positive, scope & negative, scope & negative & hard
@@ -1302,13 +1321,15 @@ def cached_scores(sets: list[SetFile], cache: Path, baseline_id: str) -> tuple[d
 
 
 def best_of(candidates: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """Per class and language the candidate with the highest calibration-part TPR at 0.1 % FPR (then 1 %); the
-    measurement part never picks it. Each picked cell names its candidate under ``system``."""
+    """Per class and language the candidate with the highest calibration-part TPR at 0.1 % FPR (then 1 %; a cut from
+    a higher ladder level counts as 0); the measurement part never picks it. Each picked cell names its candidate
+    under ``system``."""
     out: dict[str, Any] = {}
     for name, cells in sorted(candidates.items()):
         for cls, languages in cells.items():
             for language, cell in languages.items():
-                rank = tuple(cell[fpr]["calibration"]["tpr"] or 0.0 for fpr in GATE_FPRS[::-1])
+                rank = tuple((cell[fpr]["calibration"]["tpr"] or 0.0) if cell[fpr]["level"] == fpr else 0.0
+                             for fpr in GATE_FPRS[::-1])
                 current = out.get(cls, {}).get(language)
                 if current is None or rank > current[0]:
                     out.setdefault(cls, {})[language] = (rank, {**cell, "system": name})
@@ -1318,17 +1339,19 @@ def best_of(candidates: dict[str, dict[str, Any]]) -> dict[str, Any]:
 FAIR_SYSTEMS = (("rules", "rules only"), ("l1_model", "L1 model"), ("cascade", "cascade"),
                 ("prompt_guard_2_22m", "Prompt Guard 2 22M"), ("prompt_guard_2_86m", "Prompt Guard 2 86M"),
                 ("protectai_v2", "ProtectAI v2"), ("heuristic", "best heuristic"))
-# Why a cell has no number: the system was not measured, does not score the class, or cannot reach the budget.
+# Why a cell has no number: the system was not measured, does not score the class, or reaches no level of the ladder.
 NOT_RUN, NO_CLASS, NO_BUDGET = "n/r: not run", "n/r: class", "n/r: budget"
 
 
-def _tpr_fpr(part: dict[str, Any], reachable: bool = True) -> str:
-    """``TPR / FPR`` in percent; the FPR with two decimals, so 0.1 % budgets stay readable; ``NO_BUDGET`` when the
-    budget is not reachable."""
-    if not reachable:
+def _tpr_fpr(part: dict[str, Any], fpr: str, entry: dict[str, Any]) -> str:
+    """``TPR / FPR`` in percent of ``part`` of a cell's ``entry`` at level ``fpr``; the FPR with two decimals, so
+    0.1 % budgets stay readable. A cut from a higher ladder level names it and is set in italics
+    (``*41.2 / 0.18 @0.2%*``); ``NO_BUDGET`` when no level is reachable."""
+    if not entry["reachable"]:
         return NO_BUDGET
-    fpr = "–" if part["fpr"] is None else f"{part['fpr'] * 100:.2f}"
-    return f"{_pct(part['tpr'])} / {fpr}"
+    measured = "–" if part["fpr"] is None else f"{part['fpr'] * 100:.2f}"
+    text = f"{_pct(part['tpr'])} / {measured}"
+    return text if entry["level"] == fpr else f"*{text} @{_fpr_label(entry['level'])}*"
 
 
 def fair_lines(report: dict[str, Any], fpr: str) -> list[str]:
@@ -1356,7 +1379,7 @@ def fair_lines(report: dict[str, Any], fpr: str) -> list[str]:
                         continue
                     p = cell[fpr][part]
                     picked = f" ({cell['system']})" if "system" in cell and part == "measurement" else ""
-                    values.append(f"{_tpr_fpr(p, cell[fpr]['reachable'])}{picked}")
+                    values.append(f"{_tpr_fpr(p, fpr, cell[fpr])}{picked}")
             lines.append("| " + " | ".join(values) + " |")
     return lines
 
@@ -1386,8 +1409,13 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], source: str
              "negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, "
              f"the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. "
              f"`{NOT_RUN}`: the system was not measured (reason under Not measured). `{NO_CLASS}`: the system does not "
-             f"score the class. `{NO_BUDGET}`: the budget is not reachable (more calibration negatives than the budget "
-             "share the system's top score, e.g. heuristic detections of another class's positives).",
+             "score the class. Where a system cannot reach the table's FPR level (more calibration negatives than the "
+             "level allows share its top score, e.g. heuristic detections of another class's positives), the cell "
+             "takes the cut of the lowest reachable level of the ladder "
+             + ", ".join(_fpr_label(f"{level:g}") for level in FPR_LADDER)
+             + " above it, again from the calibration part only, and names that level in italics (`*41.2 / 0.18 "
+             "@0.2%*`): such a cell is not a number at the table's level, and only plain cells of the 0.1% table "
+             f"count as 0.1% results. `{NO_BUDGET}`: no level of the ladder is reachable.",
              ""]
     if report["short_sources"]:
         lines += ["Sources too small to reach every part: " + ", ".join(report["short_sources"]) + ".", ""]

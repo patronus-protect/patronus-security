@@ -979,6 +979,7 @@ tasks:
   # Owner, 2026-11-27: every cell gets a number. Where the 0.1% budget is not reachable on the calibration
   # part (n/r: budget), report the TPR at the lowest FPR level that is reachable instead of n/r.
   - id: E13
+    status: done
     title: "A number in every cell: where 0.1% FPR is not reachable (n/r: budget), scoreboard.py reports TPR at the lowest reachable FPR level from a fixed ladder (0.2%, 0.5%, 1%, 2%, 5%) with that level named in the cell, for rules only, L1 model, cascade and every baseline"
     type: eval-infra
     deps: [E10b]
