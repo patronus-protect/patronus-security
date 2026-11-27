@@ -211,6 +211,37 @@ def test_system_result_scores_the_benchmark_classes_and_the_obfuscation_drop():
     assert [v["text"] for v in MODULE.variants([{"id": "p", "text": "hi", "positive": True}])][2] == "aGk="
 
 
+def test_the_model_backed_system_flags_by_the_cascade_decision():
+    # The L1 model decides a row the heuristic left undetected: `flagged` (L1 heuristic) is empty, the cascade's
+    # final decision is `detected`, and that decision is the model-backed system's flag.
+    model = {"l1": "none", "l1_score": 0.2, "decision": "detected", "decided_by": "l1_model", "score": 3.0}
+    clear = {"l1": "none", "l1_score": 0.1, "decision": "clear", "decided_by": "l1_model", "score": -3.0}
+    rows = [{"id": "p", "positive": True}, {"id": "n", "positive": False}]
+    predictions = {"p": {"scores": {"jailbreak": 0.2}, "flagged": [], "cascade": {"jailbreak": model}},
+                   "n": {"scores": {"jailbreak": 0.1}, "flagged": [], "cascade": {"jailbreak": clear}}}
+    for kind in MODULE.OBFUSCATION_KINDS:
+        predictions[f"p~{kind}"] = {"scores": {}, "flagged": [],
+                                    "cascade": {"jailbreak": model if kind == "leetspeak" else clear}}
+    out = MODULE.system_result(benchmark(), rows, predictions, curve=False)
+    assert out["f1"]["f1"] == 1.0
+    assert out["drops"]["leetspeak"] == 0.0 and out["drops"]["base64"] == 1.0
+    # Rules only keeps the L1 heuristic's flags.
+    assert MODULE.system_result(benchmark(), rows, predictions, curve=True)["f1"]["f1"] == 0.0
+
+
+def test_the_result_cache_key_follows_the_system_configs(tmp_path, monkeypatch):
+    binary = tmp_path / "predictor"
+    binary.write_bytes(b"")
+    key = MODULE.result_key(benchmark(), binary, [])
+    assert MODULE.result_key(benchmark(), binary, []) == key
+    systems = MODULE.run_systems()
+    changed = copy.deepcopy(systems)
+    changed["l1_model"]["changed"] = True
+    monkeypatch.setattr(MODULE, "run_systems", lambda: changed)
+    assert MODULE.result_key(benchmark(), binary, []) != key
+    assert MODULE.result_key(benchmark(), None, []) != key
+
+
 class FakeReference:
     id = "prompt_guard_2_22m"
     classes = ["instruction_injection", "jailbreak"]

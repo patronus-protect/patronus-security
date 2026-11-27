@@ -269,14 +269,17 @@ def predict(rows: list[dict[str, Any]], binary: Path, config: dict[str, Any], wo
 def system_result(entry: dict[str, Any], rows: list[dict[str, Any]], predictions: dict[str, dict[str, Any]],
                   curve: bool) -> dict[str, Any]:
     """Protocol result of one system on one benchmark, with the TPR drop under each obfuscation; the score of a row
-    is the highest over the benchmark's classes, of the L1 score curve (``curve``) or of the cascade's answer."""
+    is the highest over the benchmark's classes, of the L1 score curve (``curve``) or of the cascade's answer, and a
+    row is flagged by L1's detections (``curve``) or by the cascade's final decision."""
     def score(row_id: str) -> float:
         p = predictions[row_id]
         return max(float((p.get("scores") or {}).get(cls, 0.0)) if curve else
                    SCOREBOARD.decision_score(SCOREBOARD._stage(p, cls)) for cls in entry["classes"])
 
     def flag(row_id: str) -> bool:
-        return any(cls in (predictions[row_id].get("flagged") or []) for cls in entry["classes"])
+        p = predictions[row_id]
+        return any(cls in (p.get("flagged") or []) if curve else SCOREBOARD._stage(p, cls)["decision"] == "detected"
+                   for cls in entry["classes"])
 
     pos = [r["id"] for r in rows if r["positive"]]
     neg = [r["id"] for r in rows if not r["positive"]]
@@ -356,6 +359,13 @@ def latency(texts: list[str], binary: Path, work: Path) -> dict[str, Any]:
     return out
 
 
+def result_key(entry: dict[str, Any], binary: Path | None, references: list[Any]) -> str:
+    """Cache key of one benchmark's result: the benchmark, every system's config (so a changed calibration is
+    measured again), the predictor build and the reference classifiers."""
+    inputs = [entry, run_systems() if binary else {}, binary and binary.stat().st_mtime_ns, [m.id for m in references]]
+    return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
 def run(registry: dict[str, Any], binary: Path | None, sources: Path, work: Path, offline: bool = False,
         references: list[Any] = (), only: set[str] | None = None) -> dict[str, Any]:
     """Every live benchmark through every ``run_systems`` system and every reference classifier (``references``,
@@ -371,10 +381,7 @@ def run(registry: dict[str, Any], binary: Path | None, sources: Path, work: Path
     for entry in sorted(live, key=lambda e: len(benchmark_rows(e, registry, sources, offline))):
         rows = benchmark_rows(entry, registry, sources, offline)
         texts += [row["text"] for row in rows]
-        inputs = [entry, sorted(run_systems()) if binary else [], binary and binary.stat().st_mtime_ns,
-                  [m.id for m in references]]
-        key = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode("utf-8")).hexdigest()[:16]
-        done = work / f"{entry['id']}-{key}.json"
+        done = work / f"{entry['id']}-{result_key(entry, binary, references)}.json"
         if done.is_file():
             results["benchmarks"][entry["id"]] = json.loads(done.read_text(encoding="utf-8"))
             continue
