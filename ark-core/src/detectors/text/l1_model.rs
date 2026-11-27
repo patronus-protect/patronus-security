@@ -11,13 +11,16 @@
 //! threshold, its `1pct_fpr` cut the clear threshold; both can be overridden,
 //! and clearing can be switched off.
 
+use std::borrow::{Borrow, Cow};
+use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use super::facts::{carries_class, extract, DataRef, Finding};
+use super::facts::{carries_class, extract, DataRef, Finding, TextFacts};
 use super::model::CategoryModel;
+use super::window::ModelView;
 use crate::cascade::StageOutcome;
 use crate::detectors::facts_common::bundle::VerifiedBundle;
 use crate::detectors::facts_common::thresholds::L1Thresholds;
@@ -246,16 +249,26 @@ impl L1TextModel {
     }
 
     /// Score `text` with the module's heuristic `findings` and the PII/DLP
-    /// `data` found in it (both may be empty). One in-memory pass, no I/O.
-    /// A carrier-bound class (tool poisoning, agent config tampering, memory
-    /// poisoning) only scores text with its structural carrier; text without
-    /// it never reaches the model and scores lowest: clear, or escalate
-    /// where clearing is switched off.
+    /// `data` found in it (both may be empty). One in-memory pass over the
+    /// bounded view of the text ([`ModelView`]), no I/O.
     pub fn evaluate(
         &self,
         text: &str,
         findings: &[Finding<'_>],
         data: &[DataRef<'_>],
+    ) -> L1ModelOutcome {
+        self.evaluate_with(text, || ModelInput::of(text, findings, data))
+    }
+
+    /// Score `text` with the view and facts `input` gives, asked for only
+    /// when the model reads the text. A carrier-bound class (tool poisoning,
+    /// agent config tampering, memory poisoning) only scores text with its
+    /// structural carrier; text without it never reaches the model and
+    /// scores lowest: clear, or escalate where clearing is switched off.
+    pub fn evaluate_with<'v, 'f, F: Borrow<ModelInput<'v, 'f>>>(
+        &self,
+        text: &str,
+        input: impl FnOnce() -> F,
     ) -> L1ModelOutcome {
         let started = std::time::Instant::now();
         if !carries_class(self.category, text) {
@@ -268,8 +281,9 @@ impl L1TextModel {
                 duration_ms: started.elapsed().as_secs_f64() * 1000.0,
             };
         }
-        let facts = extract(text, findings, data);
-        let score = self.model.logit(text, &facts);
+        let input = input();
+        let ModelInput { view, facts } = input.borrow();
+        let score = self.model.logit(&view.text, facts);
         let thresholds = self.thresholds_for(facts.language);
         L1ModelOutcome {
             category: self.category,
@@ -278,6 +292,51 @@ impl L1TextModel {
             thresholds,
             outcome: thresholds.outcome(score),
             duration_ms: started.elapsed().as_secs_f64() * 1000.0,
+        }
+    }
+}
+
+/// What an L1 model reads of a text: its bounded view and the facts of that
+/// view, with the findings and data references the view holds.
+#[derive(Clone, Debug)]
+pub struct ModelInput<'t, 'f> {
+    pub view: ModelView<'t>,
+    pub facts: TextFacts<'f>,
+}
+
+impl<'t, 'f> ModelInput<'t, 'f> {
+    pub fn of(text: &'t str, findings: &[Finding<'f>], data: &[DataRef<'f>]) -> Self {
+        let view = ModelView::of(text, findings, data);
+        let facts = extract(&view.text, &view.findings(findings), &view.data(data));
+        Self { view, facts }
+    }
+}
+
+/// The input the L1 models of one scan read: built once, by the first model
+/// that runs, and shared by every later model on the same text with the same
+/// rule findings (the input depends on nothing else). Extraction is most of
+/// a model's cost, so eleven models cost about one extraction.
+#[derive(Default)]
+pub struct SharedFacts<'t> {
+    cached: OnceCell<(&'t str, Vec<Finding<'static>>, ModelInput<'t, 'static>)>,
+}
+
+impl<'t> SharedFacts<'t> {
+    /// The input of `text` with `findings`: the shared one when the first
+    /// model read the same text and findings, else built anew.
+    pub fn of(
+        &self,
+        text: &'t str,
+        findings: Vec<Finding<'static>>,
+    ) -> Cow<'_, ModelInput<'t, 'static>> {
+        let (cached_text, cached_findings, input) = self.cached.get_or_init(|| {
+            let input = ModelInput::of(text, &findings, &[]);
+            (text, findings.clone(), input)
+        });
+        if *cached_text == text && *cached_findings == findings {
+            Cow::Borrowed(input)
+        } else {
+            Cow::Owned(ModelInput::of(text, &findings, &[]))
         }
     }
 }
@@ -367,6 +426,70 @@ pub(crate) mod tests {
     use super::test_model::{bundle, SYNTHETIC, TEXT};
     use super::*;
     use crate::detectors::facts_common::bundle::write_test_bundle as write_bundle;
+
+    #[test]
+    fn shared_facts_score_every_model_as_its_own_extraction() {
+        let finding = Finding {
+            category: "exfiltration",
+            family: "markdown_image",
+            pattern: "ark.ex.image",
+            points: 45,
+            span: 0..9,
+        };
+        let shared = SharedFacts::default();
+        let other = "Bitte fasse die Notizen kurz zusammen.";
+        for (name, category) in BUILTIN_L1_MODELS {
+            let model = L1TextModel::load(*category, &L1ModelConfig::builtin(*name)).unwrap();
+            for (text, findings) in [
+                (TEXT, vec![finding.clone()]),
+                (TEXT, vec![]),
+                (other, vec![]),
+            ] {
+                let own = model.evaluate(text, &findings, &[]);
+                let with_shared = model.evaluate_with(text, || shared.of(text, findings.clone()));
+                assert_eq!(own.score.to_bits(), with_shared.score.to_bits(), "{name}");
+                assert_eq!(own.outcome, with_shared.outcome, "{name}");
+            }
+        }
+        // The first extraction is kept; another text or other findings get their own.
+        assert!(matches!(
+            shared.of(TEXT, vec![finding.clone()]),
+            Cow::Borrowed(_)
+        ));
+        assert!(matches!(shared.of(TEXT, vec![]), Cow::Owned(_)));
+        assert!(matches!(shared.of(other, vec![finding]), Cow::Owned(_)));
+    }
+
+    #[test]
+    fn long_text_is_scored_on_its_bounded_view_only() {
+        let model = L1TextModel::load(
+            SecurityCategory::Exfiltration,
+            &L1ModelConfig::builtin("exfiltration"),
+        )
+        .unwrap();
+        let filler = "Die Quartalszahlen liegen im Rahmen der Planung. ".repeat(3000);
+        let text = format!("{filler}{TEXT}{filler}");
+        let at = filler.len();
+        let finding = Finding {
+            category: "exfiltration",
+            family: "send",
+            pattern: "ark.ex.send",
+            points: 45,
+            span: at..at + TEXT.len(),
+        };
+        let view = ModelView::of(&text, std::slice::from_ref(&finding), &[]);
+        assert!(view.text.len() < text.len() / 4);
+        let facts = extract(
+            &view.text,
+            &view.findings(std::slice::from_ref(&finding)),
+            &[],
+        );
+        let outcome = model.evaluate(&text, &[finding], &[]);
+        assert_eq!(
+            outcome.score.to_bits(),
+            model.model.logit(&view.text, &facts).to_bits()
+        );
+    }
 
     #[test]
     fn loads_a_pinned_bundle_at_the_model_cuts() {

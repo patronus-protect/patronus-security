@@ -39,6 +39,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and `ark-distributed-protocol/` each carry its `LICENSE`, `LICENSE-COMMERCIAL.md` and
   `NOTICE`, and the `ark-api` and `ark-coordinator` images copy them from there. No package
   changes its license.
+- Prompt injection, jailbreak, prompt extraction, memory poisoning and exfiltration scan German
+  and other non-ASCII text much faster: their catalogue rules with a word boundary no longer fall
+  back to the slow regex engine at the first umlaut. On 100 KiB of German and English prose, a
+  scan of all eleven attack classes drops from about 354 ms to about 157 ms (median, rules only);
+  the injection rule catalogue alone from about 210 ms to about 30 ms. Matches and evidence are
+  unchanged.
+- The built-in L1 models of a cascade share one reading of the text: the facts they score
+  (language, carrier, context terms, rule findings) are extracted once per scan instead of once
+  per model, and the catalogue scoring of every class reuses the context scan its rules already
+  made. On 100 KiB of German and English prose the eleven L1 models together take about 50 ms
+  instead of about 175 ms (median); scores and decisions are bit for bit the same. Rust API:
+  `Cascade::l1_scan_answer` and `Cascade::l1_model_stage` take the scan's
+  `detectors::text::SharedFacts`, and `injection_l1::category_results` takes the prepared
+  `NativeText` instead of the bare text.
 - The opt-in attack classes scan German and other non-ASCII text much faster: a rule with a word
   boundary no longer falls back to the slow regex engine at the first umlaut. On 100 KiB windows
   of German prose, the ten opt-in attack classes together take about 40 ms (p95) instead of about
@@ -47,6 +61,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Detection changes
 
+- **Detection change (built-in L1 models, opt-in cascade, texts over 16 KiB):** an L1 model
+  reads at most 16 KiB of a text: windows of 1 KiB on each side of the rule findings and data
+  references, the rest filled from the start of the text (only the start when no rule fires).
+  Texts up to 16 KiB are read whole and score exactly as before. The models' cost no longer
+  grows with the text: on 100 KiB of German and English prose the eleven models together take
+  about 13 ms instead of about 48 ms (median). Scores of longer texts change; across our German
+  and English development rows, 1 of the 16 rows over 16 KiB changes its decision (a benign
+  agent transcript is now flagged as `unsafe_action`). Rust API: `L1TextModel::evaluate_with`
+  takes a `detectors::text::ModelInput` (the bounded `ModelView` and its facts), which
+  `SharedFacts::of` now returns.
 - **Detection change (crash fix):** the threat scan no longer fails on text where a `\u` escape marker is
   followed by a multi-byte character (for example a Cyrillic look-alike letter); the request used to end with
   a detector error instead of a result.
