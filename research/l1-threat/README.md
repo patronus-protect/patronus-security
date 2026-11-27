@@ -719,6 +719,14 @@ Text über das `text_facts`-Beispiel (Feld `model_text`). Messung je Modell, sau
 [`scoreboard/model-obfuscation.md`](scoreboard/model-obfuscation.md) (`model_obfuscation.py run`). Offen: jailbreak DE
 unter base64 (91,5 → 72,0 % TPR; Dekodierung auf 1024 Bytes je Fragment begrenzt) und Modelle, deren saubere
 Benign-Rate auf dieser Stichprobe schon über 0,1 % liegt (jailbreak, prompt_extraction EN, unsafe_action EN u. a.).
+Eine Aufbereitung je Text: `NativeText` hält die `TextViews` (dekodierte und gefaltete Sichten, Entschleierung lazy);
+die versteckten Sichten der Regeln, die Fakten (samt Kontext-Scan) und die Modelle lesen sie, und die Kaskade reicht
+die Aufbereitung des Regel-Scans an das Modell weiter (`L1TextModel::evaluate`, `Cascade::l1_scan_answer` nehmen
+`&NativeText`). E12-Benchmarks nach T36 (`competitors.py run`, Kaskade „ARK L1 model“, TPR-Verlust in Punkten,
+zw / tags / b64 / leet / homoglyph; vorher in [`scoreboard/competitors.md`](scoreboard/competitors.md)): deepset
+−6,1 / −0,4 / 0,0 / 0,0 / −6,1 (vorher −70,7 bei zw), jackhhao −1,5 / −1,8 / 14,0 / −2,0 / −1,8 (vorher −77,2 bei zw),
+OpenAI-Moderation 0,0 / −0,2 / 0,8 / 1,9 / 0,0, RP-Mod 0,0 / 0,0 / 0,1 / 0,4 / 0,0. Offen: base64 auf jackhhao
+(14,0 Punkte; lange Jailbreak-Prompts werden nur bis 1024 Bytes je Fragment dekodiert).
 
 **Kopf an Kopf auf den Benchmarks der Konkurrenz (E12).** Neben dem Mix misst `competitors.py` ARK auf den eigenen
 Sätzen der offenen Konkurrenten, nach deren Protokoll (Metrik und Schwellenregel des Papers), und stellt die
