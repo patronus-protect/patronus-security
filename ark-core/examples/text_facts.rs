@@ -18,7 +18,6 @@ use patronus_ark_core::{
     cascade::ScanGateMatrix,
     detectors::{
         text::extract_with,
-        text_views::TextViews,
         threat::{facts_findings, ThreatPipeline},
     },
     threat::NativeText,
@@ -45,8 +44,9 @@ fn main() -> io::Result<()> {
         let text = row["text"]
             .as_str()
             .ok_or_else(|| io::Error::other(format!("line {}: no text", number + 1)))?;
+        // One preparation per text, as in a scan: rules, facts and model text.
+        let prepared = NativeText::new(text);
         let detections: Vec<_> = if threat_findings {
-            let prepared = NativeText::new(text);
             SecurityCategory::ATTACK_CLASSES
                 .iter()
                 .map(|&category| {
@@ -60,12 +60,11 @@ fn main() -> io::Result<()> {
             .iter()
             .flat_map(|detection| facts_findings(&detection.details))
             .collect();
-        let views = TextViews::new(text);
-        let model_text = match views.model_text(text) {
+        let model_text = match prepared.model_text() {
             std::borrow::Cow::Owned(normalized) => Some(normalized),
             std::borrow::Cow::Borrowed(_) => None,
         };
-        let facts = extract_with(text, &views, &findings, &[]).to_json();
+        let facts = extract_with(&prepared, &findings, &[]).to_json();
         row["facts"] = facts;
         if let Some(model_text) = model_text {
             row["model_text"] = model_text.into();

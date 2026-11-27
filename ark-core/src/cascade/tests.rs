@@ -456,7 +456,7 @@ fn l1_model(name: &str, outcome: Option<StageOutcome>) -> L1TextModel {
     let config = bundle(name);
     let score = L1TextModel::load(SecurityCategory::Injection, &config)
         .unwrap()
-        .evaluate(TEXT, &[], &[])
+        .evaluate(&crate::threat::NativeText::new(TEXT), &[], &[])
         .score;
     let (detect, clear, clear_enabled) = match outcome {
         Some(StageOutcome::Detected) => (score - 1.0, score - 2.0, true),
@@ -487,7 +487,13 @@ fn run_with_model(
     use crate::detectors::text::l1_model::test_model::TEXT;
     let cascade = cascade(None);
     let stage = cascade.l1_stage(SecurityCategory::Injection, ScoreMode::Strict, [heuristic]);
-    let stage = cascade.l1_model_stage(stage, Some(model), TEXT, Vec::new(), &Default::default());
+    let stage = cascade.l1_model_stage(
+        stage,
+        Some(model),
+        &crate::threat::NativeText::new(TEXT),
+        Vec::new(),
+        &Default::default(),
+    );
     cascade
         .decide(
             &LayerExecution::default(),
@@ -734,7 +740,7 @@ fn every_escalation_signal_escalates() {
         let stage = cascade(None).l1_model_stage(
             stage,
             Some(&model),
-            crate::detectors::text::l1_model::test_model::TEXT,
+            &crate::threat::NativeText::new(crate::detectors::text::l1_model::test_model::TEXT),
             Vec::new(),
             &Default::default(),
         );

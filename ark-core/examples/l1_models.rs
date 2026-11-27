@@ -38,7 +38,12 @@ fn main() -> io::Result<()> {
             .ok_or_else(|| io::Error::other(format!("line {}: no text", number + 1)))?;
         let answers: Vec<_> = models
             .iter()
-            .map(|(name, model)| (*name, model.evaluate(text, &[], &[])))
+            .map(|(name, model)| {
+                (
+                    *name,
+                    model.evaluate(&patronus_ark_core::threat::NativeText::new(text), &[], &[]),
+                )
+            })
             .collect();
         let flagged: Vec<&str> = answers
             .iter()

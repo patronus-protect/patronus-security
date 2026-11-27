@@ -40,7 +40,11 @@ fn every_model_answers_alike_on_clean_and_obfuscated_text() {
             .iter()
             .find(|(name, _)| *name == str_of(&row, "model"))
             .expect("built-in model");
-        let answer = model.evaluate(str_of(&row, "text"), &[], &[]);
+        let answer = model.evaluate(
+            &patronus_ark_core::threat::NativeText::new(str_of(&row, "text")),
+            &[],
+            &[],
+        );
         let detected = answer.outcome == StageOutcome::Detected;
         if detected
             != row["expected_detected"]

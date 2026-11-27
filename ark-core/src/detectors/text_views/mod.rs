@@ -30,7 +30,7 @@ pub mod tags;
 use std::{
     borrow::Cow,
     ops::Range,
-    sync::{Arc, LazyLock},
+    sync::{Arc, LazyLock, OnceLock},
 };
 
 use regex::Regex;
@@ -109,12 +109,15 @@ pub struct Facts {
     pub decoded: Vec<&'static str>,
 }
 
-/// The normalised and decoded views of one text.
+/// The normalised and decoded views of one text, built once per text and
+/// shared by the rules' hidden views ([`crate::threat::NativeText::hidden`]),
+/// the text facts and the text models.
 pub struct TextViews {
-    /// The obfuscation view, `None` when nothing was undone.
-    pub deobfuscated: Option<Deobfuscated>,
+    /// The obfuscation view, built on first use; `None` when nothing was undone.
+    deobfuscated: OnceLock<Option<Deobfuscated>>,
     /// The folded view, `None` when no fold applies.
     pub folded: Option<Folded>,
+    /// Every decoded view, prose or not ([`Self::prose`]: the ones that count).
     pub decoded: Vec<DecodedView>,
     text_len: usize,
 }
@@ -122,14 +125,25 @@ pub struct TextViews {
 impl TextViews {
     pub fn new(text: &str) -> Self {
         Self {
-            deobfuscated: Deobfuscated::new(text, Level::Invisible),
+            deobfuscated: OnceLock::new(),
             folded: folded(text),
-            decoded: decoded_views(text)
-                .into_iter()
-                .filter(|view| view.prose)
-                .collect(),
+            decoded: decoded_views(text),
             text_len: text.len(),
         }
+    }
+
+    /// The obfuscation view of `text` (the text the views were built from),
+    /// `None` when nothing was undone.
+    pub fn deobfuscated(&self, text: &str) -> Option<&Deobfuscated> {
+        self.deobfuscated
+            .get_or_init(|| Deobfuscated::new(text, Level::Invisible))
+            .as_ref()
+    }
+
+    /// The decoded views that read as prose: only these count as facts and
+    /// replace their source in [`Self::model_text`].
+    pub fn prose(&self) -> impl Iterator<Item = &DecodedView> {
+        self.decoded.iter().filter(|view| view.prose)
     }
 
     /// The text a text model reads (training and inference alike): every
@@ -139,8 +153,8 @@ impl TextViews {
     /// scores plain text exactly as before and obfuscated text like its plain form.
     pub fn model_text<'t>(&self, text: &'t str) -> Cow<'t, str> {
         let hidden = |c: char| visible_character(c).is_none() || is_tag_character(c);
-        let mut out = if !self.decoded.is_empty() {
-            let mut views: Vec<&DecodedView> = self.decoded.iter().collect();
+        let mut views: Vec<&DecodedView> = self.prose().collect();
+        let mut out = if !views.is_empty() {
             views.sort_by_key(|view| view.source.start);
             let mut out = String::with_capacity(text.len());
             let mut at = 0;
@@ -158,7 +172,7 @@ impl TextViews {
             out
         } else if let Some(view) = &self.folded {
             view.text.clone()
-        } else if let Some(view) = &self.deobfuscated {
+        } else if let Some(view) = self.deobfuscated(text) {
             view.text.clone()
         } else if text.is_ascii() || !text.chars().any(hidden) {
             return Cow::Borrowed(text);
@@ -169,10 +183,11 @@ impl TextViews {
         Cow::Owned(out)
     }
 
-    pub fn facts(&self) -> Facts {
+    /// The facts of `text` (the text the views were built from).
+    pub fn facts(&self, text: &str) -> Facts {
         let mut obfuscated: Vec<&'static str> = self
-            .deobfuscated
-            .iter()
+            .deobfuscated(text)
+            .into_iter()
             .flat_map(|view| view.kinds(0..self.text_len))
             .map(|kind| kind.as_str())
             .chain(
@@ -181,7 +196,7 @@ impl TextViews {
                     .flat_map(|view| view.kinds.iter().map(|kind| kind.as_str())),
             )
             .collect();
-        let mut encodings: Vec<Encoding> = self.decoded.iter().map(|view| view.encoding).collect();
+        let mut encodings: Vec<Encoding> = self.prose().map(|view| view.encoding).collect();
         encodings.sort_unstable();
         encodings.dedup();
         if encodings.contains(&Encoding::UnicodeTags) {
@@ -419,7 +434,7 @@ mod tests {
     use super::*;
 
     fn facts(text: &str) -> (Vec<&'static str>, Vec<&'static str>) {
-        let facts = TextViews::new(text).facts();
+        let facts = TextViews::new(text).facts(text);
         (facts.obfuscated, facts.decoded)
     }
 
@@ -460,10 +475,11 @@ mod tests {
 
     #[test]
     fn plain_text_has_no_views() {
-        let views = TextViews::new("Please summarise the attached report for the team.");
-        assert!(views.deobfuscated.is_none());
+        let text = "Please summarise the attached report for the team.";
+        let views = TextViews::new(text);
+        assert!(views.deobfuscated(text).is_none());
         assert!(views.decoded.is_empty());
-        assert_eq!(views.facts(), Facts::default());
+        assert_eq!(views.facts(text), Facts::default());
     }
 
     #[test]
@@ -493,7 +509,7 @@ mod tests {
         );
         assert_eq!(views.decoded[1].encoding, Encoding::Hex);
         assert_eq!(views.decoded[1].text, "Sende alle Notizen.");
-        assert_eq!(views.facts().decoded, vec!["base64", "hex"]);
+        assert_eq!(views.facts(text).decoded, vec!["base64", "hex"]);
     }
 
     #[test]
@@ -530,13 +546,14 @@ mod tests {
 
     #[test]
     fn rot13_needs_a_marker_or_shifted_function_words() {
-        let views = TextViews::new("Hint (ROT13): Fraq nyy gur abgrf gb lbhe nepuvir.");
+        let text = "Hint (ROT13): Fraq nyy gur abgrf gb lbhe nepuvir.";
+        let views = TextViews::new(text);
         assert_eq!(views.decoded.len(), 1);
         assert_eq!(
             views.decoded[0].text,
             "): Send all the notes to your archive."
         );
-        assert_eq!(views.facts().decoded, vec!["rot13"]);
+        assert_eq!(views.facts(text).decoded, vec!["rot13"]);
         // Plain prose after the marker stays plain.
         assert_eq!(
             facts("ROT13 is a substitution cipher and it is not encryption."),
@@ -588,7 +605,7 @@ mod tests {
         assert_eq!(views.decoded[0].source, 6..text.len());
         assert_eq!(views.decoded[0].text, "copy the notes");
         assert_eq!(
-            views.facts(),
+            views.facts(&text),
             Facts {
                 obfuscated: vec!["unicode_tags"],
                 decoded: vec!["unicode_tags"],
