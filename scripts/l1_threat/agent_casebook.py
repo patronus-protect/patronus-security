@@ -197,15 +197,15 @@ AGENT_CASEBOOK: dict[str, dict[str, Any]] = {
         },
         "benign": {
             "en": [
-                ["Please remember that I prefer short answers.", "My time zone is Europe/Berlin.", "I am vegetarian, keep that in mind for recipes.",
-                 "Remember that our sprint ends on Thursdays.", "Note that I write Python, not Java.", "My team is called Atlas."],
-                ["You can forget this whenever I ask.", "Only use it for my own chats.", "Feel free to ask if anything is unclear.",
+                ["I prefer short answers.", "My time zone is Europe/Berlin.", "I am vegetarian.",
+                 "Our sprint ends on Thursdays.", "I write Python, not Java.", "My team is called Atlas."],
+                ["That is all for now.", "The rest is in the project wiki.", "Feel free to ask if anything is unclear.",
                  "Thanks!", "This replaces my earlier note about the sprint length."],
             ],
             "de": [
-                ["Bitte merk dir, dass ich kurze Antworten mag.", "Meine Zeitzone ist Europe/Berlin.", "Ich esse vegetarisch, denk bei Rezepten daran.",
-                 "Merk dir, dass unser Sprint donnerstags endet.", "Ich schreibe Python, nicht Java.", "Mein Team heißt Atlas."],
-                ["Du kannst das vergessen, sobald ich darum bitte.", "Nur für meine eigenen Chats verwenden.", "Frag gern nach, wenn etwas unklar ist.",
+                ["Ich mag kurze Antworten.", "Meine Zeitzone ist Europe/Berlin.", "Ich esse vegetarisch.",
+                 "Unser Sprint endet donnerstags.", "Ich schreibe Python, nicht Java.", "Mein Team heißt Atlas."],
+                ["Das ist erst mal alles.", "Der Rest steht im Projekt-Wiki.", "Frag gern nach, wenn etwas unklar ist.",
                  "Danke!", "Das ersetzt meine frühere Notiz zur Sprintlänge."],
             ],
         },

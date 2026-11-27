@@ -38,8 +38,9 @@ detector (owner decision 2026-11-20; out of scope, so no row at all):
   exports, tickets, CI logs, cluster manifests, vector-store calls) and phrasing; the advisory shapes rewrite public
   attack write-ups and advisories (named in ``modelled_on``) as the form of the attack. An attack is composed of one
   lead, one action and one cover drawn independently, its look-alike of two benign parts in the same carrier (benign
-  tool docs, ordinary rules files and memory writes, bounded batch jobs, exports the user asked for); a repeated attack
-  text is drawn again. Each set counts as its own source in the gold.
+  tool docs, ordinary rules files and memory writes, bounded batch jobs, exports the user asked for); a memory
+  look-alike is a statement, never a request to remember something, since the carriers are shared or imported
+  content. A repeated attack text is drawn again. Each set counts as its own source in the gold.
 
 Source filter (owner decision 2026-11-21): carrier insertion and obfuscation slices take an attack row
 only if each of its classes is visible in the row's own text (``payload_visible``, one literal or
@@ -123,9 +124,10 @@ SCHEMA = CORPORA.GENERATED_SCHEMA
 # obfuscation rows only from attack rows whose classes are visible in their own text (``payload_visible``); v8: the
 # ``agent_scenarios`` generator (a second, independent family for the agent classes), ``source_family`` per set;
 # v9: no benign twin for ``agent_scenarios`` rows in a ``no_twin_frames`` frame (kb_chunk); v10: the dev-only
-# ``agent_casebook`` and ``advisory_shapes`` families; a set with count 0 is not written.
+# ``agent_casebook`` and ``advisory_shapes`` families; a set with count 0 is not written; v11: their memory_poisoning
+# look-alikes are statements, no request to remember something (no benign input in shared or imported content).
 # A frozen output of a lower version is regenerated without --force.
-GENERATOR_VERSION = 10
+GENERATOR_VERSION = 11
 DEV_SEED = "ark-l1-threat-e02-generators-dev-v1"
 SEED_FILE = ".generators-seed"
 READY = CORPORA.READY
@@ -1473,14 +1475,16 @@ def freeze(out: Path, files: dict[str, bytes], force: bool) -> int:
 
 
 def keep_frozen(out: Path, files: dict[str, bytes], only: frozenset[str]) -> dict[str, bytes]:
-    """``files`` with every set outside ``only`` taken from the frozen output ``out`` as it is (file, manifest
-    entry, inputs), so adding a generator leaves the frozen sets and their reviewed rows byte-identical."""
+    """The sets of ``files`` in ``only``, every other set taken from the frozen output ``out`` as it is (file, manifest
+    entry, inputs), so adding a generator leaves the frozen sets and their reviewed rows byte-identical and adds no
+    set outside ``only``."""
     frozen = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     manifest = json.loads(files["manifest.json"])
     kept = {name: entry for name, entry in frozen["sets"].items() if name not in only}
-    files = {name: data for name, data in files.items() if name[:-len(".jsonl")] not in kept}
+    fresh = {name: entry for name, entry in manifest["sets"].items() if name in only}
+    files = {entry["file"]: files[entry["file"]] for entry in fresh.values()}
     files.update({entry["file"]: (out / entry["file"]).read_bytes() for entry in kept.values()})
-    manifest.update(inputs=frozen["inputs"], sets=dict(sorted({**manifest["sets"], **kept}.items())))
+    manifest.update(inputs=frozen["inputs"], sets=dict(sorted({**fresh, **kept}.items())))
     data = CORPORA.BENIGN_CODE._manifest_bytes(manifest)
     return {**files, "manifest.json": data, READY: f"{CORPORA.PRESIDIO._sha256(data)}  manifest.json\n".encode("utf-8")}
 

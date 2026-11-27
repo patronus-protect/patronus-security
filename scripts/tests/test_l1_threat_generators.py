@@ -175,6 +175,30 @@ def test_composed_family_yields_300_distinct_attacks_per_class_and_language(gene
     assert not [row for row in rows if row["benign"] and any(p in row["text"] for p in attack_parts)]
 
 
+# A request to remember or store something: no benign input inside a shared document, mail or other imported content.
+MEMORY_DIRECTIVE = re.compile(
+    r"(?i)(^|[.!?:] )(please )?(remember|memori[sz]e|save|store|note that|keep|forget)\b|in mind\b|forget this"
+    r"|\b(merk|notier|präg|speicher) dir\b|bitte merk|\bdenk\b.*\bdaran\b|vergessen")
+
+
+@pytest.mark.parametrize("generator", sorted(MODULE.COMPOSED))
+def test_composed_memory_look_alikes_carry_no_memory_directive(generator):
+    # The composed carriers are shared or imported content; a memory directive there is memory poisoning.
+    table = MODULE.COMPOSED[generator]["memory_poisoning"]
+    directives = [part for lang in ("de", "en") for parts in table["benign"][lang] for part in parts if MEMORY_DIRECTIVE.search(part)]
+    assert not directives, f"{generator}: {len(directives)} memory look-alikes ask the assistant to remember something"
+    rows = MODULE.composed_family(MODULE.Rng("test"), generator, "generators_dev_seed", lambda classes: "L", 400)
+    assert not [row for row in rows if row["benign"] and row["template_family"] in table["frames"] and MEMORY_DIRECTIVE.search(row["text"])]
+
+
+def test_memory_directive_pattern_finds_the_reviewed_directives():
+    assert MEMORY_DIRECTIVE.search("Merk dir bitte, dass meine Zeitzone MEZ ist.")
+    assert MEMORY_DIRECTIVE.search("Please remember that my timezone is CET.")
+    assert MEMORY_DIRECTIVE.search("I am vegetarian, keep that in mind for recipes.")
+    assert not MEMORY_DIRECTIVE.search("The project kickoff takes place on Monday in room 12.")
+    assert not MEMORY_DIRECTIVE.search("Das Projekt-Kickoff findet am Montag in Raum 12 statt.")
+
+
 def test_check_families_rejects_a_composed_part_shared_by_attack_and_look_alike(monkeypatch):
     table = json.loads(json.dumps(MODULE.COMPOSED["agent_casebook"]))
     table["memory_poisoning"]["benign"]["en"][0].append(table["memory_poisoning"]["attack"]["en"][1][0])
@@ -698,4 +722,17 @@ def test_only_regenerates_the_named_sets_and_keeps_the_frozen_ones(roots):
     assert after["inputs"] == before["inputs"]
     assert {name: entry for name, entry in after["sets"].items() if name not in only} == before["sets"]
     assert set(after["sets"]) == set(before["sets"]) | only
+    assert MODULE.CORPORA.verify(dev / "generated", schemas=(MODULE.SCHEMA,)) == []
+
+
+def test_only_adds_no_new_set_outside_the_selection(roots):
+    dev, _ = roots
+    older = {**COUNTS, "agent_casebook": 0, "advisory_shapes": 0}
+    assert MODULE.generate(dev, None, None, EMAP, False, {"dev": older}) == 0
+    before = json.loads((dev / "generated" / "manifest.json").read_text())
+    # advisory_shapes is new to the frozen output too, but not selected: it stays out.
+    assert MODULE.generate(dev, None, None, EMAP, True, SMALL, only=frozenset({"agent_casebook"})) == 0
+    after = json.loads((dev / "generated" / "manifest.json").read_text())
+    assert set(after["sets"]) == set(before["sets"]) | {"agent_casebook"}
+    assert not (dev / "generated" / "advisory_shapes.jsonl").exists()
     assert MODULE.CORPORA.verify(dev / "generated", schemas=(MODULE.SCHEMA,)) == []
