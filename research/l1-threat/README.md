@@ -734,7 +734,8 @@ mehrere Stunden. Die Latenz der Referenzmodelle lief parallel zu den anderen Ref
 Maschine), ist also zu ihren Ungunsten verzerrt; 86M fehlt dort.
 
 **Eine Zahl in jeder Zelle (E13).** Erreicht ein System die FPR-Stufe einer Tabelle nicht (mehr
-Kalibrier-Negative, als die Stufe erlaubt, teilen seinen Höchstwert), trägt die Zelle statt `n/r: budget` TPR / FPR
+Kalibrier-Negative, als die Stufe erlaubt, teilen seinen Höchstwert im Kalibrier-Teil; Mess- und Report-Zeilen
+verschieben weder Stufe noch Schnitt), trägt die Zelle statt `n/r: budget` TPR / FPR
 am Schnitt der niedrigsten erreichbaren Stufe der festen Leiter 0,2 %, 0,5 %, 1 %, 2 %, 5 % oberhalb der
 Tabellenstufe (`scoreboard.ladder_cut`); auch dieser Schnitt kommt nur aus dem Kalibrier-Teil, gemessen wird am
 Mess-Teil und an den Report-Sätzen. Solche Zellen stehen kursiv und nennen ihre Stufe (`*41.2 / 0.18 @0.2%*`); sie

@@ -1229,9 +1229,9 @@ FPR_LADDER = (0.002, 0.005, 0.01, 0.02, 0.05)
 
 
 def ladder_cut(negatives: list[float], top: float, target: float) -> tuple[float, float, bool]:
-    """``(level, cut, reachable)``: the cut at ``target`` FPR of the calibration ``negatives`` when some score
-    (``top`` is the highest) reaches it, else at the first level of ``FPR_LADDER`` above ``target`` that is reachable;
-    ``reachable`` is False (at ``target``) when no level is."""
+    """``(level, cut, reachable)``: the cut at ``target`` FPR of the calibration ``negatives`` when some calibration
+    score (``top`` is the highest) reaches it, else at the first level of ``FPR_LADDER`` above ``target`` that is
+    reachable; ``reachable`` is False (at ``target``) when no level is."""
     for level in (target, *(level for level in FPR_LADDER if level > target)):
         cut = mix_cut(negatives, level)
         # Unreachable: more calibration negatives than the level allows share the system's top score.
@@ -1258,13 +1258,16 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
         values = np.asarray([float(scores.get(r.row["id"], {}).get(cls, 0.0)) for r in rows])
         for language in LANGUAGES:
             in_language = np.ones(len(rows), dtype=bool) if language == "all" else language_of == language
-            calibration_neg = values[negative & in_language & (part == "calibration")]
+            calibration = in_language & (part == "calibration")
+            calibration_neg = values[negative & calibration]
             if not len(calibration_neg):
                 continue
+            # Reachability looks at calibration scores only, so held-out rows never move the level or the cut.
+            top = float(values[calibration].max())
             measured = positive & in_language & (part == "measurement")
             cell: dict[str, Any] = {"sources": len(set(source[measured].tolist()))}
             for fpr in FPRS:
-                level, cut, reachable = ladder_cut(calibration_neg.tolist(), float(values.max()), fpr)
+                level, cut, reachable = ladder_cut(calibration_neg.tolist(), top, fpr)
                 hit = values >= cut
                 entry: dict[str, Any] = {"cut": cut, "level": f"{level:g}", "reachable": reachable}
                 for name in ("calibration", "measurement", "report"):
