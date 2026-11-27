@@ -144,6 +144,13 @@ Hotspots (Einzelregeln auf einem 100-KiB-Fenster deutscher/englischer Prosa, `re
 6. **Kurztexte**: Head p50 1,32 → 1,45 ms (p95 3,54 → 3,18 ms); die entspannte Suche macht je Kandidat
    drei statt einer Suche, auf kurzen Texten ohne Treffer kaum messbar.
 
+Qualität: Base- und Head-`threat_cascade` (Release) über alle 88 677 Zeilen von
+`train_dev` + `generated` + `translated` geben mit der Regel-Konfiguration und mit
+`cascade-config.json` (L1-Modelle) Zeile für Zeile dieselbe Vorhersage (Scores, `flagged`,
+Kaskadenentscheidung, Logit; nur `ms` ausgenommen): 0 Abweichungen, je 11 156 markierte Zeilen. Die
+Änderungen sind reine Suchwege mit identischen Treffern; Schwellen, Regeln und Modelle sind
+unverändert.
+
 Stand gegen das Ziel (100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit L1-Modellen): Regeln 180 ms, mit
 Modellen 408 ms — nicht erreicht. Der Lauf von `scripts/benchmark_injection_l1.py` und die
 Neuberechnung der E12-Latenztabelle stehen aus.
