@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use super::facts::{carries_class, extract, DataRef, Finding, TextFacts};
 use super::model::CategoryModel;
+use super::window::ModelView;
 use crate::cascade::StageOutcome;
 use crate::detectors::facts_common::bundle::VerifiedBundle;
 use crate::detectors::facts_common::thresholds::L1Thresholds;
@@ -248,25 +249,26 @@ impl L1TextModel {
     }
 
     /// Score `text` with the module's heuristic `findings` and the PII/DLP
-    /// `data` found in it (both may be empty). One in-memory pass, no I/O.
+    /// `data` found in it (both may be empty). One in-memory pass over the
+    /// bounded view of the text ([`ModelView`]), no I/O.
     pub fn evaluate(
         &self,
         text: &str,
         findings: &[Finding<'_>],
         data: &[DataRef<'_>],
     ) -> L1ModelOutcome {
-        self.evaluate_with(text, || extract(text, findings, data))
+        self.evaluate_with(text, || ModelInput::of(text, findings, data))
     }
 
-    /// Score `text` with the facts `facts` gives, asked for only when the
-    /// model reads the text. A carrier-bound class (tool poisoning, agent
-    /// config tampering, memory poisoning) only scores text with its
+    /// Score `text` with the view and facts `input` gives, asked for only
+    /// when the model reads the text. A carrier-bound class (tool poisoning,
+    /// agent config tampering, memory poisoning) only scores text with its
     /// structural carrier; text without it never reaches the model and
     /// scores lowest: clear, or escalate where clearing is switched off.
-    pub fn evaluate_with<'f, F: Borrow<TextFacts<'f>>>(
+    pub fn evaluate_with<'v, 'f, F: Borrow<ModelInput<'v, 'f>>>(
         &self,
         text: &str,
-        facts: impl FnOnce() -> F,
+        input: impl FnOnce() -> F,
     ) -> L1ModelOutcome {
         let started = std::time::Instant::now();
         if !carries_class(self.category, text) {
@@ -279,9 +281,9 @@ impl L1TextModel {
                 duration_ms: started.elapsed().as_secs_f64() * 1000.0,
             };
         }
-        let facts = facts();
-        let facts = facts.borrow();
-        let score = self.model.logit(text, facts);
+        let input = input();
+        let ModelInput { view, facts } = input.borrow();
+        let score = self.model.logit(&view.text, facts);
         let thresholds = self.thresholds_for(facts.language);
         L1ModelOutcome {
             category: self.category,
@@ -294,31 +296,47 @@ impl L1TextModel {
     }
 }
 
-/// The facts the L1 models of one scan read: extracted once, by the first
-/// model that runs, and shared by every later model on the same text with
-/// the same rule findings (the facts depend on nothing else). Extraction is
-/// most of a model's cost, so eleven models cost about one extraction.
+/// What an L1 model reads of a text: its bounded view and the facts of that
+/// view, with the findings and data references the view holds.
+#[derive(Clone, Debug)]
+pub struct ModelInput<'t, 'f> {
+    pub view: ModelView<'t>,
+    pub facts: TextFacts<'f>,
+}
+
+impl<'t, 'f> ModelInput<'t, 'f> {
+    pub fn of(text: &'t str, findings: &[Finding<'f>], data: &[DataRef<'f>]) -> Self {
+        let view = ModelView::of(text, findings, data);
+        let facts = extract(&view.text, &view.findings(findings), &view.data(data));
+        Self { view, facts }
+    }
+}
+
+/// The input the L1 models of one scan read: built once, by the first model
+/// that runs, and shared by every later model on the same text with the same
+/// rule findings (the input depends on nothing else). Extraction is most of
+/// a model's cost, so eleven models cost about one extraction.
 #[derive(Default)]
 pub struct SharedFacts<'t> {
-    cached: OnceCell<(&'t str, Vec<Finding<'static>>, TextFacts<'static>)>,
+    cached: OnceCell<(&'t str, Vec<Finding<'static>>, ModelInput<'t, 'static>)>,
 }
 
 impl<'t> SharedFacts<'t> {
-    /// The facts of `text` with `findings`: the shared ones when the first
-    /// extraction read the same text and findings, else extracted anew.
+    /// The input of `text` with `findings`: the shared one when the first
+    /// model read the same text and findings, else built anew.
     pub fn of(
         &self,
         text: &'t str,
         findings: Vec<Finding<'static>>,
-    ) -> Cow<'_, TextFacts<'static>> {
-        let (cached_text, cached_findings, facts) = self.cached.get_or_init(|| {
-            let facts = extract(text, &findings, &[]);
-            (text, findings.clone(), facts)
+    ) -> Cow<'_, ModelInput<'t, 'static>> {
+        let (cached_text, cached_findings, input) = self.cached.get_or_init(|| {
+            let input = ModelInput::of(text, &findings, &[]);
+            (text, findings.clone(), input)
         });
         if *cached_text == text && *cached_findings == findings {
-            Cow::Borrowed(facts)
+            Cow::Borrowed(input)
         } else {
-            Cow::Owned(extract(text, &findings, &[]))
+            Cow::Owned(ModelInput::of(text, &findings, &[]))
         }
     }
 }
@@ -440,6 +458,33 @@ pub(crate) mod tests {
         ));
         assert!(matches!(shared.of(TEXT, vec![]), Cow::Owned(_)));
         assert!(matches!(shared.of(other, vec![finding]), Cow::Owned(_)));
+    }
+
+    #[test]
+    fn long_text_is_scored_on_its_bounded_view_only() {
+        let model = L1TextModel::load(
+            SecurityCategory::Exfiltration,
+            &L1ModelConfig::builtin("exfiltration"),
+        )
+        .unwrap();
+        let filler = "Die Quartalszahlen liegen im Rahmen der Planung. ".repeat(3000);
+        let text = format!("{filler}{TEXT}{filler}");
+        let at = filler.len();
+        let finding = Finding {
+            category: "exfiltration",
+            family: "send",
+            pattern: "ark.ex.send",
+            points: 45,
+            span: at..at + TEXT.len(),
+        };
+        let view = ModelView::of(&text, std::slice::from_ref(&finding), &[]);
+        assert!(view.text.len() < text.len() / 4);
+        let facts = extract(&view.text, &view.findings(&[finding.clone()]), &[]);
+        let outcome = model.evaluate(&text, &[finding], &[]);
+        assert_eq!(
+            outcome.score.to_bits(),
+            model.model.logit(&view.text, &facts).to_bits()
+        );
     }
 
     #[test]

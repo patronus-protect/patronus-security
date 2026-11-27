@@ -17,6 +17,7 @@
 //!   facts.
 //! - [`l1_model`]: a module's optional L1 model, loaded once from a pinned
 //!   bundle, with its detect/clear outcome.
+//! - [`window`]: the bounded part of a long text an L1 model reads.
 //!
 //! Only the text is read: request metadata (role, source) never feeds the
 //! facts. Deterministic, no I/O.
@@ -26,9 +27,13 @@ pub mod l1_model;
 pub mod model;
 mod schema;
 mod tf1;
+mod window;
 
 pub use facts::{data_refs, extract, DataRef, Finding, FindingFacts, Sink, TextFacts};
-pub use l1_model::{L1ModelConfig, L1ModelOutcome, L1TextModel, SharedFacts, L1_MODEL_LAYER};
+pub use l1_model::{
+    L1ModelConfig, L1ModelOutcome, L1TextModel, ModelInput, SharedFacts, L1_MODEL_LAYER,
+};
 pub use model::{CategoryModel, TEXT_MODEL};
 pub use schema::schema;
 pub use tf1::{tf1, visit_tf1};
+pub use window::{ModelView, MODEL_VIEW_BYTES};

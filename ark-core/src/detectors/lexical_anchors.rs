@@ -153,6 +153,15 @@ impl LexicalAnchorScanner {
         AnchorPresence { present }
     }
 
+    /// Where the anchor words sit in an already lowercased text, in text
+    /// order and without overlaps; lazy, so a caller stops when it has enough.
+    pub fn find_lowercase<'s>(
+        &'s self,
+        text: &'s str,
+    ) -> impl Iterator<Item = std::ops::Range<usize>> + 's {
+        self.matcher.find_iter(text).map(|hit| hit.range())
+    }
+
     pub fn indices_in_literal(&self, literal: &str) -> Vec<usize> {
         self.presence_lowercase(&fold_literal(literal))
             .present
