@@ -262,5 +262,5 @@ NeMo, Pipelock, Prompt Guard, Vigil fielen auf „not run“), und der Mix kam m
 55 918 Zeilen heraus. `baseline.md`, `cascade.md` und die übrigen Berichte sind deshalb nicht neu
 eingecheckt; der Refresh gehört in die Owner-Umgebung mit vollem Baseline-Cache
 (`python3 scripts/l1_threat/scoreboard.py refresh --dev "$ARK_L1_DEV_DATA" --cache <gate-cache>
---baseline-cache ~/ark-threat/baselines`). Da nur Texte über 16 KiB anders gelesen werden, ändert
+--baseline-cache <voller Baseline-Cache>`). Da nur Texte über 16 KiB anders gelesen werden, ändert
 sich im Mix höchstens die eine oben genannte Zeile.
