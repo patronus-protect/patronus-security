@@ -236,6 +236,23 @@ python3 scripts/l1_threat/harmful_subclass.py coverage --dev "$ARK_L1_DEV_DATA" 
 modulo 20 = 0). Der Kaskaden-Bericht des Scoreboards liest die Datei für den Per-Subklasse-Check. Die Blätter mit
 Zeilentext bleiben außerhalb des Repos. Tests: `scripts/tests/test_l1_threat_harmful_subclass.py`.
 
+## Multi-Label-Gold
+
+`multi_label.py` liest [`research/l1-threat/labels/multi_label.jsonl`](../../research/l1-threat/labels/multi_label.jsonl):
+je geprüfte Angriffszeile des Mixes und der Report-Sätze alle Klassen, die sie trägt (`labels`: zuerst ihre
+`classes`, dann jeder erlaubte Nachbar laut `research/l1-threat/README.md`, Klassengrenzen), mit
+Begründungskürzel, ohne Zeilentext. Geprüft sind die Zeilen, auf denen Regeln oder ein eingebautes L1-Modell
+einen erlaubten Nachbarn melden; ein Agent labelt jede, ein zweiter, unabhängiger Durchgang die feste
+5-%-Stichprobe (wie bei den Subklassen).
+
+```bash
+python3 scripts/l1_threat/multi_label.py agree --check SCRATCH/check.jsonl   # zweiter Durchgang, 5 %
+```
+
+Das Scoreboard (`load_pairs`, `mix_rows`) liest die Klassen jeder Zeile über `multi_label.apply`: eine Zeile ist
+Positive jeder ihrer Klassen und nie Negative einer davon; die Konfusionstabelle zählt sie unter jeder.
+Tests: `scripts/tests/test_l1_threat_multi_label.py`.
+
 ## Generatoren und Übersetzungen
 
 `generators.py` leitet aus den eingefrorenen Korpora abgeleitete Sätze ab, jede Angriffszeile mit

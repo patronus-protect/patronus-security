@@ -69,7 +69,8 @@ and DLP texts and the own DE/EN trigger-word hard negatives) and its row-wise sp
 calibration and measurement, without any row a built-in L1 model was trained on (``trained_keys``, matched by
 SHA-256 text key; the models are not retrained); ``fair`` scores rules only (the L1 score curve), the L1 model and
 the cascade (``decision_score``: their answer with the L1 model's logit), Prompt Guard 2 22M and 86M, ProtectAI v2
-and the best heuristic baseline (picked on the calibration part) on the same rows. For a class, the negatives are the benign rows and the positives of every other class. Every cut comes from
+and the best heuristic baseline (picked on the calibration part) on the same rows. For a class, the negatives are the benign rows and the positives of every other class (a row of the multi-label gold,
+``multi_label.py``, is a positive of each of its labels and never a negative of one). Every cut comes from
 the calibration part's negatives only, per class and language, at 0.1 % (decisive) and 1 % FPR; TPR, FPR and
 hard-negative FPR come from the measurement part and, at the same cut, from the report sets, which stay outside
 the mix; each cell names the sources behind its measured positives.
@@ -1379,7 +1380,9 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], source: str
              + (" (" + ", ".join(f"{source} {n}" for source, n in excluded.items()) + ")" if excluded else "")
              + ".", "",
              "For a class, the negatives are the benign rows (benign pool, hard benigns, PII and DLP texts, trigger-word "
-             "hard negatives) and the positives of every other class. Every cut comes from the calibration part's "
+             "hard negatives) and the positives of every other class; a row of the multi-label gold "
+             "(`research/l1-threat/labels/multi_label.jsonl`) is a positive of each of its labels and never a negative "
+             "of one of them. Every cut comes from the calibration part's "
              "negatives only (per class and language); TPR, FPR and hard-negative FPR come from the measurement part, "
              f"the report columns from the report sets at the same cut. `sources`: sets behind the measured positives. "
              f"`{NOT_RUN}`: the system was not measured (reason under Not measured). `{NO_CLASS}`: the system does not "
