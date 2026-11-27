@@ -225,6 +225,7 @@ Träger-Gate der drei trägergebundenen Klassen (`carries_class`) liest weiter d
 | short (256 B) | 0.4 → 0.4 | 1.804 / 3.911 |
 | 4 KiB | 3.6 → 3.5 | 12.934 / 19.272 |
 | 100 KiB | 48.0 → 13.2 | 146.247 / 183.490 |
+| 10 MiB | 2 979 → 12.5 | (Scan parallel zu einem Clippy-Lauf gemessen, nicht vergleichbar) |
 
 L1-Modelle bei 100 KiB (nachher, p50 / p95 ms): tool_poisoning 4.10 / 4.28 (Träger-Gate über den
 ganzen Text), injection 3.23 / 3.63 (baut Sicht und Facts für alle), memory_poisoning 0.77 / 0.95,
