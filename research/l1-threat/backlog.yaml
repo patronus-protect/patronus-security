@@ -1005,11 +1005,43 @@ tasks:
       labelled positives; nothing from the holdout sources; gold spot-check per new set at <= 5% errors;
       gold.md shows the new counts and sources; E10b's clean evaluation re-rendered on them, with the
       measured positives per class and language in the report
+  # Owner, 2026-11-27 (E12 report): under zero-width characters the built-in L1 models lose 70-89 points of
+  # TPR (PromptShield -89.4, deepset -70.7, jackhhao -77.2) while the rules lose 8-10: the models score the
+  # raw text, not the normalized and decoded views T05/T29 built for the rules.
+  - id: T36
+    title: "L1 models read the raw text: under zero-width characters the built-in L1 models lose 70-89 points of TPR on the E12 benchmarks while the rules lose 8-10; every L1 model scores the same normalized and decoded views the rules use (zero-width and Unicode tags stripped, homoglyphs folded, base64 and other decodings once per text)"
+    type: recall-fix
+    deps: []
+    accept: >-
+      every built-in L1 model takes its input from the prepared views in ark-core (NativeText / MatchText),
+      one shared preparation per text, no second normalizer; model training and Rust inference see the same
+      normalization (parity goldens); E12's obfuscation columns re-run: each model loses at most 10 points of
+      TPR under zero-width, Unicode tags, base64, leetspeak and homoglyphs on every E12 benchmark, and the
+      unobfuscated numbers do not drop; goldens DE + EN with obfuscated positives and obfuscated hard
+      negatives per model class; L1 100 KiB p95 within +5 %
+  # Owner, 2026-11-27: threat L1 is far too slow. E12 measured 437 ms (rules) and 945 ms (L1 models) at 100 KiB
+  # p95 on VPS1; patronus-ark-core 0.1.18 on a laptop: all threat categories 66-75 ms per 100 KiB against
+  # 9-11 ms for pii + dlp. The threat rules do not use the anchor-based prefilters PII and DLP use, and the
+  # L1 models (TF-IDF style, should be cheap) read the whole text.
+  - id: T38
+    title: "Threat L1 latency: all threat categories take 66-75 ms per 100 KiB (core 0.1.18, laptop) and 437 ms rules / 945 ms with L1 models on VPS1 (E12), against 9-11 ms for pii + dlp; bring threat rules and L1 models onto the anchor-based prefilter path PII and DLP use, and score the L1 models only on anchored windows"
+    type: perf
+    deps: []
+    accept: >-
+      profile first (per rule and per model, native, short / 4 KiB / 100 KiB / 10 MiB, no process start in the
+      measurement) and name the top hotspots in research/l1-threat/scoreboard/latency.md; every threat rule
+      sits behind a literal or structural prefilter on one shared Aho-Corasick pass (the RuleMeta gates and
+      lexical anchors PII and DLP use), regexes compiled once, linear and bounded; the L1 models score only
+      bounded windows around anchors (or a capped prefix when no anchor fires) instead of the whole text, with
+      the TPR change of that windowing reported on the clean evaluation (no class loses more than 0.5 pp at
+      0.1% FPR); all threat categories together at 100 KiB p95 <= 10 ms (rules) and <= 15 ms (rules + L1
+      models) on the VPS, measured with scripts/benchmark_injection_l1.py and the E12 latency table re-run;
+      no quality change on dev, holdout and goldens
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, T36, T38]}
 
 recurring:
   - id: TRIAGE
