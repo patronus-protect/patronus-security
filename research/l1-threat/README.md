@@ -723,7 +723,8 @@ Eine Aufbereitung je Text: `NativeText` hält die `TextViews` (dekodierte und ge
 die versteckten Sichten der Regeln, die Fakten (samt Kontext-Scan) und die Modelle lesen sie, und die Kaskade reicht
 die Aufbereitung des Regel-Scans an das Modell weiter (`L1TextModel::evaluate`, `Cascade::l1_scan_answer` nehmen
 `&NativeText`). E12-Benchmarks nach T36 (`competitors.py run`, Kaskade „ARK L1 model“, TPR-Verlust in Punkten,
-zw / tags / b64 / leet / homoglyph; vorher in [`scoreboard/competitors.md`](scoreboard/competitors.md)): deepset
+zw / tags / b64 / leet / homoglyph; vorher in [`scoreboard/competitors.md`](scoreboard/competitors.md)): PromptShield
+−9,7 / −4,6 / −3,3 / −4,8 / −9,8 (vorher −89,4 bei zw), deepset
 −6,1 / −0,4 / 0,0 / 0,0 / −6,1 (vorher −70,7 bei zw), jackhhao −1,5 / −1,8 / 14,0 / −2,0 / −1,8 (vorher −77,2 bei zw),
 OpenAI-Moderation 0,0 / −0,2 / 0,8 / 1,9 / 0,0, RP-Mod 0,0 / 0,0 / 0,1 / 0,4 / 0,0. Offen: base64 auf jackhhao
 (14,0 Punkte; lange Jailbreak-Prompts werden nur bis 1024 Bytes je Fragment dekodiert).
