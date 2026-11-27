@@ -1013,37 +1013,63 @@ tasks:
   # is that the models score the raw text and react to the zero-width characters themselves, which would
   # also flag benign text carrying them; the rules (-8 to -10) read the normalized and decoded views.
   - id: T36
-    title: "L1 models react to the obfuscation itself: under zero-width characters the built-in L1 models flag 70-89 points more of the E12 benchmark positives than without them (clean 10-38 %), so they likely fire on the zero-width characters and not on the attack; every L1 model scores the same normalized and decoded views the rules use"
+    title: "L1 models read the shared prepared views (part a, split 2026-11-27): the text is prepared once per scan and the rules, the text facts and every built-in L1 model read the same normalized and decoded view; F:OBF/F:DEC tokens dropped in Rust and Python; the flag rate on obfuscated benign and hard-negative text is measured and reported"
     type: precision-fix
     deps: []
     accept: >-
-      first measure the cause: each built-in model's flag rate on benign and hard-negative texts with and
-      without zero-width characters, Unicode tags, base64, leetspeak and homoglyphs inserted, at its detect
-      cut, reported per model; every built-in L1 model then takes its input from the prepared views in
-      ark-core (NativeText / MatchText), one shared preparation per text, no second normalizer, with the same
-      normalization in training and Rust inference (parity goldens); afterwards the flag rate on obfuscated
-      benign and hard-negative text stays within the benign FPR budget (0.1 % per language) and each model's
-      TPR under every obfuscation on the E12 benchmarks stays within 10 points of its clean TPR in both
-      directions; goldens DE + EN with obfuscated positives and obfuscated hard negatives per model class;
-      L1 100 KiB p95 within +5 %
+      one text preparation per scan in ark-core, read by the rules, the text facts and every built-in L1
+      model (no second normalizer), with a unit test that the model reads the same view as the rules;
+      training and Rust inference use the same normalization (parity goldens pass); the flag rate of each
+      model on benign and hard-negative text with zero-width characters, Unicode tags, base64, leetspeak and
+      homoglyphs inserted is reported per model, language and obfuscation in research/l1-threat/scoreboard/;
+      the E12 obfuscation columns are re-run where the benchmark sources are available, or named as not
+      re-run with the reason; no class loses TPR at 0.1% FPR on the clean evaluation; L1 100 KiB p95 within
+      +5 %
+  - id: T36b
+    title: "Obfuscated benign text stays quiet and long base64 decodes: after T36 the flag rate on obfuscated benign and hard-negative text is above 0.1 % in 66 model/language/obfuscation cells (jailbreak EN already 2.77 % clean on that sample; base64 lifts instruction_injection DE from 0.03 % to 0.80 %), and base64 is decoded only up to 1 KiB per fragment, so long jailbreak prompts lose 14 points on jackhhao"
+    type: precision-fix
+    deps: [T36]
+    accept: >-
+      every model's flag rate on obfuscated benign and hard-negative text within the benign FPR budget
+      (0.1 % per language), or the remaining cell named with its number and cause; base64 and the other
+      decodings handle fragments up to a bounded size well above 1 KiB with linear cost, keeping the L1
+      100 KiB p95 within +5 %; each model's TPR under every obfuscation on the E12 benchmarks within 10
+      points of its clean TPR in both directions; goldens DE + EN with obfuscated positives and obfuscated
+      hard negatives
   # Owner, 2026-11-27: threat L1 is far too slow. E12 measured 437 ms (rules) and 945 ms (L1 models) at 100 KiB
   # p95 on VPS1; patronus-ark-core 0.1.18 on a laptop: all threat categories 66-75 ms per 100 KiB against
   # 9-11 ms for pii + dlp. The threat rules do not use the anchor-based prefilters PII and DLP use, and the
   # L1 models (TF-IDF style, should be cheap) read the whole text.
   - id: T38
-    title: "Threat L1 latency: all threat categories take 66-75 ms per 100 KiB (core 0.1.18, laptop) and 437 ms rules / 945 ms with L1 models on VPS1 (E12), against 9-11 ms for pii + dlp; bring threat rules and L1 models onto the anchor-based prefilter path PII and DLP use, and score the L1 models only on anchored windows"
+    title: "Threat L1 profiling and shared text facts (part a, split 2026-11-27): a threat_profile example profiles every attack-class detector and L1 model at 256 B / 4 KiB / 100 KiB / 10 MiB in one warm process, the hotspots are written up, and the eleven built-in L1 models extract the text facts once per scan instead of once each"
     type: perf
     deps: []
     accept: >-
-      profile first (per rule and per model, native, short / 4 KiB / 100 KiB / 10 MiB, no process start in the
-      measurement) and name the top hotspots in research/l1-threat/scoreboard/latency.md; every threat rule
-      sits behind a literal or structural prefilter on one shared Aho-Corasick pass (the RuleMeta gates and
-      lexical anchors PII and DLP use), regexes compiled once, linear and bounded; the L1 models score only
-      bounded windows around anchors (or a capped prefix when no anchor fires) instead of the whole text, with
-      the TPR change of that windowing reported on the clean evaluation (no class loses more than 0.5 pp at
-      0.1% FPR); all threat categories together at 100 KiB p95 <= 10 ms (rules) and <= 15 ms (rules + L1
-      models) on the VPS, measured with scripts/benchmark_injection_l1.py and the E12 latency table re-run;
-      no quality change on dev, holdout and goldens
+      the threat_profile example and research/l1-threat/scoreboard/latency.md with per-rule and per-model
+      cost and the top hotspots; the built-in L1 models share one text-fact extraction per scan
+      (SharedFacts) and each class's catalogue scoring reuses the prepared context; all threat categories
+      at 100 KiB p95 measured natively on the VPS before and after, rules only and rules + L1 models, both
+      numbers in the PR; no quality change on dev, holdout and goldens
+  - id: T38b
+    title: "One Aho-Corasick pass for the threat rules: after T38 all threat categories still take about 167 ms (rules) at 100 KiB p95 on the VPS against 9-11 ms for pii + dlp; every threat rule moves behind a literal or structural prefilter on one shared Aho-Corasick pass, like the RuleMeta gates and lexical anchors of PII and DLP"
+    type: perf
+    deps: [T38]
+    accept: >-
+      every threat rule has a literal or structural prefilter on one shared Aho-Corasick pass per text (no
+      per-rule scan of the whole text), regexes compiled once, linear and bounded; all threat categories at
+      100 KiB p95 <= 10 ms (rules only) on the VPS, measured natively with the threat_profile example and
+      scripts/benchmark_injection_l1.py; latency.md updated; no quality change on dev, holdout and goldens
+  - id: T38c
+    title: "Exact model pruning with the models' own n-grams: the built-in L1 models still read the whole text (about 239 ms with models at 100 KiB p95 after T38); build one automaton from each model's positive-weight n-grams and use it as the anchor, so texts whose score bound stays below the cut skip the model and long texts are scored only where those n-grams occur — with exactly the same score as full scoring"
+    type: perf
+    deps: [T38b]
+    accept: >-
+      for each built-in L1 model an automaton over its positive-weight n-gram features (built once at load)
+      gives a per-text upper bound of the score; texts whose bound stays below the detect cut skip the model,
+      and the remaining texts are scored on the spans where those features occur; a property test over the
+      dev and goldens shows the pruned decision and score equal full scoring on every row (no TPR or FPR
+      change at all); all threat categories with L1 models at 100 KiB p95 <= 15 ms on the VPS, measured
+      natively; latency.md updated
   # Owner, 2026-11-27: E14 (#512) brought the agent classes to 521-525 dev positives per language from 4-5
   # sources, but gold.md counts every one of them as synthetic; E14's accept asked for at least one source
   # that is not a generator. The clean evaluation was not re-rendered after E14 either.
@@ -1066,7 +1092,7 @@ tasks:
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T38]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T36b, T38, T38b, T38c]}
 
 recurring:
   - id: TRIAGE
