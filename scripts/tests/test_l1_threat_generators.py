@@ -19,8 +19,10 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 EMAP = MODULE.entity_map.load(MODULE.entity_map.MAP_PATH)
-COUNTS = {"carrier_insertion": 40, "exfil_lookalikes": 20, "obfuscation_slices": 32, "class_templates": 20, "agent_scenarios": 16}
-SMALL = {"dev": COUNTS, "holdout": COUNTS}
+COUNTS = {"carrier_insertion": 40, "exfil_lookalikes": 20, "obfuscation_slices": 32, "class_templates": 20, "agent_scenarios": 16,
+          "agent_casebook": 20, "advisory_shapes": 20}
+# The composed families are dev only.
+SMALL = {"dev": COUNTS, "holdout": {**COUNTS, "agent_casebook": 0, "advisory_shapes": 0}}
 # Class template families without a benign look-alike (owner decision 2026-11-20).
 TWINLESS_FAMILIES = {"memory_note_in_doc", "refusal_suppression"}
 
@@ -65,7 +67,7 @@ def roots(tmp_path):
 
 
 def generated(directory: Path):
-    return {name: read_jsonl(directory / f"{name}.jsonl") for name in MODULE.GENERATORS}
+    return {name: read_jsonl(directory / f"{name}.jsonl") for name in MODULE.GENERATORS if (directory / f"{name}.jsonl").exists()}
 
 
 def test_template_families_are_split_disjoint():
@@ -126,6 +128,65 @@ def test_agent_scenarios_are_an_independent_family_for_the_agent_classes(roots):
         assert "source_family" not in manifest["sets"]["class_templates"]
         assert manifest["template_families"]["agent_scenarios"]["tool_poisoning"] == sorted(MODULE.AGENT_SCENARIOS["tool_poisoning"]["frames"][split])
     assert not texts["dev"] & texts["holdout"]
+
+
+COMPOSED_CLASSES = AGENT_CLASSES | {"exfiltration"}
+
+
+def test_composed_families_are_dev_only_independent_sources_for_the_agent_classes(roots):
+    dev, holdout = roots
+    assert MODULE.generate(dev, holdout, None, EMAP, False, SMALL) == 0
+    dev_manifest = json.loads((dev / "generated" / "manifest.json").read_text())
+    holdout_manifest = json.loads((holdout / "generated" / "manifest.json").read_text())
+    other = {row["text"] for name, rows in generated(dev / "generated").items() if name not in MODULE.COMPOSED for row in rows}
+    for generator, tables in MODULE.COMPOSED.items():
+        assert set(tables) == COMPOSED_CLASSES
+        assert dev_manifest["sets"][generator]["source_family"] == generator
+        assert generator not in holdout_manifest["sets"] and not (holdout / "generated" / f"{generator}.jsonl").exists()
+        rows = generated(dev / "generated")[generator]
+        attacks = [row for row in rows if not row["benign"]]
+        assert {(row["classes"][0], row["language"]) for row in attacks} == {(c, lang) for c in COMPOSED_CLASSES for lang in ("de", "en")}
+        assert len(rows) == 2 * len(attacks)  # every attack has its look-alike in the same carrier
+        by_id = {row["id"]: row for row in rows}
+        for row in rows:
+            name = (row if not row["benign"] else by_id[row["twin_of"]])["classes"][0]
+            assert row["template_family"] in tables[name]["frames"]
+            assert row["modelled_on"] == tables[name]["modelled_on"]
+            assert "{" + "n}" not in row["text"] and "{x}" not in row["text"] and row["text"] not in other
+            if row["text"].startswith("{"):
+                json.loads(row["text"])
+    casebook, advisory = ({row["text"] for row in generated(dev / "generated")[name]} for name in ("agent_casebook", "advisory_shapes"))
+    assert not casebook & advisory
+
+
+@pytest.mark.parametrize("generator", sorted(MODULE.COMPOSED))
+def test_composed_family_yields_300_distinct_attacks_per_class_and_language(generator):
+    rows = MODULE.composed_family(MODULE.Rng("test"), generator, "generators_dev_seed", lambda classes: "L", 2000)
+    attacks = [row for row in rows if not row["benign"]]
+    assert len({row["text"] for row in attacks}) == len(attacks)
+    per_cell: dict[tuple[str, str], int] = {}
+    for row in attacks:
+        per_cell[(row["classes"][0], row["language"])] = per_cell.get((row["classes"][0], row["language"]), 0) + 1
+    # With the two other agent families, each family adds at least 150 per class and language toward the 300.
+    assert len(per_cell) == 2 * len(COMPOSED_CLASSES) and min(per_cell.values()) >= 150
+    # Look-alikes carry no attack part.
+    attack_parts = {p.split("{n}")[0] for table in MODULE.COMPOSED[generator].values() for lang in ("de", "en")
+                    for parts in table["attack"][lang] for p in parts if len(p.split("{n}")[0]) > 12}
+    assert not [row for row in rows if row["benign"] and any(p in row["text"] for p in attack_parts)]
+
+
+def test_check_families_rejects_a_composed_part_shared_by_attack_and_look_alike(monkeypatch):
+    table = json.loads(json.dumps(MODULE.COMPOSED["agent_casebook"]))
+    table["memory_poisoning"]["benign"]["en"][0].append(table["memory_poisoning"]["attack"]["en"][1][0])
+    monkeypatch.setitem(MODULE.COMPOSED, "agent_casebook", table)
+    assert any("agent_casebook memory_poisoning (en)" in p for p in MODULE.check_families())
+
+
+def test_check_families_rejects_a_composed_frame_of_another_generator(monkeypatch):
+    table = json.loads(json.dumps(MODULE.COMPOSED["advisory_shapes"]))
+    table["tool_poisoning"]["frames"]["python_docstring"] = MODULE.AGENT_SCENARIOS["tool_poisoning"]["frames"]["dev"]["python_docstring"]
+    monkeypatch.setitem(MODULE.COMPOSED, "advisory_shapes", table)
+    assert any("advisory_shapes tool_poisoning: a frame reuses" in p for p in MODULE.check_families())
 
 
 def test_agent_scenario_rows_vary_and_keep_the_directive_in_the_frame():
@@ -212,6 +273,7 @@ def test_dev_generation_is_deterministic_and_paired(roots):
     dev_families = {f for splits in MODULE.CARRIERS.values() for f in splits["dev"]} | set(MODULE.TOOL_FRAMES["dev"]) | set(MODULE.WRAPPERS["dev"])
     dev_families |= {f for table in MODULE.CLASS_TEMPLATES.values() for f in table["dev"]}
     dev_families |= {f for table in MODULE.AGENT_SCENARIOS.values() for f in table["frames"]["dev"]}
+    dev_families |= {f for tables in MODULE.COMPOSED.values() for table in tables.values() for f in table["frames"]}
     for name, rows in generated(dev / "generated").items():
         attacks = [row for row in rows if not row["benign"]]
         twinless = sum(row["template_family"] in TWINLESS_FAMILIES if name == "class_templates"
