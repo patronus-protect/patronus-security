@@ -479,7 +479,11 @@ pub(crate) mod tests {
         };
         let view = ModelView::of(&text, std::slice::from_ref(&finding), &[]);
         assert!(view.text.len() < text.len() / 4);
-        let facts = extract(&view.text, &view.findings(&[finding.clone()]), &[]);
+        let facts = extract(
+            &view.text,
+            &view.findings(std::slice::from_ref(&finding)),
+            &[],
+        );
         let outcome = model.evaluate(&text, &[finding], &[]);
         assert_eq!(
             outcome.score.to_bits(),
