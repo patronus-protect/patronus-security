@@ -680,3 +680,22 @@ def test_filtered_rows_leave_the_other_rows_byte_identical(monkeypatch):
 
 def test_generator_version_forces_a_regeneration_of_the_source_filter():
     assert MODULE.GENERATOR_VERSION >= 7
+
+
+def test_only_regenerates_the_named_sets_and_keeps_the_frozen_ones(roots):
+    dev, _ = roots
+    older = {**COUNTS, "agent_casebook": 0, "advisory_shapes": 0}
+    assert MODULE.generate(dev, None, None, EMAP, False, {"dev": older}) == 0
+    frozen = {path.name: path.read_bytes() for path in (dev / "generated").glob("*.jsonl")}
+    before = json.loads((dev / "generated" / "manifest.json").read_text())
+    # A corpus added after the freeze would change carrier_insertion; --only leaves it as frozen.
+    freeze_corpus(dev / "train_dev", "train_dev", corpus_rows("dev") + corpus_rows("later"))
+    only = frozenset(MODULE.COMPOSED)
+    assert MODULE.generate(dev, None, None, EMAP, True, SMALL, only=only) == 0
+    after = json.loads((dev / "generated" / "manifest.json").read_text())
+    for name, data in frozen.items():
+        assert (dev / "generated" / name).read_bytes() == data
+    assert after["inputs"] == before["inputs"]
+    assert {name: entry for name, entry in after["sets"].items() if name not in only} == before["sets"]
+    assert set(after["sets"]) == set(before["sets"]) | only
+    assert MODULE.CORPORA.verify(dev / "generated", schemas=(MODULE.SCHEMA,)) == []

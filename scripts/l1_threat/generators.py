@@ -65,6 +65,7 @@ hand-check sample with ``checked: true``; ``translate ingest`` validates the she
 translated) and its ``template_family``.
 
     python3 scripts/l1_threat/generators.py generate --dev-out DEV [--holdout-out HOLDOUT] [--holdout-seed-file F] [--force]
+        [--only SET ...]
     python3 scripts/l1_threat/generators.py translate export --dev-out DEV --sheet SHEET.jsonl [--per-set N] [--sets ID ...]
     python3 scripts/l1_threat/generators.py translate ingest --dev-out DEV --sheet SHEET.jsonl [--force]
     python3 scripts/l1_threat/generators.py verify DIR
@@ -1471,8 +1472,22 @@ def freeze(out: Path, files: dict[str, bytes], force: bool) -> int:
     return 0
 
 
+def keep_frozen(out: Path, files: dict[str, bytes], only: frozenset[str]) -> dict[str, bytes]:
+    """``files`` with every set outside ``only`` taken from the frozen output ``out`` as it is (file, manifest
+    entry, inputs), so adding a generator leaves the frozen sets and their reviewed rows byte-identical."""
+    frozen = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads(files["manifest.json"])
+    kept = {name: entry for name, entry in frozen["sets"].items() if name not in only}
+    files = {name: data for name, data in files.items() if name[:-len(".jsonl")] not in kept}
+    files.update({entry["file"]: (out / entry["file"]).read_bytes() for entry in kept.values()})
+    manifest.update(inputs=frozen["inputs"], sets=dict(sorted({**manifest["sets"], **kept}.items())))
+    data = CORPORA.BENIGN_CODE._manifest_bytes(manifest)
+    return {**files, "manifest.json": data, READY: f"{CORPORA.PRESIDIO._sha256(data)}  manifest.json\n".encode("utf-8")}
+
+
 def generate(dev_out: Path, holdout_out: Path | None, seed_file: Path | None, emap: dict[str, Any], force: bool,
-             counts: dict[str, dict[str, int]] = DEFAULT_COUNTS) -> int:
+             counts: dict[str, dict[str, int]] = DEFAULT_COUNTS, only: frozenset[str] | None = None) -> int:
+    """Generate each split; with ``only``, just those sets, every other set of a frozen output kept (``keep_frozen``)."""
     targets = {"dev": (dev_out, DEV_SEED)}
     if holdout_out is not None:
         seed_path = seed_file or holdout_out / SEED_FILE
@@ -1485,7 +1500,10 @@ def generate(dev_out: Path, holdout_out: Path | None, seed_file: Path | None, em
         if not inputs:
             print(f"{split}: no frozen input corpus under {root}; {root / OUT_DIR} not written")
             continue
-        status |= freeze(root / OUT_DIR, generate_split(split, seed, inputs, emap, counts[split]), force)
+        files = generate_split(split, seed, inputs, emap, counts[split])
+        if only is not None and (root / OUT_DIR / READY).exists():
+            files = keep_frozen(root / OUT_DIR, files, only)
+        status |= freeze(root / OUT_DIR, files, force)
     return status
 
 
@@ -1597,6 +1615,8 @@ def main(argv: list[str] | None = None) -> int:
     gen.add_argument("--holdout-out", type=Path, help="holdout root with holdout/ (gate only)")
     gen.add_argument("--holdout-seed-file", type=Path, help=f"secret holdout seed (default: HOLDOUT/{SEED_FILE})")
     gen.add_argument("--force", action="store_true")
+    gen.add_argument("--only", nargs="+", choices=GENERATORS,
+                     help="regenerate only these sets; every other set of a frozen output stays as it is")
     tr = sub.add_parser("translate")
     tr.add_argument("action", choices=("export", "ingest"))
     tr.add_argument("--dev-out", type=Path, required=True)
@@ -1615,7 +1635,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "generate":
         if args.holdout_seed_file is not None and args.holdout_out is None:
             parser.error("--holdout-seed-file needs --holdout-out")
-        return generate(args.dev_out, args.holdout_out, args.holdout_seed_file, entity_map.load(args.entity_map), args.force)
+        return generate(args.dev_out, args.holdout_out, args.holdout_seed_file, entity_map.load(args.entity_map), args.force,
+                        only=frozenset(args.only) if args.only else None)
     if args.action == "export":
         sets = frozenset(args.sets) if args.sets else None
         sheet = export_sheet(read_corpus(args.dev_out / "train_dev", {"train_dev"}), args.per_set, sets)

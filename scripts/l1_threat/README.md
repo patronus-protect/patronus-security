@@ -292,6 +292,24 @@ Benign-Zeile, wie bei einem `out_of_scope`-Label der Entity-Map:
   Eingabe; Generator-Version 9, die Doppelgänger-Anweisung wird trotzdem gezogen, die übrigen Zeilen bleiben gleich).
   Der Satz trägt im Manifest `source_family: agent_scenarios` und zählt in `gold.py` als eigene Quelle; alle
   anderen Generator-Sätze bleiben zusammen die eine Quelle `generators`.
+- `agent_casebook` und `advisory_shapes` (E14, Generator-Version 10): zwei weitere unabhängige Familien für die
+  vier Agenten-Klassen und `exfiltration`, nur Dev (Holdout-Anzahl 0, kein Holdout-Satz). `agent_casebook.py` hat
+  eigene Träger (`tools/list`-Antworten, Parameter-Schemas, Tickets, CI-Logs, Kubernetes-ConfigMaps,
+  Vector-Store-Upserts, Team-Chats, Crontabs) und eigene Formulierungen; `advisory_shapes.py` schreibt öffentliche
+  Write-ups und Advisories (in `modelled_on`: Invariant Labs, Trail of Bits, CyberArk, Pillar Security, Embrace The
+  Red, EchoLeak, OWASP LLM10 …) als Form des Angriffs um, nie als wirksame Nutzlast. Ein Angriff wird aus Einleitung,
+  Handlung und Verschleierung zusammengesetzt (unabhängig gezogen, ein schon vorhandener Angriffstext wird neu
+  gezogen), sein Doppelgänger aus zwei harmlosen Teilen im selben Träger: harmlose Tool-Doku, gewöhnliche
+  Regeldateien und Agent-Konfiguration, normale Gedächtnis- und RAG-Einträge, lange, aber begrenzte Batch-Jobs,
+  vom Nutzer gewollte Exporte. Je Satz rund 200 Angriffe pro Klasse und Sprache; jeder Satz zählt in `gold.py` als
+  eigene Quelle (`source_family`). `check_families` prüft, dass kein Träger einer anderen Familie gehört und kein
+  Angriffsteil zugleich ein harmloser Teil ist.
+
+`generate --only SATZ …` erzeugt nur die genannten Sätze und übernimmt alle anderen eines eingefrorenen
+Verzeichnisses unverändert (Datei, Manifest-Eintrag, `inputs`): ein neuer Generator ändert so keine geprüfte Zeile
+und keinen Trainingssatz der ausgelieferten L1-Modelle, auch wenn sich die Eingabekorpora seit dem Einfrieren bewegt
+haben. Owner-Befehl für E14: `python3 scripts/l1_threat/generators.py generate --dev-out DEV --only agent_casebook
+advisory_shapes`.
 
 Quellfilter (Owner-Entscheidung 2026-11-21, ein Filter statt einer niedrigeren Latte): `carrier_insertion` und
 `obfuscation_slices` nehmen eine Angriffszeile nur, wenn jede ihrer Klassen im eigenen Text sichtbar ist
