@@ -154,3 +154,42 @@ unverändert.
 Stand gegen das Ziel (100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit L1-Modellen): Regeln 180 ms, mit
 Modellen 408 ms — nicht erreicht. Der Lauf von `scripts/benchmark_injection_l1.py` und die
 Neuberechnung der E12-Latenztabelle stehen aus.
+
+### T38 Runde 2 (2026-11-27): L1-Modelle teilen die Facts
+
+Gleiches Werkzeug, gleiche Maschine und gleiche Texte wie oben (`threat_profile`, 58 470 gutartige
+`train_dev`-Zeilen, Seed 38). Vorher = Head der ersten Runde (`f1bf35ba`), Nachher = dieser Branch.
+
+| Größe | Regeln p50 / p95 ms vorher → nachher | Regeln + L1-Modelle p50 / p95 ms vorher → nachher | Summe L1-Modelle p50 ms vorher → nachher |
+|---|---:|---:|---:|
+| short (256 B) | 1.453 / 3.178 → 1.530 / 4.005 | 2.668 / 5.688 → 1.792 / 4.102 | 0.8 → 0.4 |
+| 4 KiB | 9.599 / 16.402 → 10.717 / 18.494 | 18.557 / 25.647 → 13.529 / 19.662 | 8.7 → 3.6 |
+| 100 KiB | 149.596 / 180.329 → 136.583 / 166.630 | 335.799 / 407.575 → 186.114 / 238.665 | 175.2 → 48.0 |
+| 10 MiB | 27 289 / 30 789 → 25 324 / 25 667 | 39 555 / 48 447 → 28 215 / 29 500 | 9 913 → 2 979 |
+
+Was sich geändert hat (beides reine Wiederverwendung, Scores bitgleich):
+
+1. **Facts einmal je Scan** (Hotspot 3): von den ≈ 19 ms je Modell und 100 KiB waren ≈ 16 ms die
+   Fact-Extraktion (Sichten, Kontext-Lexika, Sprache, Träger, Senken), nur ≈ 3 ms die n-Gramm-Wertung.
+   Die Facts hängen nur vom Text und den Regel-Findings des Scans ab, und die sind für jedes Modul
+   gleich; `SharedFacts` extrahiert sie beim ersten Modell und reicht sie an alle weiteren (Core-Scanner
+   und Arks Queue). Jetzt: erstes Modell ≈ 17 ms, jedes weitere ≈ 3,1 ms, zusammen 48 statt 175 ms.
+2. **Kontext-Scan der Katalog-Wertung**: außerhalb von `injection` scannte die Wertung der
+   Katalogkandidaten die Kontext-Lexika je Klasse erneut über den ganzen Text; sie liest jetzt den
+   Scan der vorbereiteten `NativeText`, den die Regeln schon gemacht haben (Regeln p50 150 → 137 ms).
+
+Verbleibende Hotspots bei 100 KiB (Head, im Scan, p50 ms): `injection`-Katalog 29 (Wertung im Scan
+44), `unsafe_action` 19, Fact-Extraktion des ersten L1-Modells 17, `jailbreak`-Katalog 11,
+`exfiltration` 11, `toxic_language` 10, je weiteres L1-Modell 3 (n-Gramm-Hashes über den ganzen
+Text; Tabellenzugriffe dominieren). Nächste Schritte bleiben: ein gemeinsamer Aho-Corasick-Pass
+für alle Threat-Regeln (heute je Regel ein `AnchorGate`), die Katalogregeln mit langen
+Satzanfangs-Alternationen, und die L1-Modelle nur auf Fenstern um Anker (ändert Scores, braucht die
+TPR-Messung auf der sauberen Auswertung).
+
+Qualität: Base (`f1bf35ba`) und Head `threat_cascade` (Release) mit `cascade-config.json` über alle
+88 677 Zeilen von `train_dev` + `generated` + `translated`: 0 abweichende Vorhersagen (alles außer
+`ms`), je 11 156 markierte Zeilen. Dazu ein Unit-Test, der für alle elf eingebauten Modelle den
+Score mit geteilten Facts bitgleich zur eigenen Extraktion prüft.
+
+Stand gegen das Ziel (100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit L1-Modellen): Regeln 167 ms, mit
+Modellen 239 ms — weiter nicht erreicht.
