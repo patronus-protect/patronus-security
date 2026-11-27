@@ -53,7 +53,8 @@ def dumps(facts: dict) -> str:
 
 
 def fact_tokens(facts: dict) -> set[str]:
-    """Deterministic flattening of the facts of one text into model tokens."""
+    """Deterministic flattening of the facts of one text into model tokens. ``obfuscated`` and ``decoded`` give no
+    token: the models read the text with its obfuscation undone, and the obfuscation alone is no attack."""
     out = {f"F:LANG={facts['language']}"}
     out |= {f"F:CAR={c}" for c in facts["carrier"]}
     out |= {f"F:ADR={a}" for a in facts["addressee"]}
@@ -65,8 +66,6 @@ def fact_tokens(facts: dict) -> set[str]:
         out.add(f"F:FAM={category}:{finding['family']}")
         out.add(f"F:PAT={finding['pattern']}")
         out |= {f"F:MOD={category}:{m}" for m in finding["modifiers"]}
-    out |= {f"F:OBF={o}" for o in facts["obfuscated"]}
-    out |= {f"F:DEC={d}" for d in facts["decoded"]}
     out |= {f"F:SUP={s}" for s in facts["support"]}
     out |= {f"F:CTR={c}" for c in facts["counter"]}
     if facts["addressee"] and facts["sinks"]:

@@ -100,9 +100,15 @@ def char_wb_ngrams(text: str, min_n: int, max_n: int) -> Iterable[str]:
                 break
 
 
+def model_text(row: dict) -> str:
+    """The text the models read: ``model_text`` (the Rust ``TextViews::model_text`` the ``text_facts`` example writes
+    where it differs: obfuscation undone, decoded text appended), else ``text``."""
+    return row.get("model_text", row["text"])
+
+
 def row_tokens(row: dict) -> list[str]:
     """The ``tf1`` tokens of a row with its text and facts document."""
-    return tf1(row["text"], row["facts"])
+    return tf1(model_text(row), row["facts"])
 
 
 @functools.lru_cache(maxsize=1 << 22)
@@ -295,7 +301,7 @@ def train(
     """A ``format_version: 2`` model document trained on rows with text, facts and label;
     ``tokens`` feeds the token block (``tf1`` by default; the ablation trains n-gram-only stages
     on a subset of it)."""
-    texts = [row["text"] for row in rows]
+    texts = [model_text(row) for row in rows]
     token_docs = [tokens(row) for row in rows]
     char_docs = [list(char_wb_ngrams(text, *ngram_range)) for text in texts]
     char_block = Block.fit(char_docs, min_df, char_buckets)
@@ -582,7 +588,7 @@ def train_fasttext(
     weights are stored as float32 values."""
     token_docs = [tokens(row) for row in rows]
     docs = [
-        np.array([bucket_of(f, buckets) for f in fasttext_features(row["text"], toks, *ngram_range)], dtype=np.int32)
+        np.array([bucket_of(f, buckets) for f in fasttext_features(model_text(row), toks, *ngram_range)], dtype=np.int32)
         for row, toks in zip(rows, token_docs)
     ]
     keep = [i for i, doc in enumerate(docs) if len(doc)]
@@ -610,7 +616,7 @@ def train_fasttext(
     }
     model = FastTextModel(document)
     negatives = [
-        model.logit(row["text"], toks)
+        model.logit(model_text(row), toks)
         for row, toks in zip(rows, token_docs)
         if int(row["label"]) == 0
     ]
@@ -662,7 +668,7 @@ def parity_scores() -> str:
     for row in synthetic_rows():
         scores = {}
         for name, model in models.items():
-            score, top = model.score(row["text"], model.tokens_of(row))
+            score, top = model.score(model_text(row), model.tokens_of(row))
             scores[name] = {"score": score, "top": top, "outcome": outcome(model.document["thresholds"], score)}
         expected.append({"id": row["id"], "text": row["text"], "facts": row["facts"], "models": scores})
     return render(expected)
@@ -724,7 +730,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "score":
         model = load_model(json.loads(args.model.read_text(encoding="utf-8")))
         for row in read_rows(args.rows):
-            value, top = model.score(row["text"], model.tokens_of(row))
+            value, top = model.score(model_text(row), model.tokens_of(row))
             print(json.dumps({"id": row.get("id"), "score": value, "top": top}, ensure_ascii=False))
         return 0
     if args.command == "pack":

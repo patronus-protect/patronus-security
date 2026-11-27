@@ -78,12 +78,12 @@ def test_tf1_has_word_and_fact_tokens():
         "F:FAM=exfiltration:markdown_image",
         "F:PAT=ark.ex.image",
         "F:MOD=exfiltration:negated",
-        "F:DEC=base64",
         "F:CTR=meta",
         "F:ADR_SINK",
     ):
         assert token in tokens
     assert "F:ADR_SINK" not in MODULE.tf1("x", facts(sinks=[]))
+    assert not [t for t in tokens if t.startswith(("F:OBF=", "F:DEC="))]
 
 
 def test_tf1_words_follow_python_unicode_word_class():

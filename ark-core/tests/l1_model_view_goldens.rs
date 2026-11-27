@@ -42,7 +42,11 @@ fn every_model_answers_alike_on_clean_and_obfuscated_text() {
             .expect("built-in model");
         let answer = model.evaluate(str_of(&row, "text"), &[], &[]);
         let detected = answer.outcome == StageOutcome::Detected;
-        if detected != row["expected_detected"].as_bool().expect("expected_detected") {
+        if detected
+            != row["expected_detected"]
+                .as_bool()
+                .expect("expected_detected")
+        {
             failures.push(format!("{}: score {}", row["id"], answer.score));
         }
     }
@@ -54,7 +58,12 @@ fn every_model_answers_alike_on_clean_and_obfuscated_text() {
 fn obfuscated_text_reads_as_the_clean_text() {
     let rows = goldens();
     for case in rows.chunks(6) {
-        assert_eq!(str_of(&case[0], "obfuscation"), "clean", "{}", case[0]["id"]);
+        assert_eq!(
+            str_of(&case[0], "obfuscation"),
+            "clean",
+            "{}",
+            case[0]["id"]
+        );
         let clean = str_of(&case[0], "text");
         assert_eq!(TextViews::new(clean).model_text(clean), clean);
         for row in &case[1..] {

@@ -14,6 +14,7 @@
 //! Findings and data references come from the caller (the category patterns
 //! and the PII/DLP detectors); the facts add what the text says around them.
 
+use std::borrow::Cow;
 use std::ops::Range;
 
 use super::super::context_lexica::ContextLexica;
@@ -101,14 +102,31 @@ pub fn data_refs<'a>(
 
 /// The facts of `text` with the pattern `findings` and PII/DLP `data` found in it.
 pub fn extract<'a>(text: &str, findings: &[Finding<'a>], data: &[DataRef<'a>]) -> TextFacts<'a> {
-    let views = TextViews::new(text);
+    extract_with(text, &TextViews::new(text), findings, data)
+}
+
+/// [`extract`] on the views of `text` built once by the caller. Language,
+/// carriers and the addressee, support and counter terms are read from the
+/// text the models read ([`TextViews::model_text`]), so obfuscation does not
+/// hide them; findings, data and sinks keep their offsets in `text`.
+pub fn extract_with<'a>(
+    text: &str,
+    views: &TextViews,
+    findings: &[Finding<'a>],
+    data: &[DataRef<'a>],
+) -> TextFacts<'a> {
     let view_facts = views.facts();
     let scan = ContextLexica::shared().scan(text);
-    let terms = context::TextContext::of(&scan);
+    let read = views.model_text(text);
+    let read_scan = match &read {
+        Cow::Owned(read) => Some(ContextLexica::shared().scan(read)),
+        Cow::Borrowed(_) => None,
+    };
+    let terms = context::TextContext::of(read_scan.as_ref().unwrap_or(&scan));
     let mut findings: Vec<FindingFacts<'a>> = findings
         .iter()
         .map(|finding| FindingFacts {
-            modifiers: context::modifiers(text, &scan, &views, finding.span.clone()),
+            modifiers: context::modifiers(text, &scan, views, finding.span.clone()),
             finding: finding.clone(),
         })
         .collect();
@@ -126,8 +144,8 @@ pub fn extract<'a>(text: &str, findings: &[Finding<'a>], data: &[DataRef<'a>]) -
     });
     data.dedup();
     TextFacts {
-        language: language::detect(text),
-        carrier: carrier::carriers(text),
+        language: language::detect(&read),
+        carrier: carrier::carriers(&read),
         addressee: terms.addressee,
         sinks: sinks::sinks(text, &scan),
         data,

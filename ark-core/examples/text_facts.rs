@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Add the `patronus.text_facts/1` document of every row to a JSONL file:
 //! reads rows with a `text` field on stdin and writes each row with a `facts`
-//! field to stdout. The text category model training
+//! field to stdout, and a `model_text` field where the text the models read
+//! ([`TextViews::model_text`]: obfuscation undone, decoded text appended)
+//! differs from `text`. The text category model training
 //! (`scripts/l1_threat/category_model.py train`) reads these rows, so the
 //! `tf1` tokens it trains on are the ones the Rust inference sees. With
 //! `--threat-findings` the facts carry the accepted points findings of the
@@ -15,7 +17,8 @@ use std::io::{self, BufRead, BufWriter, Write};
 use patronus_ark_core::{
     cascade::ScanGateMatrix,
     detectors::{
-        text::extract,
+        text::extract_with,
+        text_views::TextViews,
         threat::{facts_findings, ThreatPipeline},
     },
     threat::NativeText,
@@ -57,8 +60,16 @@ fn main() -> io::Result<()> {
             .iter()
             .flat_map(|detection| facts_findings(&detection.details))
             .collect();
-        let facts = extract(text, &findings, &[]).to_json();
+        let views = TextViews::new(text);
+        let model_text = match views.model_text(text) {
+            std::borrow::Cow::Owned(normalized) => Some(normalized),
+            std::borrow::Cow::Borrowed(_) => None,
+        };
+        let facts = extract_with(text, &views, &findings, &[]).to_json();
         row["facts"] = facts;
+        if let Some(model_text) = model_text {
+            row["model_text"] = model_text.into();
+        }
         serde_json::to_writer(&mut out, &row)?;
         out.write_all(b"\n")?;
     }
