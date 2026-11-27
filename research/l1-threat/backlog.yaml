@@ -938,6 +938,7 @@ tasks:
   # reports agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on
   # text without any tool description; the example therefore turns on only six models.
   - id: T34
+    status: done
     title: "Cross-class firing of rules and built-in L1 models, with clear class borders: a plain instruction_injection input also flags agent_config_tampering, memory_poisoning and exfiltration, and the tool_poisoning model fires on text without a tool or MCP description — every model must stay quiet on the other classes' positives and on text without its carrier"
     type: precision-fix
     deps: [E10b]
