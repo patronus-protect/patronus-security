@@ -44,6 +44,7 @@ use flows::{
     db_dump_flows, link_prior, remote_interp_is_filter, same_command_links, writes_and_downloads,
 };
 use network::network_of;
+pub(crate) use network::scope_of;
 use segment::{build_segment, redirect_targets};
 use segments::{segments_fixed, strip_fixed};
 

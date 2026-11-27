@@ -260,7 +260,7 @@ fn v6_scope(ip: u128) -> &'static str {
 }
 
 /// Network scope of a host name or address.
-fn scope_of(host: &str) -> &'static str {
+pub(crate) fn scope_of(host: &str) -> &'static str {
     let lower = host.trim_matches(['[', ']']).to_lowercase();
     let h = lower.trim_end_matches('.');
     if matches!(h, "localhost" | "localhost.localdomain") || h.ends_with(".localhost") {

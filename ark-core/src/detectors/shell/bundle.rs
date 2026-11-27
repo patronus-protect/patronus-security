@@ -21,6 +21,7 @@ use serde::Deserialize;
 use super::model::SHELL_MODEL;
 use super::policies::DC_RULES_JSON;
 use super::vocab::VOCAB_CSV;
+use crate::detectors::facts_common::block::BlockFile;
 use crate::detectors::facts_common::bundle::VerifiedBundle;
 use crate::detectors::facts_common::model::TfidfLrModel;
 
@@ -47,7 +48,12 @@ pub(crate) struct Bundle {
 }
 
 /// Load the bundle in `dir`; `manifest_sha256` pins the release manifest.
+/// A file is read as a `cat-shell` block (`block.safetensors`), the pin then
+/// being the file's sha256.
 pub(crate) fn load(dir: &Path, manifest_sha256: Option<&str>) -> Result<Bundle, String> {
+    if dir.is_file() {
+        return load_block(&BlockFile::open(dir, manifest_sha256)?);
+    }
     let bundle = VerifiedBundle::open(dir, manifest_sha256)?;
     for (name, embedded) in EMBEDDED_FILES {
         bundle.require_embedded(name, embedded)?;
@@ -58,4 +64,24 @@ pub(crate) fn load(dir: &Path, manifest_sha256: Option<&str>) -> Result<Bundle, 
         .map_err(|error| format!("invalid {}: {error}", config.policy_levels_file))?;
     let model = TfidfLrModel::from_json_slice(&bundle.read(&config.model_file)?, SHELL_MODEL)?;
     Ok(Bundle { model, levels })
+}
+
+/// A `cat-shell` block: the model JSON without its weights and the policy
+/// levels as metadata, the weights as an `F64` tensor. The rules and the
+/// vocabulary its `block.py` embeds must be the copies compiled in here.
+pub(crate) fn load_block(block: &BlockFile) -> Result<Bundle, String> {
+    block.require_kind("cat-shell")?;
+    block.require_embedded("dc_rules_sha256", DC_RULES_JSON)?;
+    block.require_embedded("shell_vocab_sha256", VOCAB_CSV)?;
+    let mut model: serde_json::Value = serde_json::from_str(block.meta("model")?)
+        .map_err(|error| format!("block model: {error}"))?;
+    let (weights, _) = block.f64s("weights")?;
+    model["weights"] = serde_json::Value::from(weights);
+    let bytes = serde_json::to_vec(&model).map_err(|error| error.to_string())?;
+    let levels = serde_json::from_str(block.meta("policy_levels")?)
+        .map_err(|error| format!("block policy levels: {error}"))?;
+    Ok(Bundle {
+        model: TfidfLrModel::from_json_slice(&bytes, SHELL_MODEL)?,
+        levels,
+    })
 }

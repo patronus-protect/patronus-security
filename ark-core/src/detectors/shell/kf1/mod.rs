@@ -18,8 +18,8 @@ mod pipelines;
 mod semantic;
 
 pub(crate) use pipelines::{
-    classify_source, clean, flow_markers, raw_pipelines, risk_markers, Pipeline, FORM_FILE,
-    PERSIST_TARGET, SHELLS, UPLOADERS, UPLOAD_FLAG,
+    classify_source, clean, flow_markers, raw_pipelines, risk_markers, Pipeline, CRED_EXAMPLE,
+    CRED_FORMAT, FORM_FILE, PERSIST_TARGET, SHELLS, UPLOADERS, UPLOAD_FLAG,
 };
 pub(crate) use semantic::{segment_markers, semantic_markers, turns, FIXTURE, SECCTL};
 

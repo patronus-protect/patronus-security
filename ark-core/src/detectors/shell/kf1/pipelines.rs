@@ -65,7 +65,7 @@ pub(crate) static SHELLS: WordSet = word_set!(
     ".",
     "eval",
 );
-static CRED_EXAMPLE: LazyLock<Regex> = LazyLock::new(|| {
+pub(crate) static CRED_EXAMPLE: LazyLock<Regex> = LazyLock::new(|| {
     py_regex(
         r"(AKIA[0-9A-Z]{0,16}EXAMPLE|EXAMPLE[A-Z0-9]*KEY|sk-[a-z-]*example|example[-_]?(key|token|secret))",
         true,
@@ -316,7 +316,7 @@ pub(crate) fn flow_markers(text: &str, pipes: &[Pipeline]) -> BTreeSet<String> {
     out
 }
 
-static CRED_FORMAT: LazyLock<Regex> = LazyLock::new(|| {
+pub(crate) static CRED_FORMAT: LazyLock<Regex> = LazyLock::new(|| {
     py_regex(
         r"(AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|sk-(proj-|ant-)?[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|glpat-[A-Za-z0-9_-]{20,})",
         false,

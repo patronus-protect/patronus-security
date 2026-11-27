@@ -76,6 +76,9 @@ it for every call.
     print(verdict["decision"], [p["id"] for p in verdict["policies"]])
     ```
 
+- `bundle_dir` can also point to a Cat block file (`block.safetensors`, `patronus.block/1`). The same file runs
+  without ARK through the block's `block.py` (see [Check tool calls](check-tool-calls.md#the-block-one-file-with-or-without-ark)).
+  `manifest_sha256` then pins the file itself.
 - `shell` is optional, like `wolf`. Without it, `shell_verdict` returns a configuration error; text
   scans never run Cat.
 - **Assets:** `download: "missing"` fetches the pinned release

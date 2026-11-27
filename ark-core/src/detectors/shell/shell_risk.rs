@@ -111,13 +111,15 @@ pub struct ShellRiskScore {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShellConfig {
-    /// The downloaded `cat-shell-risk-commander` release directory; unset
+    /// The downloaded `cat-shell-risk-commander` release directory, or a
+    /// `cat-shell` block file (`block.safetensors`, `patronus.block/1`); unset
     /// takes Cat's directory below the model cache root
     /// ([`crate::warmup::shell_bundle_dir`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle_dir: Option<PathBuf>,
-    /// sha256 of the bundle's `manifest.json`. Default: the pinned K26
-    /// release, [`SHELL_MANIFEST_SHA256`](crate::warmup::SHELL_MANIFEST_SHA256).
+    /// sha256 of the bundle's `manifest.json`, or of the block file itself.
+    /// Default: the pinned K26 release,
+    /// [`SHELL_MANIFEST_SHA256`](crate::warmup::SHELL_MANIFEST_SHA256).
     #[serde(default = "pinned_manifest")]
     pub manifest_sha256: String,
     /// Directories of user `.cedar` policies, read in file-name order.

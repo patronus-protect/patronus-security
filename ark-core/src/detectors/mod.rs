@@ -18,6 +18,7 @@ pub mod structure;
 pub mod text;
 pub mod text_views;
 pub mod threat;
+pub mod tool;
 pub mod validators;
 pub mod word_boundary;
 

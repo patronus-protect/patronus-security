@@ -14,9 +14,12 @@
 //!   n-gram embeddings, averaged, linear softmax), the second candidate form
 //!   of the text category models.
 //! - [`thresholds`]: the detect and clear cuts of an L1 model's score.
+//! - [`block`]: a `patronus.block/1` safetensors file, the one-file release
+//!   that also runs without ARK through its `block.py`.
 //! - [`bundle`]: a sha256-pinned model release directory, verified file by file.
 //! - [`cedar`]: loading the Cedar schema a facts document is checked against.
 
+pub mod block;
 pub(crate) mod bundle;
 pub mod cedar;
 pub mod fasttext;

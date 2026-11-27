@@ -102,6 +102,7 @@ nav:
       - Normalize text before scanning: how-to/normalize-text-before-scanning.md
       - Add external L1 signals: how-to/external-l1-signals.md
       - Check shell commands (Cat): how-to/check-shell-commands.md
+      - Check tool calls: how-to/check-tool-calls.md
   - Concepts:
       - Architecture: concepts/architecture.md
       - "Analysis framework: modules and layers": concepts/layered-scanning.md

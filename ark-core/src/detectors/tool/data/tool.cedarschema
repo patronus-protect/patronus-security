@@ -1,0 +1,12 @@
+// Cedar schema of the call requests over patronus.tool_facts/1 (`tool/policies.rs`).
+// Pairs are pre-joined: objects "<ACCESS>@<CLASS>", flows "<DATA>><SINK>" and "<DATA>><SINK>><VIA>".
+entity Agent;
+entity Tool;
+type CallContext = {
+  tool: String, server: String, paw: String, sight: String, sinks: Set<String>, sources: Set<String>,
+  objects: Set<String>, classes: Set<String>, hosts: Set<String>, net_scopes: Set<String>,
+  recipient_kinds: Set<String>, recipient_domains: Set<String>, atoms: Set<String>, flows: Set<String>,
+  shell: Bool, external: Bool, session_sources: Set<String>, session_tool_sources: Set<String>, session_objects: Set<String>,
+  linked: Set<String>, targets: Set<String>, known_targets: Set<String>
+};
+action call appliesTo { principal: Agent, resource: Tool, context: CallContext };

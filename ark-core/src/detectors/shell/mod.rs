@@ -17,8 +17,8 @@
 
 mod bundle;
 pub mod facts;
-mod kf1;
-mod markers;
+pub(crate) mod kf1;
+pub(crate) mod markers;
 mod model;
 pub mod policies;
 pub(crate) mod pyre;
@@ -26,7 +26,7 @@ pub mod shell_risk;
 #[cfg(any(test, feature = "test-util"))]
 pub mod testing;
 mod tokens;
-mod vocab;
+pub(crate) mod vocab;
 
 pub use facts::{Facts, ShellContext};
 pub use kf1::kf1;
