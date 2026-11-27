@@ -410,6 +410,40 @@ sources stay out for their licence or holdout overlap: GermEval 2019 shares the 
 holdout, GermEval 2021 has no licence and failed the spot-check, GermEval 2025 is GPL-3.0, and GerMS-AT is
 non-commercial. The agent classes gain native English rows only in the report column (InjecAgent).
 
+## Findings (E14: two more generator families for the agent classes, 2026-11-27)
+
+Dev pool: `DEV/train_dev`, `DEV/report` and `DEV/translated` as frozen, plus `DEV/generated` with the two new
+dev-only sets of generator version 10 added by `generators.py generate --dev-out DEV --only agent_casebook
+advisory_shapes` (every other generated set kept byte-identical; built in a local copy of `DEV`, which is read-only
+for the runner). Each new set: 4,000 rows, 2,000 attacks (200 per class and language for tool_poisoning,
+agent_config_tampering, memory_poisoning, resource_exhaustion and exfiltration) and a benign look-alike in the same
+carrier for each.
+
+- **`agent_casebook`: 0 of 102 wrong or unclear.** The third generator family: its own carriers (JSON-RPC
+  `tools/list` responses, parameter schemas, OpenAI function lists, ticket and PR-review comments, CI logs, team
+  chats, vector-store upserts, memory tool calls, GitHub Actions, crontabs, ConfigMaps, scraped pages) and phrasing;
+  an attack is lead + action + cover, drawn independently. Look-alikes: tool docs with limits and scopes, ordinary
+  rules-file lines, a user's own preferences, batch jobs with stop conditions and budgets, exports the user asked for.
+  Reviewed by a separate agent, not the author.
+- **`advisory_shapes`: 0 of 102 wrong or unclear.** Public write-ups and advisories (Invariant Labs tool poisoning
+  and rug pull, Trail of Bits line jumping, CyberArk full-schema poisoning, Pillar Security rules file backdoor,
+  Copilot and Cursor auto-approve CVEs, Embrace The Red memory persistence, PoisonedRAG/MINJA, OWASP LLM10,
+  denial-of-wallet, EchoLeak, markdown-image exfiltration) rewritten as the form of the attack in the carrier they
+  describe; `.invalid` hosts and placeholders only. Two reviewer notes were fixed in the templates before the
+  numbers above (a benign status page loaded its badge from the sink host; the hotline memory rows named a number
+  the text did not hold).
+- **Positives per class and language** (dev, scored): tool_poisoning, memory_poisoning and resource_exhaustion
+  521-522 from four sources (advisory_shapes 200, agent_casebook 200, agent_scenarios 80, generators 41-42);
+  agent_config_tampering 525 DE (five sources, with 3 approve_or_deny_de rows) and 522 EN; exfiltration DE 551
+  (advisory_shapes 200, agent_casebook 200, generators 150, approve_or_deny_de 1), EN 797.
+- **Not reached: a non-generator source.** The open native sources for these classes that the registry knows
+  (MCPTox, MalSkillBench, MemForm, autoredclaw, the MCP registry descriptions) are holdout sources and stay there;
+  Agent Security Bench (MIT) was checked and its attacker instructions are unsafe actions, not tool, config, memory
+  or loop attacks. Every positive added here is synthetic.
+- **Other moves since the last render:** `DEV/translated` is the frozen 600-row set (harmful_content DE 461,
+  unsafe_action DE 135), `approve_or_deny_de` 72 rows, `agent_scenarios` 1,229 rows (generator version 9 dropped the
+  look-alikes of `kb_chunk`); the earlier reviews of those sets stand.
+
 ## How this report is made
 
 ```bash

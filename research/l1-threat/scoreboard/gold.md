@@ -25,15 +25,15 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | instruction_injection | 268 | 4762 | 0 | 11711 | 4370 | 159 | 501 | 11711 | 0 | 0 |
 | jailbreak | 492 | 2884 | 63 | 1086 | 3220 | 0 | 156 | 647 | 0 | 502 |
 | prompt_extraction | 387 | 15143 | 0 | 725 | 15073 | 300 | 157 | 331 | 0 | 394 |
-| tool_poisoning | 122 | 121 | 63 | 894 | 0 | 0 | 243 | 474 | 0 | 483 |
-| agent_config_tampering | 125 | 122 | 63 | 347 | 0 | 3 | 244 | 285 | 0 | 125 |
-| memory_poisoning | 122 | 121 | 63 | 665 | 0 | 0 | 243 | 232 | 0 | 496 |
-| exfiltration | 151 | 397 | 225 | 11936 | 113 | 1 | 434 | 11711 | 0 | 450 |
-| unsafe_action | 164 | 643 | 63 | 144 | 382 | 35 | 390 | 82 | 0 | 125 |
-| resource_exhaustion | 122 | 121 | 63 | 62 | 0 | 0 | 243 | 0 | 0 | 125 |
-| harmful_content | 561 | 731 | 0 | 172 | 731 | 561 | 0 | 172 | 0 | 0 |
+| tool_poisoning | 522 | 521 | 63 | 894 | 0 | 0 | 1043 | 474 | 0 | 483 |
+| agent_config_tampering | 525 | 522 | 63 | 347 | 0 | 3 | 1044 | 285 | 0 | 125 |
+| memory_poisoning | 522 | 521 | 63 | 665 | 0 | 0 | 1043 | 232 | 0 | 496 |
+| exfiltration | 551 | 797 | 225 | 11936 | 113 | 1 | 1234 | 11711 | 0 | 450 |
+| unsafe_action | 135 | 643 | 63 | 144 | 382 | 6 | 390 | 82 | 0 | 125 |
+| resource_exhaustion | 522 | 521 | 63 | 62 | 0 | 0 | 1043 | 0 | 0 | 125 |
+| harmful_content | 461 | 731 | 0 | 172 | 731 | 461 | 0 | 172 | 0 | 0 |
 | toxic_language | 223 | 831 | 1999 | 2162 | 831 | 223 | 0 | 4161 | 0 | 0 |
-| benign | 24632 | 35938 | 17191 | 15030 | 46306 | 12314 | 1950 | 37235 | 0 | 2100 |
+| benign | 26606 | 37913 | 17191 | 15030 | 46306 | 12314 | 5899 | 37235 | 0 | 2100 |
 
 ## Dev targets per class and language
 
@@ -47,21 +47,21 @@ Scored dev positives per class and language against the target, from at least 2 
 | jailbreak | en | 200 | 2884 | 4 | 2770 | 0 | 114 | yes |
 | prompt_extraction | de | 200 | 387 | 2 | 0 | 300 | 87 | yes |
 | prompt_extraction | en | 200 | 15143 | 5 | 15073 | 0 | 70 | yes |
-| harmful_content | de | 200 | 561 | 3 | 0 | 561 | 0 | yes |
+| harmful_content | de | 200 | 461 | 2 | 0 | 461 | 0 | yes |
 | harmful_content | en | 200 | 731 | 3 | 731 | 0 | 0 | yes |
 | toxic_language | de | 200 | 223 | 3 | 0 | 223 | 0 | yes |
 | toxic_language | en | 200 | 831 | 3 | 831 | 0 | 0 | yes |
-| tool_poisoning | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
-| tool_poisoning | en | 100 | 121 | 2 | 0 | 0 | 121 | yes |
-| memory_poisoning | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
-| memory_poisoning | en | 100 | 121 | 2 | 0 | 0 | 121 | yes |
-| resource_exhaustion | de | 100 | 122 | 2 | 0 | 0 | 122 | yes |
-| resource_exhaustion | en | 100 | 121 | 2 | 0 | 0 | 121 | yes |
-| agent_config_tampering | de | 100 | 125 | 3 | 0 | 3 | 122 | yes |
-| agent_config_tampering | en | 100 | 122 | 2 | 0 | 0 | 122 | yes |
-| exfiltration | de | 100 | 151 | 2 | 0 | 1 | 150 | yes |
-| exfiltration | en | 100 | 397 | 3 | 113 | 0 | 284 | yes |
-| unsafe_action | de | 100 | 164 | 2 | 0 | 35 | 129 | yes |
+| tool_poisoning | de | 100 | 522 | 4 | 0 | 0 | 522 | yes |
+| tool_poisoning | en | 100 | 521 | 4 | 0 | 0 | 521 | yes |
+| memory_poisoning | de | 100 | 522 | 4 | 0 | 0 | 522 | yes |
+| memory_poisoning | en | 100 | 521 | 4 | 0 | 0 | 521 | yes |
+| resource_exhaustion | de | 100 | 522 | 4 | 0 | 0 | 522 | yes |
+| resource_exhaustion | en | 100 | 521 | 4 | 0 | 0 | 521 | yes |
+| agent_config_tampering | de | 100 | 525 | 5 | 0 | 3 | 522 | yes |
+| agent_config_tampering | en | 100 | 522 | 4 | 0 | 0 | 522 | yes |
+| exfiltration | de | 100 | 551 | 4 | 0 | 1 | 550 | yes |
+| exfiltration | en | 100 | 797 | 5 | 113 | 0 | 684 | yes |
+| unsafe_action | de | 100 | 135 | 2 | 0 | 6 | 129 | yes |
 | unsafe_action | en | 100 | 643 | 4 | 382 | 0 | 261 | yes |
 
 Benign chat pool (dev): de 11172, en 11225 rows.
@@ -70,7 +70,9 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 
 | Set | Role | Rows | Reviewed | Wrong | Unclear | Error rate | Benign errors |
 |---|---|---:|---:|---:|---:|---:|---:|
-| generated/agent_scenarios | dev | 1280 | 50 | 0 | 0 | 0.0% | 0 / 10 |
+| generated/advisory_shapes | dev | 4000 | 102 | 0 | 0 | 0.0% | 0 / 17 |
+| generated/agent_casebook | dev | 4000 | 102 | 0 | 0 | 0.0% | 0 / 17 |
+| generated/agent_scenarios | dev | 1229 | 50 | 0 | 0 | 0.0% | 0 / 10 |
 | generated/carrier_insertion | dev | 1170 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/class_templates | dev | 925 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/exfil_lookalikes | dev | 600 | 50 | 0 | 0 | 0.0% | 0 / 25 |
@@ -86,7 +88,7 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | report/textdetox_de | report | 4564 | 50 | 2 | 9 | 22.0% | 3 / 25 |
 | train_dev/agent_safetybench | dev | 111 | 50 | 0 | 1 | 2.0% | 0 / 25 |
 | train_dev/agentdojo | dev | 268 | 52 | 0 | 0 | 0.0% | 0 / 12 |
-| train_dev/approve_or_deny_de | dev | 82 | 50 | 0 | 0 | 0.0% | 0 / 23 |
+| train_dev/approve_or_deny_de | dev | 72 | 50 | 0 | 0 | 0.0% | 0 / 25 |
 | train_dev/bipia | dev | 235 | 51 | 0 | 0 | 0.0% | 0 / 17 |
 | train_dev/cyberseceval_multilingual | dev | 9 | 9 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/dolly_15k | dev | 14635 | 50 | 0 | 0 | 0.0% | 0 / 50 |
@@ -107,9 +109,9 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | train_dev/wildjailbreak | dev | 2023 | 50 | 0 | 1 | 2.0% | 0 / 23 |
 | train_dev/xl_safetybench | dev | 450 | 50 | 0 | 0 | 0.0% | 0 / 0 |
 | train_dev/xsafety_de | dev | 152 | 50 | 0 | 2 | 4.0% | 0 / 0 |
-| translated/runner_translations_de | dev | 700 | 52 | 0 | 1 | 1.9% | 0 / 13 |
+| translated/runner_translations_de | dev | 600 | 52 | 0 | 1 | 1.9% | 0 / 13 |
 
-Benign pool (dev, scored sets): 0 of 492 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 528 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -150,9 +152,20 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 
 | Set | Row | Label | Verdict | Note |
 |---|---|---|---|---|
+| train_dev/agent_safetybench | agent_safetybench:0001647 | unsafe_action | unclear | Scraping personal data framed as a demo; privacy harm, unsafe act only implied |
+| train_dev/dynahate | dynahate:0032382 | toxic_language | unclear | questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat |
 | train_dev/mosscap | mosscap:0068803 | prompt_extraction | unclear | Literal phrase request; extraction intent only implied |
+| train_dev/nemotron_safety_v3 | nemotron_safety_v3:0003660 | harmful_content | unclear | Interpersonal sabotage; no AILuminate hazard fits |
+| train_dev/nemotron_safety_v3 | nemotron_safety_v3:0000500 | harmful_content | unclear | Binge-drinking question; harm to self only, little uplift |
+| train_dev/nemotron_safety_v3 | nemotron_safety_v3:0000998 | toxic_language | unclear | Mild venting about children; hatred of a group unclear |
+| train_dev/neuralchemy | neuralchemy:0003342 | instruction_injection | unclear | asks for an attack prompt, carries no override itself |
+| train_dev/neuralchemy | neuralchemy:0003180 | jailbreak | wrong | override plus extraction request, not a jailbreak |
+| train_dev/polyguardprompts | polyguardprompts:0027986 | harmful_content | unclear | dominance plan for a TV plot, harm vague |
+| train_dev/polyguardprompts | polyguardprompts:0023736 | harmful_content | unclear | vague evasion of platform rules, no hazard named |
 | train_dev/spml | spml:0007279 | instruction_injection | unclear | Only asks whether override possible; rest no override |
 | train_dev/wildjailbreak | wildjailbreak:0002208 | jailbreak | unclear | Fantasy forgery of spell scrolls; harmful goal only implied |
+| train_dev/xsafety_de | xsafety_de:0000061 | toxic_language | unclear | reproaches the reader for bad manners and swearing; critical but no insult, slur or threat |
+| train_dev/xsafety_de | xsafety_de:0000062 | toxic_language | unclear | polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat |
 | report/ailuminate_demo | ailuminate_demo:0000505 | harmful_content | unclear | Discussion of fraud tactics; mostly educational, limited uplift |
 | report/ailuminate_demo | ailuminate_demo:0000510 | harmful_content | wrong | Asks how to react to crime; seeks no uplift |
 | report/ailuminate_demo | ailuminate_demo:0000624 | other | unclear | Garbled; vulnerability angle is cyber, not reported subclass |
@@ -168,21 +181,6 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 | report/ailuminate_demo | ailuminate_demo:0000502 | harmful_content | unclear | Tax planning loopholes; borderline legal |
 | report/ailuminate_demo | ailuminate_demo:0000590 | harmful_content | unclear | Statement about abandoning child; no request |
 | report/ailuminate_demo | ailuminate_demo:0000931 | harmful_content | wrong | Benign question about coping behaviours |
-| report/gandalf | gandalf:0000636 | instruction_injection+prompt_extraction | unclear | Only asks about memory; neither override nor extraction clear |
-| report/jackhhao_jailbreak | jackhhao_jailbreak:0001451 | jailbreak | unclear | Instruction override with harmless goal; injection rather than jailbreak |
-| report/jackhhao_jailbreak | jackhhao_jailbreak:0000236 | jailbreak | unclear | Persona pretext for risky essay, but no rule-lifting |
-| report/jackhhao_jailbreak | jackhhao_jailbreak:0000452 | jailbreak | wrong | Harmless D&D campaign request, no rule-lifting |
-| report/textdetox_de | textdetox_de:0002064 | toxic_language | unclear | Sarcastic political jab; mild |
-| report/textdetox_de | textdetox_de:0002101 | toxic_language | unclear | Sarcastic camp remark; tone unclear |
-| report/textdetox_de | textdetox_de:0003412 | benign | unclear | Common dehumanizing trope, likely aimed at migrants |
-| report/textdetox_de | textdetox_de:0004666 | toxic_language | unclear | Crude but generic political venting |
-| report/textdetox_de | textdetox_de:0002408 | toxic_language | unclear | Harsh political comparison, no direct insult |
-| report/textdetox_de | textdetox_de:0004698 | toxic_language | wrong | Political criticism without insult |
-| report/textdetox_de | textdetox_de:0001886 | toxic_language | unclear | Ethnically framed deportation call; borderline |
-| report/textdetox_de | textdetox_de:0003894 | toxic_language | wrong | Political complaint without insult |
-| report/textdetox_de | textdetox_de:0002396 | benign | unclear | Mild jab at addressee's education |
-| report/textdetox_de | textdetox_de:0001950 | toxic_language | unclear | Condescending but mild |
-| report/textdetox_de | textdetox_de:0004397 | benign | unclear | Calls politician fascist; insulting label |
 | report/civil_comments | civil_comments:0060853 | toxic_language | unclear | Self-referential mild profanity; no insult or target |
 | report/civil_comments | civil_comments:0049283 | toxic_language | wrong | Polite clarifying question; only self-deprecation |
 | report/civil_comments | civil_comments:0064815 | toxic_language | unclear | Political criticism without an insult to a person |
@@ -191,23 +189,6 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 | report/civil_comments | civil_comments:0049604 | toxic_language | unclear | Political accusation; borderline insult |
 | report/civil_comments | civil_comments:0079320 | toxic_language | unclear | Describes someone looking foolish; no insult aimed |
 | report/civil_comments | civil_comments:0042234 | toxic_language | unclear | Two-word call to vandalism without target; context missing |
-| train_dev/nemotron_safety_v3 | nemotron_safety_v3:0003660 | harmful_content | unclear | Interpersonal sabotage; no AILuminate hazard fits |
-| train_dev/nemotron_safety_v3 | nemotron_safety_v3:0000500 | harmful_content | unclear | Binge-drinking question; harm to self only, little uplift |
-| train_dev/nemotron_safety_v3 | nemotron_safety_v3:0000998 | toxic_language | unclear | Mild venting about children; hatred of a group unclear |
-| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0024735 | harmful_content | unclear | Conversation fragment; the act is not named |
-| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0017232 | harmful_content | unclear | Drinking alcohol unnoticed; minor rule-breaking |
-| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0000239 | harmful_content | unclear | Video-game crafting; real-world uplift unclear |
-| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0022884 | harmful_content | wrong | Self-defence request by a victim |
-| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0016319 | harmful_content | unclear | Cheating in a game; no hazard |
-| train_dev/agent_safetybench | agent_safetybench:0001647 | unsafe_action | unclear | Scraping personal data framed as a demo; privacy harm, unsafe act only implied |
-| translated/runner_translations_de | runner_translations_de:mosscap:0007923 | prompt_extraction | unclear | fake admin role asks the model to reveal personal information it holds; probes protected data rather than the hidden password or instructions |
-| train_dev/dynahate | dynahate:0032382 | toxic_language | unclear | questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat |
-| train_dev/xsafety_de | xsafety_de:0000061 | toxic_language | unclear | reproaches the reader for bad manners and swearing; critical but no insult, slur or threat |
-| train_dev/xsafety_de | xsafety_de:0000062 | toxic_language | unclear | polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat |
-| train_dev/neuralchemy | neuralchemy:0003342 | instruction_injection | unclear | asks for an attack prompt, carries no override itself |
-| train_dev/neuralchemy | neuralchemy:0003180 | jailbreak | wrong | override plus extraction request, not a jailbreak |
-| train_dev/polyguardprompts | polyguardprompts:0027986 | harmful_content | unclear | dominance plan for a TV plot, harm vague |
-| train_dev/polyguardprompts | polyguardprompts:0023736 | harmful_content | unclear | vague evasion of platform rules, no hazard named |
 | report/deepset_prompt_injections | deepset_prompt_injections:0000386 | instruction_injection | unclear | Requests a political statement; no override of instructions |
 | report/deepset_prompt_injections | deepset_prompt_injections:0000267 | instruction_injection | unclear | Persona roleplay jailbreak, no instruction override |
 | report/deepset_prompt_injections | deepset_prompt_injections:0000630 | instruction_injection | unclear | Emotional pressure for an opinion; no instruction override |
@@ -216,6 +197,7 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 | report/deepset_prompt_injections | deepset_prompt_injections:0000583 | instruction_injection | wrong | Ordinary screenwriter persona request, no override attempt |
 | report/deepset_prompt_injections | deepset_prompt_injections:0000380 | instruction_injection | unclear | Fits prompt_extraction more than instruction override |
 | report/deepset_prompt_injections | deepset_prompt_injections:0000465 | instruction_injection | unclear | Weak persona switch; no clear override |
+| report/gandalf | gandalf:0000636 | instruction_injection+prompt_extraction | unclear | Only asks about memory; neither override nor extraction clear |
 | report/germeval2021 | germeval2021:0001386 | toxic_language | wrong | Harmless remark about litter, no target |
 | report/germeval2021 | germeval2021:0002578 | toxic_language | unclear | Harsh political criticism of a party, no insult |
 | report/germeval2021 | germeval2021:0000103 | toxic_language | unclear | Accusatory rant, no direct insult |
@@ -246,6 +228,26 @@ Benign pool (holdout, scored sets): 6 of 377 reviewed benign rows wrong or uncle
 | report/injecagent | injecagent:0000011 | instruction_injection+unsafe_action | unclear | Scheduling an appointment is low harm |
 | report/injecagent | injecagent:0000019 | instruction_injection+unsafe_action | unclear | Moving robot to a room is low harm |
 | report/injecagent | injecagent:0000025 | instruction_injection+unsafe_action | unclear | Data sharing to third party: exfiltration more than unsafe_action |
+| report/jackhhao_jailbreak | jackhhao_jailbreak:0001451 | jailbreak | unclear | Instruction override with harmless goal; injection rather than jailbreak |
+| report/jackhhao_jailbreak | jackhhao_jailbreak:0000236 | jailbreak | unclear | Persona pretext for risky essay, but no rule-lifting |
+| report/jackhhao_jailbreak | jackhhao_jailbreak:0000452 | jailbreak | wrong | Harmless D&D campaign request, no rule-lifting |
+| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0024735 | harmful_content | unclear | Conversation fragment; the act is not named |
+| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0017232 | harmful_content | unclear | Drinking alcohol unnoticed; minor rule-breaking |
+| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0000239 | harmful_content | unclear | Video-game crafting; real-world uplift unclear |
+| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0022884 | harmful_content | wrong | Self-defence request by a victim |
+| report/textdetox_de | textdetox_de:0002064 | toxic_language | unclear | Sarcastic political jab; mild |
+| report/textdetox_de | textdetox_de:0002101 | toxic_language | unclear | Sarcastic camp remark; tone unclear |
+| report/textdetox_de | textdetox_de:0003412 | benign | unclear | Common dehumanizing trope, likely aimed at migrants |
+| report/textdetox_de | textdetox_de:0004666 | toxic_language | unclear | Crude but generic political venting |
+| report/textdetox_de | textdetox_de:0002408 | toxic_language | unclear | Harsh political comparison, no direct insult |
+| report/textdetox_de | textdetox_de:0004698 | toxic_language | wrong | Political criticism without insult |
+| report/textdetox_de | textdetox_de:0001886 | toxic_language | unclear | Ethnically framed deportation call; borderline |
+| report/textdetox_de | textdetox_de:0003894 | toxic_language | wrong | Political complaint without insult |
+| report/textdetox_de | textdetox_de:0002396 | benign | unclear | Mild jab at addressee's education |
+| report/textdetox_de | textdetox_de:0001950 | toxic_language | unclear | Condescending but mild |
+| report/textdetox_de | textdetox_de:0004397 | benign | unclear | Calls politician fascist; insulting label |
+| translated/runner_translations_de | runner_translations_de:mosscap:0007923 | prompt_extraction | unclear | fake admin role asks the model to reveal personal information it holds; probes protected data rather than the hidden password or instructions |
+| report/nemotron_content_safety_v2 | nemotron_content_safety_v2:0016319 | harmful_content | unclear | Cheating in a game; no hazard |
 
 ## Findings (first dev review, 2026-11-13)
 
@@ -658,6 +660,40 @@ None of these sets is native German; PolyGuardPrompts' German part is machine-tr
 sources stay out for their licence or holdout overlap: GermEval 2019 shares the GermEval 2018 test tweets of the
 holdout, GermEval 2021 has no licence and failed the spot-check, GermEval 2025 is GPL-3.0, and GerMS-AT is
 non-commercial. The agent classes gain native English rows only in the report column (InjecAgent).
+
+## Findings (E14: two more generator families for the agent classes, 2026-11-27)
+
+Dev pool: `DEV/train_dev`, `DEV/report` and `DEV/translated` as frozen, plus `DEV/generated` with the two new
+dev-only sets of generator version 10 added by `generators.py generate --dev-out DEV --only agent_casebook
+advisory_shapes` (every other generated set kept byte-identical; built in a local copy of `DEV`, which is read-only
+for the runner). Each new set: 4,000 rows, 2,000 attacks (200 per class and language for tool_poisoning,
+agent_config_tampering, memory_poisoning, resource_exhaustion and exfiltration) and a benign look-alike in the same
+carrier for each.
+
+- **`agent_casebook`: 0 of 102 wrong or unclear.** The third generator family: its own carriers (JSON-RPC
+  `tools/list` responses, parameter schemas, OpenAI function lists, ticket and PR-review comments, CI logs, team
+  chats, vector-store upserts, memory tool calls, GitHub Actions, crontabs, ConfigMaps, scraped pages) and phrasing;
+  an attack is lead + action + cover, drawn independently. Look-alikes: tool docs with limits and scopes, ordinary
+  rules-file lines, a user's own preferences, batch jobs with stop conditions and budgets, exports the user asked for.
+  Reviewed by a separate agent, not the author.
+- **`advisory_shapes`: 0 of 102 wrong or unclear.** Public write-ups and advisories (Invariant Labs tool poisoning
+  and rug pull, Trail of Bits line jumping, CyberArk full-schema poisoning, Pillar Security rules file backdoor,
+  Copilot and Cursor auto-approve CVEs, Embrace The Red memory persistence, PoisonedRAG/MINJA, OWASP LLM10,
+  denial-of-wallet, EchoLeak, markdown-image exfiltration) rewritten as the form of the attack in the carrier they
+  describe; `.invalid` hosts and placeholders only. Two reviewer notes were fixed in the templates before the
+  numbers above (a benign status page loaded its badge from the sink host; the hotline memory rows named a number
+  the text did not hold).
+- **Positives per class and language** (dev, scored): tool_poisoning, memory_poisoning and resource_exhaustion
+  521-522 from four sources (advisory_shapes 200, agent_casebook 200, agent_scenarios 80, generators 41-42);
+  agent_config_tampering 525 DE (five sources, with 3 approve_or_deny_de rows) and 522 EN; exfiltration DE 551
+  (advisory_shapes 200, agent_casebook 200, generators 150, approve_or_deny_de 1), EN 797.
+- **Not reached: a non-generator source.** The open native sources for these classes that the registry knows
+  (MCPTox, MalSkillBench, MemForm, autoredclaw, the MCP registry descriptions) are holdout sources and stay there;
+  Agent Security Bench (MIT) was checked and its attacker instructions are unsafe actions, not tool, config, memory
+  or loop attacks. Every positive added here is synthetic.
+- **Other moves since the last render:** `DEV/translated` is the frozen 600-row set (harmful_content DE 461,
+  unsafe_action DE 135), `approve_or_deny_de` 72 rows, `agent_scenarios` 1,229 rows (generator version 9 dropped the
+  look-alikes of `kb_chunk`); the earlier reviews of those sets stand.
 
 ## How this report is made
 
