@@ -992,6 +992,7 @@ tasks:
   # Owner, 2026-11-27: the four agent classes have 11-53 measured positives per language from one or two
   # synthetic generator families, so their 100% says little. More, and more varied, positives are needed.
   - id: E14
+    status: done
     title: "More positives for the agent classes: tool_poisoning, agent_config_tampering, memory_poisoning and resource_exhaustion (and exfiltration DE) have 11-53 measured positives per language from one or two synthetic generator families; build at least 300 dev positives per class and language from at least three independent sources, one of them not a generator"
     type: eval-infra
     deps: [E10b]
