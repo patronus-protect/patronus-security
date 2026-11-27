@@ -1625,8 +1625,8 @@ def merge_results(runs: list[dict[str, Any]]) -> dict[str, Any]:
 def competitors_command(args: argparse.Namespace) -> int:
     competitors = sys.modules.get("_ark_l1_threat_competitors") or _load_file(
         "_ark_l1_threat_competitors", HERE / "competitors.py")
-    registry, published = competitors.load()
-    problems = competitors.check(registry, competitors.read(competitors.ENTITY_MAP), published)
+    registry, published, translations = competitors.load()
+    problems = competitors.check(registry, competitors.read(competitors.ENTITY_MAP), published, translations)
     if problems:
         raise ValueError("; ".join(problems))
     results = merge_results([json.loads(path.read_text(encoding="utf-8")) for path in args.results])

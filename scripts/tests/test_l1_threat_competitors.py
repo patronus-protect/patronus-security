@@ -33,6 +33,7 @@ EMAP = {"datasets": [
     {"id": "dev_set", "source": "hf:x/dev", "split": "train_dev"},
     {"id": "report_set", "source": "hf:x/report", "split": "report"},
 ]}
+TRANSLATIONS = {"schema": MODULE.TRANSLATIONS_SCHEMA, "family": "ark_authored", "rows": {"0123456789abcdef": "Hallo"}}
 PUBLISHED = {"schema": MODULE.SCHEMA, "numbers": [
     {"benchmark": "b", "system": "Other", "metric": "F1", "value": 0.5, "url": "https://arxiv.org/pdf/1", "table": "Table 1"}]}
 
@@ -95,7 +96,7 @@ def test_tpr_drop_compares_at_the_same_decision():
 
 
 def test_a_clean_benchmark_passes():
-    assert MODULE.check({"benchmarks": [benchmark()]}, EMAP, PUBLISHED) == []
+    assert MODULE.check({"benchmarks": [benchmark()]}, EMAP, PUBLISHED, TRANSLATIONS) == []
 
 
 @pytest.mark.parametrize("change, problem", [
@@ -111,24 +112,31 @@ def test_a_clean_benchmark_passes():
     ({"positive": []}, "names its positive rows"),
 ])
 def test_check_names_each_problem(change, problem):
-    problems = MODULE.check({"benchmarks": [benchmark(**change)]}, EMAP, PUBLISHED)
+    problems = MODULE.check({"benchmarks": [benchmark(**change)]}, EMAP, PUBLISHED, TRANSLATIONS)
     assert any(problem in p for p in problems), problems
 
 
 def test_a_registered_report_set_needs_no_own_files():
     entry = benchmark(dataset="report_set")
     del entry["files"]
-    assert MODULE.check({"benchmarks": [entry]}, EMAP, PUBLISHED) == []
+    assert MODULE.check({"benchmarks": [entry]}, EMAP, PUBLISHED, TRANSLATIONS) == []
 
 
 def test_a_published_number_needs_its_citation():
     for key in ("url", "table"):
         published = copy.deepcopy(PUBLISHED)
         published["numbers"][0][key] = ""
-        assert MODULE.check({"benchmarks": [benchmark()]}, EMAP, published)
+        assert MODULE.check({"benchmarks": [benchmark()]}, EMAP, published, TRANSLATIONS)
     published = copy.deepcopy(PUBLISHED)
     published["numbers"][0]["benchmark"] = "other"
-    assert any("unknown benchmark" in p for p in MODULE.check({"benchmarks": [benchmark()]}, EMAP, published))
+    assert any("unknown benchmark" in p for p in MODULE.check({"benchmarks": [benchmark()]}, EMAP, published, TRANSLATIONS))
+
+
+@pytest.mark.parametrize("change", [{"family": "neutral"}, {"schema": "other"}, {"rows": {"short": "Hallo"}},
+                                    {"rows": {"0123456789abcdef": " "}}])
+def test_translations_are_ark_authored_and_keyed(change):
+    problems = MODULE.check({"benchmarks": [benchmark()]}, EMAP, PUBLISHED, {**TRANSLATIONS, **change})
+    assert any(p.startswith("translations:") for p in problems), problems
 
 
 def test_gaps_ignore_dropped_benchmarks():
@@ -137,8 +145,8 @@ def test_gaps_ignore_dropped_benchmarks():
 
 
 def test_the_repository_registry_and_citations_check():
-    registry, published = MODULE.load()
-    assert MODULE.check(registry, MODULE.read(MODULE.ENTITY_MAP), published) == []
+    registry, published, translations = MODULE.load()
+    assert MODULE.check(registry, MODULE.read(MODULE.ENTITY_MAP), published, translations) == []
     assert all(entry["eval_only"] for entry in registry["benchmarks"])
 
 
@@ -161,7 +169,7 @@ def test_render_one_row_per_benchmark_and_system():
 
 
 def test_the_committed_report_is_current():
-    registry, published = MODULE.load()
+    registry, published, _ = MODULE.load()
     committed = (ROOT / "research" / "l1-threat" / "scoreboard" / SCOREBOARD.COMPETITORS_FILE).read_text(encoding="utf-8")
     assert "Classes without any competitor benchmark: " + ", ".join(MODULE.gaps(registry)) in committed
     for number in published["numbers"]:
@@ -208,7 +216,34 @@ def test_system_result_scores_the_benchmark_classes_and_the_obfuscation_drop():
     out = MODULE.system_result(benchmark(), rows, predictions, curve=True)
     assert out["f1"]["f1"] == 1.0
     assert out["drops"]["leetspeak"] == 0.0 and out["drops"]["base64"] == 1.0
-    assert [v["text"] for v in MODULE.variants([{"id": "p", "text": "hi", "positive": True}])][2] == "aGk="
+    assert [v["text"] for v in MODULE.variants([{"id": "p", "text": "hi", "positive": True}], {})][2] == "aGk="
+
+
+def test_the_german_drop_counts_only_the_translated_positives():
+    rows = [{"id": "p", "text": "ignore all", "positive": True}, {"id": "q", "text": "obey me", "positive": True},
+            {"id": "n", "text": "hello", "positive": False}]
+    translations = {MODULE.text_key("ignore all"): "ignoriere alles"}
+    variants = MODULE.variants(rows, translations)
+    assert [v for v in variants if v["id"].endswith("~de")] == [{"id": "p~de", "text": "ignoriere alles", "positive": True}]
+    predictions = {"p": {"scores": {"jailbreak": 0.9}, "flagged": ["jailbreak"]},
+                   "q": {"scores": {"jailbreak": 0.0}, "flagged": []},
+                   "n": {"scores": {}, "flagged": []}, "p~de": {"scores": {}, "flagged": []}}
+    for row in ("p", "q"):
+        for kind in MODULE.OBFUSCATION_KINDS:
+            predictions[f"{row}~{kind}"] = {"scores": {}, "flagged": []}
+    out = MODULE.system_result(benchmark(), rows, predictions, curve=True)
+    # p is caught clean and missed in German: the whole sample (p only) is lost; q has no translation.
+    assert out["drops"]["de"] == 1.0 and out["drops"]["base64"] == 0.5
+    del predictions["p~de"]
+    assert "de" not in MODULE.system_result(benchmark(), rows, predictions, curve=True)["drops"]
+
+
+def test_the_translation_sample_is_the_lowest_keys_of_the_positives(monkeypatch):
+    monkeypatch.setattr(MODULE, "TRANSLATION_SAMPLE", 2)
+    rows = [{"id": str(i), "text": f"t{i}", "positive": i != 3} for i in range(6)]
+    sample = MODULE.translation_sample(rows)
+    expected = sorted((r for r in rows if r["positive"]), key=lambda r: MODULE.text_key(r["text"]))[:2]
+    assert sample == expected and len(MODULE.text_key("x")) == 16
 
 
 def test_the_model_backed_system_flags_by_the_cascade_decision():
@@ -232,14 +267,15 @@ def test_the_model_backed_system_flags_by_the_cascade_decision():
 def test_the_result_cache_key_follows_the_system_configs(tmp_path, monkeypatch):
     binary = tmp_path / "predictor"
     binary.write_bytes(b"")
-    key = MODULE.result_key(benchmark(), binary, [])
-    assert MODULE.result_key(benchmark(), binary, []) == key
+    key = MODULE.result_key(benchmark(), binary, [], {})
+    assert MODULE.result_key(benchmark(), binary, [], {}) == key
+    assert MODULE.result_key(benchmark(), binary, [], {"0123456789abcdef": "Hallo"}) != key
     systems = MODULE.run_systems()
     changed = copy.deepcopy(systems)
     changed["l1_model"]["changed"] = True
     monkeypatch.setattr(MODULE, "run_systems", lambda: changed)
-    assert MODULE.result_key(benchmark(), binary, []) != key
-    assert MODULE.result_key(benchmark(), None, []) != key
+    assert MODULE.result_key(benchmark(), binary, [], {}) != key
+    assert MODULE.result_key(benchmark(), None, [], {}) != key
 
 
 class FakeReference:
@@ -252,9 +288,9 @@ class FakeReference:
 
 def test_a_reference_classifier_decides_at_one_half_and_skips_foreign_classes():
     rows = [{"id": "p", "text": "attack", "positive": True}, {"id": "n", "text": "hello", "positive": False}]
-    out = MODULE.reference_result(benchmark(), rows, FakeReference())
-    assert out["f1"]["f1"] == 1.0 and set(out["drops"].values()) == {1.0}
-    assert MODULE.reference_result(benchmark(classes=["toxic_language"]), rows, FakeReference()) is None
+    out = MODULE.reference_result(benchmark(), rows, FakeReference(), {MODULE.text_key("attack"): "Angriff"})
+    assert out["f1"]["f1"] == 1.0 and set(out["drops"].values()) == {1.0} and "de" in out["drops"]
+    assert MODULE.reference_result(benchmark(classes=["toxic_language"]), rows, FakeReference(), {}) is None
     assert set(MODULE.reference_latency(["x" * 2000], FakeReference())) == {"1KiB", "throughput"}
 
 

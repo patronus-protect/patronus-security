@@ -22,8 +22,10 @@ Protocol adapters (one per benchmark protocol), all on per-row scores (``score >
 - ``auprc``: average precision (``scoreboard.average_precision``; Llama Guard's protocol on the OpenAI moderation set).
 
 Every set with negatives also reports TPR at 0.1 % FPR. Robustness: ``obfuscate`` renders a positive under
-zero-width characters, Unicode tags, base64, leetspeak or homoglyphs (``generators.OBFUSCATIONS``);
-``tpr_drop`` is the TPR lost at the same cut as on the clean set.
+zero-width characters, Unicode tags, base64, leetspeak or homoglyphs (``generators.OBFUSCATIONS``), and
+the sampled positives of every benchmark with English rows in the runner's own German translation
+(``research/l1-threat/competitors_de.yaml``, ``ark_authored``, keyed by ``text_key``); ``tpr_drop`` is the TPR lost
+at the same cut as on the clean rows.
 
     python3 scripts/l1_threat/competitors.py check
 """
@@ -49,6 +51,7 @@ ROOT = HERE.parents[1]
 DATASETS = HERE / "datasets.yaml"
 ENTITY_MAP = ROOT / "research" / "l1-threat" / "entity_map.yaml"
 PUBLISHED = ROOT / "research" / "l1-threat" / "competitors.yaml"
+TRANSLATIONS = ROOT / "research" / "l1-threat" / "competitors_de.yaml"
 
 
 SCOREBOARD = sys.modules.get("_ark_l1_threat_scoreboard")
@@ -67,6 +70,9 @@ OBFUSCATION_KINDS = SCOREBOARD.OBFUSCATION_KINDS
 BENCHMARK_KEYS = {"id", "name", "classes", "languages", "source", "licence", "revision", "commercial", "eval_only",
                   "protocol", "note"}
 SCHEMA = "ark-l1-threat-competitors-v1"
+TRANSLATIONS_SCHEMA = "ark-l1-threat-competitors-de-v1"
+# Positives per benchmark with English rows that are translated to German: the lowest ``text_key`` values.
+TRANSLATION_SAMPLE = 30
 OPTIONAL_BENCHMARK_KEYS = {"dataset", "targets", "files", "format", "text", "positive", "rows", "pending", "dropped"}
 CORPORA = SCOREBOARD.CORPORA
 PII_LATENCY = sys.modules.get("_ark_l1_pii_latency") or SCOREBOARD._load_file(
@@ -155,6 +161,26 @@ def tpr_drop(clean: list[bool], variant: list[bool]) -> float | None:
     return sum(clean) / len(clean) - sum(variant) / len(variant)
 
 
+def drops(pos: list[str], flag: Any, variant_ids: set[str]) -> dict[str, float | None]:
+    """The TPR drop under each obfuscation over every positive and, under ``de``, over the positives that have a
+    German translation (``<id>~de`` in ``variant_ids``), compared with the same positives clean."""
+    out = {kind: tpr_drop([flag(i) for i in pos], [flag(f"{i}~{kind}") for i in pos]) for kind in OBFUSCATION_KINDS}
+    translated = [i for i in pos if f"{i}~de" in variant_ids]
+    if translated:
+        out["de"] = tpr_drop([flag(i) for i in translated], [flag(f"{i}~de") for i in translated])
+    return out
+
+
+def text_key(text: str) -> str:
+    """The key of a benchmark text in the translation file (no benchmark text is stored next to its translation)."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def translation_sample(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The positives of a benchmark that get a German translation: the ``TRANSLATION_SAMPLE`` lowest ``text_key``."""
+    return sorted((row for row in rows if row["positive"]), key=lambda row: text_key(row["text"]))[:TRANSLATION_SAMPLE]
+
+
 # ── registry ─────────────────────────────────────────────────────────────────
 
 
@@ -164,7 +190,8 @@ def _repo(source: str) -> str:
     return "/".join(text.split()[0].split("/")[:2]).lower()
 
 
-def check(registry: dict[str, Any], emap: dict[str, Any], published: dict[str, Any]) -> list[str]:
+def check(registry: dict[str, Any], emap: dict[str, Any], published: dict[str, Any],
+          translations: dict[str, Any]) -> list[str]:
     problems: list[str] = []
     datasets = {d["id"]: d for d in emap.get("datasets") or []}
     holdout_repos = {_repo(d["source"]) for d in datasets.values() if d["split"] == "holdout" and "/" in d["source"]}
@@ -199,6 +226,11 @@ def check(registry: dict[str, Any], emap: dict[str, Any], published: dict[str, A
             problems.append(f"{where}: a measured benchmark pins its files by SHA-256 (or reuses a registered dataset)")
         if live and dataset is not None and dataset["split"] == "train_dev":
             problems.append(f"{where}: dataset {entry['dataset']!r} is dev data (training, calibration)")
+    if translations.get("schema") != TRANSLATIONS_SCHEMA or translations.get("family") != "ark_authored":
+        problems.append(f"translations: schema must be {TRANSLATIONS_SCHEMA} and family ark_authored")
+    for key, text in (translations.get("rows") or {}).items():
+        if not re.fullmatch(r"[0-9a-f]{16}", str(key)) or not isinstance(text, str) or not text.strip():
+            problems.append(f"translations: {key!r} needs a text_key and a German text")
     if published.get("schema") != SCHEMA:
         problems.append(f"published numbers: schema must be {SCHEMA}")
     for number in published.get("numbers") or []:
@@ -247,10 +279,13 @@ def benchmark_rows(entry: dict[str, Any], registry: dict[str, Any], sources: Pat
     return out
 
 
-def variants(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Every positive again under each obfuscation, id ``<id>~<kind>``."""
-    return [{"id": f"{row['id']}~{kind}", "text": obfuscate(row["text"], kind), "positive": True}
-            for row in rows if row["positive"] for kind in OBFUSCATION_KINDS]
+def variants(rows: list[dict[str, Any]], translations: dict[str, str]) -> list[dict[str, Any]]:
+    """Every positive again under each obfuscation, id ``<id>~<kind>``, and in German, id ``<id>~de``, where
+    ``translations`` (text_key -> German text) has it."""
+    obfuscated = [{"id": f"{row['id']}~{kind}", "text": obfuscate(row["text"], kind), "positive": True}
+                  for row in rows if row["positive"] for kind in OBFUSCATION_KINDS]
+    return obfuscated + [{"id": f"{row['id']}~de", "text": translations[text_key(row["text"])], "positive": True}
+                         for row in rows if row["positive"] and text_key(row["text"]) in translations]
 
 
 def predict(rows: list[dict[str, Any]], binary: Path, config: dict[str, Any], work: Path) -> dict[str, dict[str, Any]]:
@@ -268,7 +303,8 @@ def predict(rows: list[dict[str, Any]], binary: Path, config: dict[str, Any], wo
 
 def system_result(entry: dict[str, Any], rows: list[dict[str, Any]], predictions: dict[str, dict[str, Any]],
                   curve: bool) -> dict[str, Any]:
-    """Protocol result of one system on one benchmark, with the TPR drop under each obfuscation; the score of a row
+    """Protocol result of one system on one benchmark, with the TPR drop under each obfuscation and in German
+    translation (``drops``); the score of a row
     is the highest over the benchmark's classes, of the L1 score curve (``curve``) or of the cascade's answer, and a
     row is flagged by L1's detections (``curve``) or by the cascade's final decision."""
     def score(row_id: str) -> float:
@@ -285,26 +321,25 @@ def system_result(entry: dict[str, Any], rows: list[dict[str, Any]], predictions
     neg = [r["id"] for r in rows if not r["positive"]]
     out = evaluate(entry, [score(i) for i in pos], [score(i) for i in neg], [flag(i) for i in pos],
                    [flag(i) for i in neg])
-    clean = [flag(i) for i in pos]
-    out["drops"] = {kind: tpr_drop(clean, [flag(f"{i}~{kind}") for i in pos]) for kind in OBFUSCATION_KINDS}
+    out["drops"] = drops(pos, flag, set(predictions))
     return out
 
 
-def reference_result(entry: dict[str, Any], rows: list[dict[str, Any]], model: Any) -> dict[str, Any] | None:
+def reference_result(entry: dict[str, Any], rows: list[dict[str, Any]], model: Any,
+                     translations: dict[str, str]) -> dict[str, Any] | None:
     """A reference classifier (``run_baselines.ReferenceBaseline``) on one benchmark under its protocol, deciding at
     0.5 like its model card; None when it scores none of the benchmark's classes."""
     classes = [cls for cls in entry["classes"] if cls in model.classes]
     if not classes:
         return None
-    every = rows + variants(rows)
+    every = rows + variants(rows, translations)
     scores = {row["id"]: max(out["scores"][cls] for cls in classes)
               for row, out in zip(every, model.score([row["text"] for row in every]))}
     pos = [r["id"] for r in rows if r["positive"]]
     neg = [r["id"] for r in rows if not r["positive"]]
     out = evaluate(entry, [scores[i] for i in pos], [scores[i] for i in neg], [scores[i] >= 0.5 for i in pos],
                    [scores[i] >= 0.5 for i in neg])
-    clean = [scores[i] >= 0.5 for i in pos]
-    out["drops"] = {kind: tpr_drop(clean, [scores[f"{i}~{kind}"] >= 0.5 for i in pos]) for kind in OBFUSCATION_KINDS}
+    out["drops"] = drops(pos, lambda i: scores[i] >= 0.5, set(scores))
     return out
 
 
@@ -359,18 +394,20 @@ def latency(texts: list[str], binary: Path, work: Path) -> dict[str, Any]:
     return out
 
 
-def result_key(entry: dict[str, Any], binary: Path | None, references: list[Any]) -> str:
+def result_key(entry: dict[str, Any], binary: Path | None, references: list[Any], translations: dict[str, str]) -> str:
     """Cache key of one benchmark's result: the benchmark, every system's config (so a changed calibration is
-    measured again), the predictor build and the reference classifiers."""
-    inputs = [entry, run_systems() if binary else {}, binary and binary.stat().st_mtime_ns, [m.id for m in references]]
+    measured again), the predictor build, the reference classifiers and the German translations."""
+    inputs = [entry, run_systems() if binary else {}, binary and binary.stat().st_mtime_ns, [m.id for m in references],
+              translations]
     return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
 def run(registry: dict[str, Any], binary: Path | None, sources: Path, work: Path, offline: bool = False,
-        references: list[Any] = (), only: set[str] | None = None) -> dict[str, Any]:
+        references: list[Any] = (), only: set[str] | None = None,
+        translations: dict[str, str] | None = None) -> dict[str, Any]:
     """Every live benchmark through every ``run_systems`` system and every reference classifier (``references``,
     ``run_baselines.reference_baselines``), on the benchmarks of ``only`` when given; without ``binary`` ARK is not
-    run (a separate reference run). The ``results`` are what ``scoreboard.py competitors`` renders and merges."""
+    run (a separate reference run); ``translations`` (text_key -> German text) adds the German variants. The ``results`` are what ``scoreboard.py competitors`` renders and merges."""
     machine = PII_LATENCY.machine_info()
     results: dict[str, Any] = {"benchmarks": {},
                                "machine": f"{machine['cpu']}, {machine['cpus_usable']} usable CPUs, {machine['system']}"}
@@ -381,16 +418,16 @@ def run(registry: dict[str, Any], binary: Path | None, sources: Path, work: Path
     for entry in sorted(live, key=lambda e: len(benchmark_rows(e, registry, sources, offline))):
         rows = benchmark_rows(entry, registry, sources, offline)
         texts += [row["text"] for row in rows]
-        done = work / f"{entry['id']}-{result_key(entry, binary, references)}.json"
+        done = work / f"{entry['id']}-{result_key(entry, binary, references, translations or {})}.json"
         if done.is_file():
             results["benchmarks"][entry["id"]] = json.loads(done.read_text(encoding="utf-8"))
             continue
         systems = {}
         for system, config in run_systems().items() if binary else ():
-            predictions = predict(rows + variants(rows), binary, config, work / system)
+            predictions = predict(rows + variants(rows, translations or {}), binary, config, work / system)
             systems[system] = system_result(entry, rows, predictions, curve=system == "rules")
         for model in references:
-            result = reference_result(entry, rows, model)
+            result = reference_result(entry, rows, model, translations or {})
             if result is not None:
                 systems[model.id] = result
         results["benchmarks"][entry["id"]] = {"rows": len(rows), "positives": sum(r["positive"] for r in rows),
@@ -407,15 +444,19 @@ def read(path: Path) -> Any:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
-def load() -> tuple[dict[str, Any], dict[str, Any]]:
-    """The benchmark registry (``datasets.yaml``) and the cited published numbers."""
-    return read(DATASETS), read(PUBLISHED)
+def load() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """The benchmark registry (``datasets.yaml``), the cited published numbers and the German translations."""
+    return read(DATASETS), read(PUBLISHED), read(TRANSLATIONS)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("check", help="check the benchmark recipes and the cited competitor numbers")
+    commands.add_parser("check", help="check the benchmark recipes, the cited competitor numbers and the translations")
+    t = commands.add_parser("sample", help="write the positives to translate to German (text_key -> text, JSON)")
+    t.add_argument("--sources", type=Path, required=True, help="download cache of the benchmark files")
+    t.add_argument("--offline", action="store_true")
+    t.add_argument("--output", type=Path, required=True)
     r = commands.add_parser("run", help="measure ARK on every live benchmark (results JSON for scoreboard.py)")
     r.add_argument("--predictor", type=Path, help=f"built {SCOREBOARD.PREDICTOR} example (without: references only)")
     r.add_argument("--benchmark", action="append", default=[], help="only these benchmark ids (repeatable)")
@@ -427,14 +468,22 @@ def main(argv: list[str] | None = None) -> int:
                    help="reference classifier to run next to ARK (repeatable; needs --models)")
     r.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    registry, published = load()
-    problems = check(registry, read(ENTITY_MAP), published)
+    registry, published, translations = load()
+    problems = check(registry, read(ENTITY_MAP), published, translations)
     for problem in problems:
         print(problem, file=sys.stderr)
     if problems or args.command == "check":
         return 1 if problems else 0
+    if args.command == "sample":
+        sample = {text_key(row["text"]): row["text"]
+                  for entry in registry.get("benchmarks") or []
+                  if not entry.get("pending") and not entry.get("dropped") and "en" in entry["languages"]
+                  for row in translation_sample(benchmark_rows(entry, registry, args.sources, args.offline))}
+        args.output.write_text(json.dumps(sample, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        return 0
     references = BASELINES.reference_baselines(read(ENTITY_MAP), args.models, set(args.reference)) if args.reference else []
-    results = run(registry, args.predictor, args.sources, args.work, args.offline, references, set(args.benchmark))
+    results = run(registry, args.predictor, args.sources, args.work, args.offline, references, set(args.benchmark),
+                  translations.get("rows") or {})
     args.output.write_text(json.dumps(results, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return 0
 
