@@ -5,12 +5,16 @@
   },
   "class_sets": {
     "agent_config_tampering": {
+      "generated/advisory_shapes": 400,
+      "generated/agent_casebook": 400,
       "generated/agent_scenarios": 160,
       "generated/class_templates": 84,
       "train_dev/approve_or_deny_de": 3
     },
     "benign": {
-      "generated/agent_scenarios": 640,
+      "generated/advisory_shapes": 2000,
+      "generated/agent_casebook": 2000,
+      "generated/agent_scenarios": 589,
       "generated/carrier_insertion": 585,
       "generated/class_templates": 425,
       "generated/exfil_lookalikes": 300,
@@ -36,6 +40,8 @@
       "translated/runner_translations_de": 150
     },
     "exfiltration": {
+      "generated/advisory_shapes": 400,
+      "generated/agent_casebook": 400,
       "generated/carrier_insertion": 75,
       "generated/exfil_lookalikes": 300,
       "generated/obfuscation_slices": 59,
@@ -49,8 +55,7 @@
       "report/nemotron_content_safety_v2": 1471,
       "train_dev/nemotron_safety_v3": 799,
       "train_dev/polyguardprompts": 293,
-      "train_dev/simple_safety_tests": 100,
-      "translated/runner_translations_de": 100
+      "train_dev/simple_safety_tests": 100
     },
     "instruction_injection": {
       "generated/carrier_insertion": 304,
@@ -77,6 +82,8 @@
       "train_dev/xl_safetybench": 450
     },
     "memory_poisoning": {
+      "generated/advisory_shapes": 400,
+      "generated/agent_casebook": 400,
       "generated/agent_scenarios": 160,
       "generated/class_templates": 83
     },
@@ -91,10 +98,14 @@
       "translated/runner_translations_de": 300
     },
     "resource_exhaustion": {
+      "generated/advisory_shapes": 400,
+      "generated/agent_casebook": 400,
       "generated/agent_scenarios": 160,
       "generated/class_templates": 83
     },
     "tool_poisoning": {
+      "generated/advisory_shapes": 400,
+      "generated/agent_casebook": 400,
       "generated/agent_scenarios": 160,
       "generated/class_templates": 83
     },
@@ -114,25 +125,25 @@
       "report/injecagent": 30,
       "train_dev/agent_safetybench": 59,
       "train_dev/agentdojo": 30,
-      "train_dev/approve_or_deny_de": 35,
+      "train_dev/approve_or_deny_de": 6,
       "train_dev/redcode": 293
     }
   },
   "classes": {
     "agent_config_tampering": {
-      "de": 125,
-      "en": 122
+      "de": 525,
+      "en": 522
     },
     "benign": {
-      "de": 24632,
-      "en": 35938
+      "de": 26606,
+      "en": 37913
     },
     "exfiltration": {
-      "de": 151,
-      "en": 397
+      "de": 551,
+      "en": 797
     },
     "harmful_content": {
-      "de": 561,
+      "de": 461,
       "en": 731
     },
     "instruction_injection": {
@@ -144,27 +155,27 @@
       "en": 2884
     },
     "memory_poisoning": {
-      "de": 122,
-      "en": 121
+      "de": 522,
+      "en": 521
     },
     "prompt_extraction": {
       "de": 387,
       "en": 15143
     },
     "resource_exhaustion": {
-      "de": 122,
-      "en": 121
+      "de": 522,
+      "en": 521
     },
     "tool_poisoning": {
-      "de": 122,
-      "en": 121
+      "de": 522,
+      "en": 521
     },
     "toxic_language": {
       "de": 223,
       "en": 831
     },
     "unsafe_action": {
-      "de": 164,
+      "de": 135,
       "en": 643
     }
   },
@@ -172,10 +183,12 @@
     "agent_config_tampering": {
       "de": {
         "provenance": {
-          "synthetic": 122,
+          "synthetic": 522,
           "translated": 3
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agent_scenarios": 80,
           "approve_or_deny_de": 3,
           "generators": 42
@@ -183,9 +196,11 @@
       },
       "en": {
         "provenance": {
-          "synthetic": 122
+          "synthetic": 522
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agent_scenarios": 80,
           "generators": 42
         }
@@ -194,10 +209,12 @@
     "exfiltration": {
       "de": {
         "provenance": {
-          "synthetic": 150,
+          "synthetic": 550,
           "translated": 1
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "approve_or_deny_de": 1,
           "generators": 150
         }
@@ -205,9 +222,11 @@
       "en": {
         "provenance": {
           "native": 113,
-          "synthetic": 284
+          "synthetic": 684
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agentdojo": 63,
           "bipia": 50,
           "generators": 284
@@ -217,12 +236,11 @@
     "harmful_content": {
       "de": {
         "provenance": {
-          "translated": 561
+          "translated": 461
         },
         "sources": {
           "nemotron_safety_v3": 316,
-          "polyguardprompts": 145,
-          "runner_translations_de": 100
+          "polyguardprompts": 145
         }
       },
       "en": {
@@ -290,18 +308,22 @@
     "memory_poisoning": {
       "de": {
         "provenance": {
-          "synthetic": 122
+          "synthetic": 522
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agent_scenarios": 80,
           "generators": 42
         }
       },
       "en": {
         "provenance": {
-          "synthetic": 121
+          "synthetic": 521
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agent_scenarios": 80,
           "generators": 41
         }
@@ -335,18 +357,22 @@
     "resource_exhaustion": {
       "de": {
         "provenance": {
-          "synthetic": 122
+          "synthetic": 522
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agent_scenarios": 80,
           "generators": 42
         }
       },
       "en": {
         "provenance": {
-          "synthetic": 121
+          "synthetic": 521
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agent_scenarios": 80,
           "generators": 41
         }
@@ -355,18 +381,22 @@
     "tool_poisoning": {
       "de": {
         "provenance": {
-          "synthetic": 122
+          "synthetic": 522
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agent_scenarios": 80,
           "generators": 42
         }
       },
       "en": {
         "provenance": {
-          "synthetic": 121
+          "synthetic": 521
         },
         "sources": {
+          "advisory_shapes": 200,
+          "agent_casebook": 200,
           "agent_scenarios": 80,
           "generators": 41
         }
@@ -398,10 +428,10 @@
       "de": {
         "provenance": {
           "synthetic": 129,
-          "translated": 35
+          "translated": 6
         },
         "sources": {
-          "approve_or_deny_de": 35,
+          "approve_or_deny_de": 6,
           "generators": 129
         }
       },
@@ -421,10 +451,73 @@
   },
   "flagged": [
     {
+      "id": "agent_safetybench:0001647",
+      "label": "unsafe_action",
+      "note": "Scraping personal data framed as a demo; privacy harm, unsafe act only implied",
+      "set": "train_dev/agent_safetybench",
+      "verdict": "unclear"
+    },
+    {
+      "id": "dynahate:0032382",
+      "label": "toxic_language",
+      "note": "questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat",
+      "set": "train_dev/dynahate",
+      "verdict": "unclear"
+    },
+    {
       "id": "mosscap:0068803",
       "label": "prompt_extraction",
       "note": "Literal phrase request; extraction intent only implied",
       "set": "train_dev/mosscap",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_safety_v3:0003660",
+      "label": "harmful_content",
+      "note": "Interpersonal sabotage; no AILuminate hazard fits",
+      "set": "train_dev/nemotron_safety_v3",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_safety_v3:0000500",
+      "label": "harmful_content",
+      "note": "Binge-drinking question; harm to self only, little uplift",
+      "set": "train_dev/nemotron_safety_v3",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_safety_v3:0000998",
+      "label": "toxic_language",
+      "note": "Mild venting about children; hatred of a group unclear",
+      "set": "train_dev/nemotron_safety_v3",
+      "verdict": "unclear"
+    },
+    {
+      "id": "neuralchemy:0003342",
+      "label": "instruction_injection",
+      "note": "asks for an attack prompt, carries no override itself",
+      "set": "train_dev/neuralchemy",
+      "verdict": "unclear"
+    },
+    {
+      "id": "neuralchemy:0003180",
+      "label": "jailbreak",
+      "note": "override plus extraction request, not a jailbreak",
+      "set": "train_dev/neuralchemy",
+      "verdict": "wrong"
+    },
+    {
+      "id": "polyguardprompts:0027986",
+      "label": "harmful_content",
+      "note": "dominance plan for a TV plot, harm vague",
+      "set": "train_dev/polyguardprompts",
+      "verdict": "unclear"
+    },
+    {
+      "id": "polyguardprompts:0023736",
+      "label": "harmful_content",
+      "note": "vague evasion of platform rules, no hazard named",
+      "set": "train_dev/polyguardprompts",
       "verdict": "unclear"
     },
     {
@@ -439,6 +532,20 @@
       "label": "jailbreak",
       "note": "Fantasy forgery of spell scrolls; harmful goal only implied",
       "set": "train_dev/wildjailbreak",
+      "verdict": "unclear"
+    },
+    {
+      "id": "xsafety_de:0000061",
+      "label": "toxic_language",
+      "note": "reproaches the reader for bad manners and swearing; critical but no insult, slur or threat",
+      "set": "train_dev/xsafety_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "xsafety_de:0000062",
+      "label": "toxic_language",
+      "note": "polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat",
+      "set": "train_dev/xsafety_de",
       "verdict": "unclear"
     },
     {
@@ -547,111 +654,6 @@
       "verdict": "wrong"
     },
     {
-      "id": "gandalf:0000636",
-      "label": "instruction_injection+prompt_extraction",
-      "note": "Only asks about memory; neither override nor extraction clear",
-      "set": "report/gandalf",
-      "verdict": "unclear"
-    },
-    {
-      "id": "jackhhao_jailbreak:0001451",
-      "label": "jailbreak",
-      "note": "Instruction override with harmless goal; injection rather than jailbreak",
-      "set": "report/jackhhao_jailbreak",
-      "verdict": "unclear"
-    },
-    {
-      "id": "jackhhao_jailbreak:0000236",
-      "label": "jailbreak",
-      "note": "Persona pretext for risky essay, but no rule-lifting",
-      "set": "report/jackhhao_jailbreak",
-      "verdict": "unclear"
-    },
-    {
-      "id": "jackhhao_jailbreak:0000452",
-      "label": "jailbreak",
-      "note": "Harmless D&D campaign request, no rule-lifting",
-      "set": "report/jackhhao_jailbreak",
-      "verdict": "wrong"
-    },
-    {
-      "id": "textdetox_de:0002064",
-      "label": "toxic_language",
-      "note": "Sarcastic political jab; mild",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "textdetox_de:0002101",
-      "label": "toxic_language",
-      "note": "Sarcastic camp remark; tone unclear",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "textdetox_de:0003412",
-      "label": "benign",
-      "note": "Common dehumanizing trope, likely aimed at migrants",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "textdetox_de:0004666",
-      "label": "toxic_language",
-      "note": "Crude but generic political venting",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "textdetox_de:0002408",
-      "label": "toxic_language",
-      "note": "Harsh political comparison, no direct insult",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "textdetox_de:0004698",
-      "label": "toxic_language",
-      "note": "Political criticism without insult",
-      "set": "report/textdetox_de",
-      "verdict": "wrong"
-    },
-    {
-      "id": "textdetox_de:0001886",
-      "label": "toxic_language",
-      "note": "Ethnically framed deportation call; borderline",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "textdetox_de:0003894",
-      "label": "toxic_language",
-      "note": "Political complaint without insult",
-      "set": "report/textdetox_de",
-      "verdict": "wrong"
-    },
-    {
-      "id": "textdetox_de:0002396",
-      "label": "benign",
-      "note": "Mild jab at addressee's education",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "textdetox_de:0001950",
-      "label": "toxic_language",
-      "note": "Condescending but mild",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "textdetox_de:0004397",
-      "label": "benign",
-      "note": "Calls politician fascist; insulting label",
-      "set": "report/textdetox_de",
-      "verdict": "unclear"
-    },
-    {
       "id": "civil_comments:0060853",
       "label": "toxic_language",
       "note": "Self-referential mild profanity; no insult or target",
@@ -708,125 +710,6 @@
       "verdict": "unclear"
     },
     {
-      "id": "nemotron_safety_v3:0003660",
-      "label": "harmful_content",
-      "note": "Interpersonal sabotage; no AILuminate hazard fits",
-      "set": "train_dev/nemotron_safety_v3",
-      "verdict": "unclear"
-    },
-    {
-      "id": "nemotron_safety_v3:0000500",
-      "label": "harmful_content",
-      "note": "Binge-drinking question; harm to self only, little uplift",
-      "set": "train_dev/nemotron_safety_v3",
-      "verdict": "unclear"
-    },
-    {
-      "id": "nemotron_safety_v3:0000998",
-      "label": "toxic_language",
-      "note": "Mild venting about children; hatred of a group unclear",
-      "set": "train_dev/nemotron_safety_v3",
-      "verdict": "unclear"
-    },
-    {
-      "id": "nemotron_content_safety_v2:0024735",
-      "label": "harmful_content",
-      "note": "Conversation fragment; the act is not named",
-      "set": "report/nemotron_content_safety_v2",
-      "verdict": "unclear"
-    },
-    {
-      "id": "nemotron_content_safety_v2:0017232",
-      "label": "harmful_content",
-      "note": "Drinking alcohol unnoticed; minor rule-breaking",
-      "set": "report/nemotron_content_safety_v2",
-      "verdict": "unclear"
-    },
-    {
-      "id": "nemotron_content_safety_v2:0000239",
-      "label": "harmful_content",
-      "note": "Video-game crafting; real-world uplift unclear",
-      "set": "report/nemotron_content_safety_v2",
-      "verdict": "unclear"
-    },
-    {
-      "id": "nemotron_content_safety_v2:0022884",
-      "label": "harmful_content",
-      "note": "Self-defence request by a victim",
-      "set": "report/nemotron_content_safety_v2",
-      "verdict": "wrong"
-    },
-    {
-      "id": "nemotron_content_safety_v2:0016319",
-      "label": "harmful_content",
-      "note": "Cheating in a game; no hazard",
-      "set": "report/nemotron_content_safety_v2",
-      "verdict": "unclear"
-    },
-    {
-      "id": "agent_safetybench:0001647",
-      "label": "unsafe_action",
-      "note": "Scraping personal data framed as a demo; privacy harm, unsafe act only implied",
-      "set": "train_dev/agent_safetybench",
-      "verdict": "unclear"
-    },
-    {
-      "id": "runner_translations_de:mosscap:0007923",
-      "label": "prompt_extraction",
-      "note": "fake admin role asks the model to reveal personal information it holds; probes protected data rather than the hidden password or instructions",
-      "set": "translated/runner_translations_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "dynahate:0032382",
-      "label": "toxic_language",
-      "note": "questions how Finland will support refugees with scare quotes around the group; hostile framing but no dehumanising term or threat",
-      "set": "train_dev/dynahate",
-      "verdict": "unclear"
-    },
-    {
-      "id": "xsafety_de:0000061",
-      "label": "toxic_language",
-      "note": "reproaches the reader for bad manners and swearing; critical but no insult, slur or threat",
-      "set": "train_dev/xsafety_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "xsafety_de:0000062",
-      "label": "toxic_language",
-      "note": "polite-form admonition against bullying with a sarcastic 'do you think you are a king'; hostile tone, no insult or threat",
-      "set": "train_dev/xsafety_de",
-      "verdict": "unclear"
-    },
-    {
-      "id": "neuralchemy:0003342",
-      "label": "instruction_injection",
-      "note": "asks for an attack prompt, carries no override itself",
-      "set": "train_dev/neuralchemy",
-      "verdict": "unclear"
-    },
-    {
-      "id": "neuralchemy:0003180",
-      "label": "jailbreak",
-      "note": "override plus extraction request, not a jailbreak",
-      "set": "train_dev/neuralchemy",
-      "verdict": "wrong"
-    },
-    {
-      "id": "polyguardprompts:0027986",
-      "label": "harmful_content",
-      "note": "dominance plan for a TV plot, harm vague",
-      "set": "train_dev/polyguardprompts",
-      "verdict": "unclear"
-    },
-    {
-      "id": "polyguardprompts:0023736",
-      "label": "harmful_content",
-      "note": "vague evasion of platform rules, no hazard named",
-      "set": "train_dev/polyguardprompts",
-      "verdict": "unclear"
-    },
-    {
       "id": "deepset_prompt_injections:0000386",
       "label": "instruction_injection",
       "note": "Requests a political statement; no override of instructions",
@@ -880,6 +763,13 @@
       "label": "instruction_injection",
       "note": "Weak persona switch; no clear override",
       "set": "report/deepset_prompt_injections",
+      "verdict": "unclear"
+    },
+    {
+      "id": "gandalf:0000636",
+      "label": "instruction_injection+prompt_extraction",
+      "note": "Only asks about memory; neither override nor extraction clear",
+      "set": "report/gandalf",
       "verdict": "unclear"
     },
     {
@@ -1091,26 +981,166 @@
       "note": "Data sharing to third party: exfiltration more than unsafe_action",
       "set": "report/injecagent",
       "verdict": "unclear"
+    },
+    {
+      "id": "jackhhao_jailbreak:0001451",
+      "label": "jailbreak",
+      "note": "Instruction override with harmless goal; injection rather than jailbreak",
+      "set": "report/jackhhao_jailbreak",
+      "verdict": "unclear"
+    },
+    {
+      "id": "jackhhao_jailbreak:0000236",
+      "label": "jailbreak",
+      "note": "Persona pretext for risky essay, but no rule-lifting",
+      "set": "report/jackhhao_jailbreak",
+      "verdict": "unclear"
+    },
+    {
+      "id": "jackhhao_jailbreak:0000452",
+      "label": "jailbreak",
+      "note": "Harmless D&D campaign request, no rule-lifting",
+      "set": "report/jackhhao_jailbreak",
+      "verdict": "wrong"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0024735",
+      "label": "harmful_content",
+      "note": "Conversation fragment; the act is not named",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0017232",
+      "label": "harmful_content",
+      "note": "Drinking alcohol unnoticed; minor rule-breaking",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0000239",
+      "label": "harmful_content",
+      "note": "Video-game crafting; real-world uplift unclear",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0022884",
+      "label": "harmful_content",
+      "note": "Self-defence request by a victim",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "wrong"
+    },
+    {
+      "id": "textdetox_de:0002064",
+      "label": "toxic_language",
+      "note": "Sarcastic political jab; mild",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0002101",
+      "label": "toxic_language",
+      "note": "Sarcastic camp remark; tone unclear",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0003412",
+      "label": "benign",
+      "note": "Common dehumanizing trope, likely aimed at migrants",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0004666",
+      "label": "toxic_language",
+      "note": "Crude but generic political venting",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0002408",
+      "label": "toxic_language",
+      "note": "Harsh political comparison, no direct insult",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0004698",
+      "label": "toxic_language",
+      "note": "Political criticism without insult",
+      "set": "report/textdetox_de",
+      "verdict": "wrong"
+    },
+    {
+      "id": "textdetox_de:0001886",
+      "label": "toxic_language",
+      "note": "Ethnically framed deportation call; borderline",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0003894",
+      "label": "toxic_language",
+      "note": "Political complaint without insult",
+      "set": "report/textdetox_de",
+      "verdict": "wrong"
+    },
+    {
+      "id": "textdetox_de:0002396",
+      "label": "benign",
+      "note": "Mild jab at addressee's education",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0001950",
+      "label": "toxic_language",
+      "note": "Condescending but mild",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "textdetox_de:0004397",
+      "label": "benign",
+      "note": "Calls politician fascist; insulting label",
+      "set": "report/textdetox_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "runner_translations_de:mosscap:0007923",
+      "label": "prompt_extraction",
+      "note": "fake admin role asks the model to reveal personal information it holds; probes protected data rather than the hidden password or instructions",
+      "set": "translated/runner_translations_de",
+      "verdict": "unclear"
+    },
+    {
+      "id": "nemotron_content_safety_v2:0016319",
+      "label": "harmful_content",
+      "note": "Cheating in a game; no hazard",
+      "set": "report/nemotron_content_safety_v2",
+      "verdict": "unclear"
     }
   ],
   "provenance": {
     "agent_config_tampering": {
-      "synthetic": 244,
+      "synthetic": 1044,
       "translated": 3
     },
     "benign": {
       "native": 46306,
-      "synthetic": 1950,
+      "synthetic": 5899,
       "translated": 12314
     },
     "exfiltration": {
       "native": 113,
-      "synthetic": 434,
+      "synthetic": 1234,
       "translated": 1
     },
     "harmful_content": {
       "native": 731,
-      "translated": 561
+      "translated": 461
     },
     "instruction_injection": {
       "native": 4370,
@@ -1122,7 +1152,7 @@
       "synthetic": 156
     },
     "memory_poisoning": {
-      "synthetic": 243
+      "synthetic": 1043
     },
     "prompt_extraction": {
       "native": 15073,
@@ -1130,10 +1160,10 @@
       "translated": 300
     },
     "resource_exhaustion": {
-      "synthetic": 243
+      "synthetic": 1043
     },
     "tool_poisoning": {
-      "synthetic": 243
+      "synthetic": 1043
     },
     "toxic_language": {
       "native": 831,
@@ -1142,11 +1172,33 @@
     "unsafe_action": {
       "native": 382,
       "synthetic": 390,
-      "translated": 35
+      "translated": 6
     }
   },
   "schema": "ark-l1-threat-gold-summary-v1",
   "sets": {
+    "generated/advisory_shapes": {
+      "benign_errors": 0,
+      "benign_reviewed": 17,
+      "dataset": "generators_dev_seed",
+      "error_rate": 0.0,
+      "reviewed": 102,
+      "role": "dev",
+      "rows": 4000,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "generated/agent_casebook": {
+      "benign_errors": 0,
+      "benign_reviewed": 17,
+      "dataset": "generators_dev_seed",
+      "error_rate": 0.0,
+      "reviewed": 102,
+      "role": "dev",
+      "rows": 4000,
+      "unclear": 0,
+      "wrong": 0
+    },
     "generated/agent_scenarios": {
       "benign_errors": 0,
       "benign_reviewed": 10,
@@ -1154,7 +1206,7 @@
       "error_rate": 0.0,
       "reviewed": 50,
       "role": "dev",
-      "rows": 1280,
+      "rows": 1229,
       "unclear": 0,
       "wrong": 0
     },
@@ -1325,12 +1377,12 @@
     },
     "train_dev/approve_or_deny_de": {
       "benign_errors": 0,
-      "benign_reviewed": 23,
+      "benign_reviewed": 25,
       "dataset": "approve_or_deny_de",
       "error_rate": 0.0,
       "reviewed": 50,
       "role": "dev",
-      "rows": 82,
+      "rows": 72,
       "unclear": 0,
       "wrong": 0
     },
@@ -1561,7 +1613,7 @@
       "error_rate": 0.0192,
       "reviewed": 52,
       "role": "dev",
-      "rows": 700,
+      "rows": 600,
       "unclear": 1,
       "wrong": 0
     }

@@ -826,6 +826,15 @@ Quelle (`agent_scenarios` für die vier Agenten-Klassen, `source_family` im Mani
 toxic_language brauchen je Sprache eine zweite offene, lizenzgeprüfte Quelle (nativ bevorzugt, keine
 Maschinenübersetzung derselben Nemotron-Prompts). Braucht eine Runde neu erzeugte oder geholte Dev-Daten, nennt
 der PR den Owner-Befehl.
+E14 (Owner 2026-11-27, 300 Dev-Positive je Agenten-Klasse und Sprache aus drei unabhängigen Quellen): zwei weitere
+Dev-Generator-Familien, `agent_casebook` (eigene Träger und Formulierungen) und `advisory_shapes` (öffentliche
+Write-ups und Advisories als Angriffsform), je 200 Angriffe pro Klasse und Sprache für die vier Agenten-Klassen und
+`exfiltration`, jeder mit harmlosem Doppelgänger im selben Träger (Hard Negative); damit 521–525 Positive aus vier
+Quellen je Agenten-Klasse und Sprache, `exfiltration` DE 551. Owner-Befehl zum Einfrieren in `DEV`:
+`python3 scripts/l1_threat/generators.py generate --dev-out DEV --only agent_casebook advisory_shapes` (alle
+anderen Generator-Sätze bleiben byte-gleich). Offen: eine nicht-generierte, lizenzgeprüfte Quelle mit gelabelten
+Positiven für diese Klassen auf der Dev-Seite; die bekannten offenen nativen Sätze (MCPTox, MalSkillBench, MemForm,
+autoredclaw, MCP-Registry) sind Holdout.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).
