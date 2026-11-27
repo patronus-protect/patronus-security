@@ -1,0 +1,38 @@
+# Published competitor numbers on the benchmarks of datasets.yaml `benchmarks` (E12). Every number was re-read at
+# its source (url) in the named table or section on 2026-11-26 before it is quoted; `value` is in the unit of the
+# source (percent or a 0–1 fraction as printed). Checked by: python3 scripts/l1_threat/competitors.py check
+schema: ark-l1-threat-competitors-v1
+
+numbers:
+  # PromptShield, arXiv 2501.15145v2, Table 4 ("Comparison of detection models on our benchmark")
+  - {benchmark: promptshield_test, system: "PromptGuard (mDeBERTa-v3-base)", metric: "TPR@1% FPR %", value: 12.78, url: "https://arxiv.org/pdf/2501.15145v2", table: "Table 4"}
+  - {benchmark: promptshield_test, system: "PromptGuard (mDeBERTa-v3-base)", metric: "TPR@0.1% FPR %", value: 9.39, url: "https://arxiv.org/pdf/2501.15145v2", table: "Table 4"}
+  - {benchmark: promptshield_test, system: "ProtectAI v2 (DeBERTa-v3-base)", metric: "TPR@1% FPR %", value: 1.97, url: "https://arxiv.org/pdf/2501.15145v2", table: "Table 4"}
+  - {benchmark: promptshield_test, system: "ProtectAI v2 (DeBERTa-v3-base)", metric: "TPR@0.1% FPR %", value: 0.00, url: "https://arxiv.org/pdf/2501.15145v2", table: "Table 4"}
+  - {benchmark: promptshield_test, system: "InjecGuard (DeBERTa-v3-base)", metric: "TPR@1% FPR %", value: 20.37, url: "https://arxiv.org/pdf/2501.15145v2", table: "Table 4"}
+  - {benchmark: promptshield_test, system: "InjecGuard (DeBERTa-v3-base)", metric: "TPR@0.1% FPR %", value: 6.61, url: "https://arxiv.org/pdf/2501.15145v2", table: "Table 4"}
+  - {benchmark: promptshield_test, system: "PromptShield (DeBERTa-v3-base)", metric: "TPR@1% FPR %", value: 43.22, url: "https://arxiv.org/pdf/2501.15145v2", table: "Table 4"}
+  - {benchmark: promptshield_test, system: "PromptShield (DeBERTa-v3-base)", metric: "TPR@0.1% FPR %", value: 31.45, url: "https://arxiv.org/pdf/2501.15145v2", table: "Table 4"}
+  # Sentinel, arXiv 2506.05446v1, Table 2 ("Benchmark Performance (Binary F1 Score)")
+  - {benchmark: sentinel_deepset, system: "ProtectAI v2", metric: "F1", value: 0.536, url: "https://arxiv.org/pdf/2506.05446v1", table: "Table 2"}
+  - {benchmark: sentinel_deepset, system: "Sentinel", metric: "F1", value: 0.857, url: "https://arxiv.org/pdf/2506.05446v1", table: "Table 2"}
+  - {benchmark: sentinel_jackhhao, system: "ProtectAI v2 (trained on this set)", metric: "F1", value: 0.915, url: "https://arxiv.org/pdf/2506.05446v1", table: "Table 2"}
+  - {benchmark: sentinel_jackhhao, system: "Sentinel", metric: "F1", value: 0.985, url: "https://arxiv.org/pdf/2506.05446v1", table: "Table 2"}
+  - {benchmark: sentinel_wildjailbreak, system: "ProtectAI v2", metric: "F1", value: 0.733, url: "https://arxiv.org/pdf/2506.05446v1", table: "Table 2"}
+  - {benchmark: sentinel_wildjailbreak, system: "Sentinel", metric: "F1", value: 0.935, url: "https://arxiv.org/pdf/2506.05446v1", table: "Table 2"}
+  # MCP tool poisoning, arXiv 2604.10534v1, Table 1 (binary)
+  - {benchmark: mcp_tool_poisoning_2604_10534, system: "Cisco MCP-scanner YARA", metric: "F1 %", value: 31.25, url: "https://arxiv.org/pdf/2604.10534v1", table: "Table 1"}
+  # OpenAI moderation set: WildGuard arXiv 2406.18495, Table 3 (F1 %, OAI column)
+  - {benchmark: openai_moderation_f1, system: "Llama-Guard", metric: "F1 %", value: 75.8, url: "https://arxiv.org/pdf/2406.18495", table: "Table 3"}
+  - {benchmark: openai_moderation_f1, system: "Llama-Guard2", metric: "F1 %", value: 76.1, url: "https://arxiv.org/pdf/2406.18495", table: "Table 3"}
+  - {benchmark: openai_moderation_f1, system: "WildGuard (Mistral-7B)", metric: "F1 %", value: 72.1, url: "https://arxiv.org/pdf/2406.18495", table: "Table 3"}
+  - {benchmark: openai_moderation_f1, system: "OpenAI Moderation API", metric: "F1 %", value: 79.0, url: "https://arxiv.org/pdf/2406.18495", table: "Table 3"}
+  # ShieldGemma arXiv 2407.21772, Table 1 (optimal F1, OpenAI Mod column)
+  - {benchmark: openai_moderation_best_f1, system: "ShieldGemma 2B", metric: "optimal F1", value: 0.812, url: "https://arxiv.org/pdf/2407.21772", table: "Table 1"}
+  - {benchmark: openai_moderation_best_f1, system: "ShieldGemma 9B", metric: "optimal F1", value: 0.821, url: "https://arxiv.org/pdf/2407.21772", table: "Table 1"}
+  - {benchmark: openai_moderation_best_f1, system: "LlamaGuard1 (7B)", metric: "optimal F1", value: 0.758, url: "https://arxiv.org/pdf/2407.21772", table: "Table 1"}
+  # Llama Guard arXiv 2312.06674, Table 2 (AUPRC, OpenAI Mod)
+  - {benchmark: openai_moderation_auprc, system: "Llama Guard (7B)", metric: "AUPRC", value: 0.847, url: "https://arxiv.org/pdf/2312.06674", table: "Table 2"}
+  # RP-Mod / RP-Crowd, NeurIPS 2021 Datasets and Benchmarks, results text of section 5 (GBERT-base, multi-task, alpha 0.9)
+  - {benchmark: rp_mod, system: "GBERT-base (multi-task)", metric: "AUROC", value: 0.791, url: "https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/file/c9e1074f5b3f9fc8ea15d152add07294-Paper-round2.pdf", table: "Section 5 text"}
+  - {benchmark: rp_crowd_3, system: "GBERT-base (multi-task)", metric: "AUROC", value: 0.914, url: "https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/file/c9e1074f5b3f9fc8ea15d152add07294-Paper-round2.pdf", table: "Section 5 text"}

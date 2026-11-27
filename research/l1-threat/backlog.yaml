@@ -763,6 +763,7 @@ tasks:
   # published detector numbers; agent_config_tampering, exfiltration, resource_exhaustion and input-side
   # prompt_extraction have none, memory_poisoning only attack-side benchmarks.
   - id: E12
+    status: done
     title: "Better, more stable, faster than the open-source competitors — head-to-head on their benchmarks: rules only, L1 model and cascade on the competitors' own sets under their protocol, next to their published numbers — PromptShield eval split (TPR at 1% / 0.1% FPR vs InjecGuard, PromptGuard, ProtectAI v2), the Sentinel protocol on deepset / jackhhao / WildJailbreak (F1 vs ProtectAI v2), the MCP tool-poisoning protocol of arXiv 2604.10534 (F1 vs Cisco YARA 31.25), the OpenAI moderation set (F1 vs Llama Guard, ShieldGemma, WildGuard), RP-Mod / RP-Crowd for German toxic language"
     type: eval-infra
     deps: [E10b]

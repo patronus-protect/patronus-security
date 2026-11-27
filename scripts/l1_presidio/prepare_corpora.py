@@ -429,6 +429,9 @@ def _upstream_url(base: str, revision: str, path: str) -> str:
         return f"{base}/resolve/{revision}/{path}"
     if base.startswith("https://github.com/"):
         return f"https://raw.githubusercontent.com/{base.removeprefix('https://github.com/')}/{revision}/{path}"
+    if base.startswith("https://zenodo.org/records/"):
+        # A Zenodo record is immutable per version; the record id in the URL is the pin.
+        return f"{base}/files/{path}"
     raise ValueError(f"no download rule for source {base!r}")
 
 

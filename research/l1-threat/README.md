@@ -642,6 +642,30 @@ ein Teil der Report-Sätze), 86M und ProtectAI v2 sind nicht für
 alle Sätze des Mixes gecacht (Owner-Befehl oben); die Wolf-Stufe (L3) fehlt in der Kaskaden-Spalte, solange auf dem
 Host kein Wolf-Edge-fp32-Bundle vorbereitet ist.
 
+**Kopf an Kopf auf den Benchmarks der Konkurrenz (E12).** Neben dem Mix misst `competitors.py` ARK auf den eigenen
+Sätzen der offenen Konkurrenten, nach deren Protokoll (Metrik und Schwellenregel des Papers), und stellt die
+veröffentlichten Zahlen daneben: [`scoreboard/competitors.md`](scoreboard/competitors.md) (`scoreboard.py
+competitors`). Die Benchmarks stehen als eigener Abschnitt `benchmarks` in `scripts/l1_threat/datasets.yaml` (Quelle,
+Lizenz, Revision, SHA-256 der Dateien, `commercial`); sie sind reine Auswertungssätze, nie in Train, Mix oder
+Kalibrierung, und keiner liest eine Holdout-Quelle (`competitors.py check`). Jede zitierte Fremdzahl steht in
+`research/l1-threat/competitors.yaml` mit URL und Tabelle, aus der sie am 26.11.2026 neu gelesen wurde. Stand:
+PromptShield-Testsplit (TPR bei 1 % / 0,1 % FPR, Schnitt auf den eigenen Negativen wie im Paper), deepset und
+jackhhao nach dem Sentinel-Protokoll (binärer F1 an der eigenen Entscheidung; ProtectAI v2 ist auf jackhhao
+trainiert), der OpenAI-Moderationssatz nach WildGuard (F1), ShieldGemma (optimaler F1, Obergrenze) und Llama Guard
+(AUPRC), RP-Mod und RP-Crowd-3 (AUROC; CC-BY-NC-SA, nur Auswertung, nie entscheidend). WildJailbreak wartet: sein
+Eval-Split liegt in ARKs eigenen Dev-Daten, der Train-Split ist upstream gesperrt. Das MCP-Protokoll aus arXiv
+2604.10534 fällt weg: seine Angriffe sind MCPTox (Holdout), seine gutartigen Tool-Beschreibungen sind nicht
+veröffentlicht. Gemessen werden Regeln allein und das L1-Modell (kalibrierte Kaskaden-Konfiguration, ohne Wolf),
+Prompt Guard 2 und ProtectAI v2 über onnxruntime (Entscheidung bei 0,5), dazu je System der TPR-Verlust unter fünf
+Verschleierungen (Nullbreite, Unicode-Tags, Base64, Leetspeak, Homoglyphen) und in deutscher Übersetzung (eigene
+Übersetzung des Runners, `ark_authored`, 30 Positive je Benchmark mit englischen Zeilen in
+`competitors_de.yaml`; schon deutsche oder abgelehnte Zeilen fehlen) an derselben Entscheidung und die
+Latenz (p50/p95 bei 1 KiB und 100 KiB, Durchsatz) auf denselben Texten und derselben Maschine. Offen: Die Referenzmodelle
+sind bisher nur auf deepset gemessen (Prompt Guard 2 22M und 86M, ProtectAI v2); PromptShield (rund 56 000 Texte mit
+Varianten) und jackhhao (lange Jailbreak-Prompts) brauchen mit einem 512-Token-Fenster nach dem anderen auf dieser CPU
+mehrere Stunden. Die Latenz der Referenzmodelle lief parallel zu den anderen Referenzläufen (ARK auf leerer
+Maschine), ist also zu ihren Ungunsten verzerrt; 86M fehlt dort.
+
 **Kaskade statt vollem Stack (Owner 2026-11-19, ersetzt die L1+L2-Messung aus E07).** Gemessen wird ark-core
 allein, und die Ebenen sind eine Kaskade: L1-Heuristik → L1-Modell → L3 (Wolf Defender für `injection`, mit
 seiner Standardschwelle); eine spätere Ebene läuft nur auf dem, was die früheren offen lassen. L2 gibt es nur in

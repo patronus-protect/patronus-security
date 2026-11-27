@@ -74,6 +74,10 @@ the calibration part's negatives only, per class and language, at 0.1 % (decisiv
 hard-negative FPR come from the measurement part and, at the same cut, from the report sets, which stay outside
 the mix; each cell names the sources behind its measured positives.
 
+``competitors`` renders ``competitors.md``, the head-to-head on the competitors' own benchmarks (``competitors.py``):
+one row per benchmark and system, ARK under the benchmark's protocol next to the cited published numbers, the TPR
+drop under obfuscation and in German translation, latency on the same machine and the classes without a benchmark.
+
 ``refresh`` keeps the scoreboard of main current: in a checkout of main it builds the predictor of HEAD, freezes
 the mix in the cache, predicts it (rules only, and the calibrated ``cascade-config.json`` when the checkout has
 one) and re-renders ``FAIR_FILES`` under ``research/l1-threat/scoreboard/`` (``baseline.md``, ``cascade.md``,
@@ -97,6 +101,7 @@ not change stays as it is. The runner commits what it rewrote as a follow-up PR 
     python3 scripts/l1_threat/scoreboard.py fair --dev DIR --mix MIX --predictions rules=PRED_DIR \\
         [--predictions l1_model=PRED_DIR] [--predictions cascade=PRED_DIR] [--baseline-cache CACHE] \\
         --output REPORT [--scoreboard research/l1-threat/scoreboard]
+    python3 scripts/l1_threat/scoreboard.py competitors [--results RESULTS] [--out competitors.md]
     python3 scripts/l1_threat/scoreboard.py refresh [--tree MAIN] [--since SHA] --dev DIR --cache DIR \\
         [--baseline-cache CACHE]
 """
@@ -1535,6 +1540,114 @@ def summary_lines(base: dict[str, Any], head: dict[str, Any]) -> list[str]:
     return lines + [""]
 
 
+# ── competitors ──────────────────────────────────────────────────────────────
+
+# The head-to-head report (E12, ``competitors.py``): the competitors' own benchmarks under their protocol.
+COMPETITOR_SYSTEMS = (("rules", "ARK rules only"), ("l1_model", "ARK L1 model"), ("cascade", "ARK cascade"))
+COMPETITORS_FILE = "competitors.md"
+# The obfuscations every benchmark is re-run under; the renderings are the generators' own.
+OBFUSCATION_KINDS = ("zero_width", "unicode_tags", "base64", "leetspeak", "homoglyph")
+
+
+def _protocol_value(result: dict[str, Any] | None) -> str:
+    """The benchmark metric of one measured system (``competitors.evaluate`` output), or ``NOT_RUN``."""
+    if not result:
+        return NOT_RUN
+    if result["protocol"] == "tpr_at_fpr":
+        return ", ".join(f"TPR@{float(k) * 100:g}% {_pct((v or {}).get('tpr'))}"
+                         for k, v in result["tpr_at_fpr"].items())
+    if result["protocol"] in ("auprc", "auroc"):
+        return f"{result['protocol'].upper()} {_pct(result[result['protocol']])}"
+    return f"F1 {_pct(result['f1']['f1'])}"
+
+
+def _competitor_row(head: str, name: str, run: dict[str, Any] | None) -> str:
+    decisive = _pct((run.get("tpr_at_0.001") or {}).get("tpr")) if run else NOT_RUN
+    drops = (run or {}).get("drops") or {}
+    obf = " / ".join(_pct(drops.get(kind)) if kind in drops else "–" for kind in OBFUSCATION_KINDS)
+    return (f"| {head} | {name} | {_protocol_value(run)} | {decisive} | {obf} | "
+            f"{_pct(drops['de']) if 'de' in drops else '–'} | this run |")
+
+
+def competitor_lines(registry: dict[str, Any], published: dict[str, Any], results: dict[str, Any],
+                     gaps: list[str]) -> list[str]:
+    """One row per benchmark and system: ARK's systems from ``results`` (measured under the benchmark's protocol,
+    TPR at 0.1 % FPR next to it, the TPR drop under each obfuscation and in German translation) and every cited
+    published competitor number; then the latency table and the classes without any competitor benchmark."""
+    lines = ["| benchmark | classes | licence | system | benchmark metric | TPR@0.1% FPR | TPR drop obfuscated "
+             "(zw / tags / b64 / leet / homoglyph) | TPR drop DE | source |", "|" + "---|" * 9]
+    measured = results.get("benchmarks") or {}
+    for bench in registry.get("benchmarks") or []:
+        head = f"{bench['name']} | {', '.join(bench['classes'])} | {bench['licence']}"
+        runs = (measured.get(bench["id"]) or {}).get("systems") or {}
+        state = next((key for key in ("dropped", "pending") if bench.get(key)), None)
+        if state:
+            lines.append(f"| {head} | ARK | {state}: {bench[state]} | | | | |")
+        else:
+            names = {**dict(COMPETITOR_SYSTEMS), **dict(FAIR_SYSTEMS)}
+            lines += [_competitor_row(head, name, runs.get(system)) for system, name in COMPETITOR_SYSTEMS]
+            lines += [_competitor_row(head, f"{names.get(system, system)} (measured)", run)
+                      for system, run in sorted(runs.items()) if system not in dict(COMPETITOR_SYSTEMS)]
+        for number in published.get("numbers") or []:
+            if number["benchmark"] == bench["id"]:
+                lines.append(f"| {head} | {number['system']} (published) | {number['metric']} "
+                             f"{number['value']:g} | – | – | – | [{number['table']}]({number['url']}) |")
+    lines += ["", "Classes without any competitor benchmark: " + (", ".join(gaps) or "none") + "."]
+    latency = results.get("latency") or {}
+    if latency:
+        lines += ["", f"Latency, all on CPU, same texts and machine ({results.get('machine', 'machine not named')}):",
+                  "", "| system | 1 KiB p50 / p95 ms | 100 KiB p50 / p95 ms | throughput docs/s (1 KiB) |",
+                  "|---|---:|---:|---:|"]
+        for system, row in latency.items():
+            sizes = [f"{row[size]['p50']:.3f} / {row[size]['p95']:.3f}" if row.get(size) else NOT_RUN
+                     for size in ("1KiB", "100KiB")]
+            lines.append(f"| {system} | {sizes[0]} | {sizes[1]} | {row.get('throughput', NOT_RUN)} |")
+    return lines
+
+
+def merge_results(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Several ``competitors.py run`` outputs as one: systems per benchmark and latency rows side by side; runs on
+    different machines are refused (latency is compared on one machine only)."""
+    machines = {run["machine"] for run in runs}
+    if len(machines) > 1:
+        raise ValueError(f"results from different machines: {sorted(machines)}")
+    merged: dict[str, Any] = {"benchmarks": {}, "latency": {}}
+    for run in runs:
+        merged["machine"] = run["machine"]
+        merged["latency"].update(run.get("latency") or {})
+        for bench, measured in (run.get("benchmarks") or {}).items():
+            slot = merged["benchmarks"].setdefault(bench, {"systems": {}})
+            slot["systems"].update(measured["systems"])
+            slot.update({k: v for k, v in measured.items() if k != "systems"})
+    return merged
+
+
+def competitors_command(args: argparse.Namespace) -> int:
+    competitors = sys.modules.get("_ark_l1_threat_competitors") or _load_file(
+        "_ark_l1_threat_competitors", HERE / "competitors.py")
+    registry, published, translations = competitors.load()
+    problems = competitors.check(registry, competitors.read(competitors.ENTITY_MAP), published, translations)
+    if problems:
+        raise ValueError("; ".join(problems))
+    results = merge_results([json.loads(path.read_text(encoding="utf-8")) for path in args.results])
+    args.out.write_text(render_competitors(registry, published, results, competitors.gaps(registry)), encoding="utf-8")
+    return 0
+
+
+def render_competitors(registry: dict[str, Any], published: dict[str, Any], results: dict[str, Any],
+                       gaps: list[str]) -> str:
+    lead = ["# L1 threat: head-to-head on the competitors' benchmarks", "",
+            "Each benchmark is scored under its own protocol (metric and threshold rule of its paper) and, where "
+            "it has negatives, by its TPR at 0.1 % FPR; reference classifiers measured here decide at 0.5. Benchmarks are evaluation only: never in training or calibration, "
+            "no holdout source. Published competitor numbers are quoted only with the table they were read from. "
+            f"`{NOT_RUN}`: not measured yet. Published values keep the unit of their source (percent or 0–1); measured "
+            "values are percent. A negative TPR drop means the obfuscated rows were caught more often than the clean ones. "
+            "TPR drop DE: the sampled positives of a benchmark with English rows (up to 30, `competitors_de.yaml`) in "
+            "the runner's own German translation (ark_authored), against the same positives in the original.",
+            ""] + ([f"Measured on {results['machine']}.", ""] if results.get("machine") else [])
+    return "\n".join(lead + competitor_lines(registry, published, results, gaps)) + "\n"
+
+
 # ── gate ─────────────────────────────────────────────────────────────────────
 
 
@@ -1758,6 +1871,10 @@ def main(argv: list[str] | None = None) -> int:
     fa.add_argument("--baseline-cache", type=Path, help="run_baselines.py cache (reference models, heuristics)")
     fa.add_argument("--output", type=Path, required=True, help="fair report (JSON)")
     fa.add_argument("--scoreboard", type=Path, help=f"also render {', '.join(FAIR_FILES)} into this directory")
+    co = commands.add_parser("competitors", help=f"render {COMPETITORS_FILE}: the competitors' benchmarks")
+    co.add_argument("--results", type=Path, action="append", default=[],
+                    help="measured results (JSON, repeatable: runs are merged); without it only the cited numbers")
+    co.add_argument("--out", type=Path, default=ROOT / "research" / "l1-threat" / "scoreboard" / COMPETITORS_FILE)
     rf = commands.add_parser("refresh", help="re-render the fair scoreboard reports in a checkout of main")
     rf.add_argument("--tree", type=Path, default=ROOT, help="checkout of main; its HEAD is measured, its reports rewritten")
     rf.add_argument("--since", help="commit the reports were last rendered from: render only after a detector, "
@@ -1773,6 +1890,8 @@ def main(argv: list[str] | None = None) -> int:
             return gate(args.head, args.base_sha, args.dev, args.holdout, args.cache, args.jobs)
         if args.command == "refresh":
             return refresh(args.tree, args.since, args.dev, args.cache, args.baseline_cache, args.jobs)
+        if args.command == "competitors":
+            return competitors_command(args)
         if args.command == "mix":
             document = build_mix(args.dev, args.out, args.force)
             print(f"mix of {sum(map(sum, (c.values() for c in document['counts'].values())))} rows from "
