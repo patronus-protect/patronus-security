@@ -191,5 +191,17 @@ Qualität: Base (`f1bf35ba`) und Head `threat_cascade` (Release) mit `cascade-co
 `ms`), je 11 156 markierte Zeilen. Dazu ein Unit-Test, der für alle elf eingebauten Modelle den
 Score mit geteilten Facts bitgleich zur eigenen Extraktion prüft.
 
+`scripts/benchmark_injection_l1.py` (nur der Injection-Pfad des Gateways über die Python-Bindung,
+synthetischer ASCII-Text, 50 Läufe nach 10 Aufwärmläufen, Release-Build; p50 / p95 ms):
+
+| Größe | gutartig | mit eingebettetem Angriff |
+|---|---:|---:|
+| 1 KiB | 0.260 / 0.387 | 1.554 / 1.984 |
+| 10 KiB | 1.153 / 1.699 | 3.136 / 4.282 |
+| 100 KiB | 9.022 / 12.377 | 16.792 / 22.604 |
+
+Die E12-Latenztabelle (`competitors.py`, braucht die Benchmark-Quellen) ist in dieser Runde nicht
+neu gerechnet.
+
 Stand gegen das Ziel (100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit L1-Modellen): Regeln 167 ms, mit
 Modellen 239 ms — weiter nicht erreicht.
