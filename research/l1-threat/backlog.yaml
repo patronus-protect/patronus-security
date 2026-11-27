@@ -1070,24 +1070,26 @@ tasks:
       dev and goldens shows the pruned decision and score equal full scoring on every row (no TPR or FPR
       change at all); all threat categories with L1 models at 100 KiB p95 <= 15 ms on the VPS, measured
       natively; latency.md updated
-  # Owner, 2026-11-27: E14 (#512) brought the agent classes to 521-525 dev positives per language from 4-5
-  # sources, but gold.md counts every one of them as synthetic; E14's accept asked for at least one source
-  # that is not a generator. The clean evaluation was not re-rendered after E14 either.
+  # Owner, 2026-11-27: E14b's first rounds found no open, licence-checked, non-generator source with real
+  # positives for the agent classes outside the holdout (resource_exhaustion has none at all). Decision:
+  # build a hand-labelled dev set from real files and verbatim advisory artefacts; small positive counts
+  # are accepted and named; German and resource_exhaustion stay synthetic as named gaps.
   - id: E14b
-    title: "A real, non-generator source for the agent classes: tool_poisoning, agent_config_tampering, memory_poisoning and resource_exhaustion (and exfiltration) have 521-525 dev positives per language after E14, all synthetic; add at least one licence-checked real-world source per class and re-render the clean evaluation on the new data"
+    title: "A hand-labelled real-world dev set for the agent classes: real rules files, agent configs and MCP tool manifests from licence-checked open repositories (mostly benign, the first real hard negatives for these classes) plus poisoned descriptions, rules and memory writes quoted verbatim in public advisories and write-ups as positives; German and resource_exhaustion stay synthetic as named gaps"
     type: eval-infra
     deps: [E14]
     accept: >-
-      per class at least one source whose positives are not produced by a generator and that gold.md counts
-      as native (for example public MCP registry tool descriptions, rules and agent-config files from open
-      repositories, issue reports and advisories with real poisoned descriptions or memory writes, each
-      positive labelled with reason code and spot-checked at <= 5% errors), with matching real benign
-      counterparts from the same source as hard negatives; licence, revision and commercial flag in
-      scripts/l1_threat/datasets.yaml; nothing from the holdout sources (MCPTox and the others in
-      entity_map.yaml); gold.md shows the native count per class and language; the clean evaluation
-      (cascade.md, builtin-models.md, fasttext-all-classes.md, baseline.md) re-rendered on E14's and E14b's
-      data, with the measured positives per class and language and the rules-only and L1-model TPR on the
-      native rows reported separately from the synthetic ones
+      a new dev set registered in scripts/l1_threat/datasets.yaml (source per row, licence, revision,
+      commercial flag) with real rules files, agent configs and MCP tool manifests from open repositories
+      whose licence allows it, and the positives quoted verbatim in public advisories and security write-ups
+      (each with its URL); every row hand-labelled by the agent with class, reason code and source, and a
+      second independent pass over a fixed 10 % sample (disagreements named in the PR); checked for overlap
+      with every holdout source in entity_map.yaml (no shared row, no shared repository with the MCP-registry
+      holdout); at least 30 real positives per class in EN for tool_poisoning, agent_config_tampering and
+      memory_poisoning, or the reached count named; at least 300 real benign rows per class family; gold.md
+      counts these rows as native; the clean evaluation re-rendered on E14's and E14b's data with the real
+      rows reported separately from the synthetic ones (rules only and L1 model: TPR on the real positives,
+      FPR on the real benign rows); German and resource_exhaustion named as gaps with the reason
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
