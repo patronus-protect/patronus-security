@@ -1479,8 +1479,8 @@ CONFUSION_PARTS = ("measurement", "report")
 def confusion(rows: list[MixRow], predictions: dict[str, dict[str, Any]],
               classes: Iterable[str] = CLASSES) -> dict[str, dict[str, dict[str, Any]]]:
     """Part -> true label -> rows and flags per class: how often each class's answer is ``detected`` (its detect cut)
-    on the rows of each true label (a row with two classes counts under both, a row without one as ``benign``), on
-    the mix's measurement part and the report sets. ``predictions`` maps a row id to its Core prediction."""
+    on the rows of each true label (a row with two classes counts under both, a row flagged ``benign`` as ``benign``,
+    a row with neither, a reported-only label, not at all), on the mix's measurement part and the report sets. ``predictions`` maps a row id to its Core prediction."""
     classes = list(classes)
     table: dict[str, dict[str, dict[str, Any]]] = {part: {} for part in CONFUSION_PARTS}
     for item in rows:
@@ -1489,7 +1489,7 @@ def confusion(rows: list[MixRow], predictions: dict[str, dict[str, Any]],
             continue
         answers = prediction.get("cascade") or {}
         flagged = [cls for cls in classes if answers.get(cls, NO_DECISION)["decision"] == "detected"]
-        for label in item.row["classes"] or ["benign"]:
+        for label in item.row["classes"] or (["benign"] if item.row["benign"] else []):
             cell = table[item.part].setdefault(label, {"rows": 0, "flags": dict.fromkeys(classes, 0)})
             cell["rows"] += 1
             for cls in flagged:

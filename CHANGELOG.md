@@ -57,6 +57,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   stored profile or a knowledge base. Plain chat without that carrier never reaches the model and
   is `clear` for the class, so a plain prompt injection with all built-in models on no longer also
   reports these classes.
+- **Detection change (same three models, opt-in cascade with `clear_enabled: false`):** text
+  without the carrier escalates instead of clearing when the module's L1 clearing is switched off,
+  so the configured L2/L3 checks still run on it.
 - **Detection change (opt-in DLP database dumps):** `dlp_database_dump_header` now recognises the
   header that mysqldump and MariaDB actually write (`-- MySQL dump 10.13 …`), and
   `dlp_database_dump_insert` reports multi-row `INSERT` statements with one tuple per line and the

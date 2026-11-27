@@ -998,8 +998,8 @@ def test_compare_holds_the_benign_fpr_budget_per_class_and_language():
 
 
 def test_confusion_counts_flags_per_true_label_on_measurement_and_report_rows():
-    def row(row_id, classes):
-        return {"id": row_id, "classes": classes}
+    def row(row_id, classes, benign=None):
+        return {"id": row_id, "classes": classes, "benign": not classes if benign is None else benign}
 
     def answer(row_id, *detected):
         return {"id": row_id, "cascade": {cls: {"l1": "detected", "l1_score": 1.0, "decision": "detected",
@@ -1009,6 +1009,8 @@ def test_confusion_counts_flags_per_true_label_on_measurement_and_report_rows():
         MODULE.MixRow(row("a", ["instruction_injection"]), "s", "measurement"),
         MODULE.MixRow(row("b", ["instruction_injection", "exfiltration"]), "s", "measurement"),
         MODULE.MixRow(row("c", []), "s", "measurement"),
+        # Reported-only label (decides: false): no class, but not benign either.
+        MODULE.MixRow(row("f", [], benign=False), "s", "measurement"),
         MODULE.MixRow(row("d", ["instruction_injection"]), "s", "calibration"),
         MODULE.MixRow(row("e", ["jailbreak"]), "r", "report"),
     ]
@@ -1016,6 +1018,7 @@ def test_confusion_counts_flags_per_true_label_on_measurement_and_report_rows():
         "a": answer("a", "instruction_injection", "memory_poisoning"),
         "b": answer("b", "instruction_injection", "exfiltration"),
         "c": answer("c"),
+        "f": answer("f", "instruction_injection"),
         "d": answer("d", "memory_poisoning"),
         "e": answer("e", "jailbreak"),
     }

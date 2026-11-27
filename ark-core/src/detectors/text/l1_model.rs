@@ -249,7 +249,8 @@ impl L1TextModel {
     /// `data` found in it (both may be empty). One in-memory pass, no I/O.
     /// A carrier-bound class (tool poisoning, agent config tampering, memory
     /// poisoning) only scores text with its structural carrier; text without
-    /// it never reaches the model and is clear at the lowest score.
+    /// it never reaches the model and scores lowest: clear, or escalate
+    /// where clearing is switched off.
     pub fn evaluate(
         &self,
         text: &str,
@@ -263,7 +264,7 @@ impl L1TextModel {
                 model: self.model.name().to_string(),
                 score: f64::MIN,
                 thresholds: self.thresholds,
-                outcome: StageOutcome::Clear,
+                outcome: self.thresholds.outcome(f64::MIN),
                 duration_ms: started.elapsed().as_secs_f64() * 1000.0,
             };
         }
@@ -596,6 +597,37 @@ pub(crate) mod tests {
             checked += 1;
         }
         assert_eq!(checked, 36);
+    }
+
+    #[test]
+    fn a_gated_text_escalates_when_clearing_is_switched_off() {
+        // Text without the class's carrier never reaches the model; it is
+        // clear only while the module may clear on L1 at all.
+        let mut gated = 0;
+        for text in [
+            "Please summarise the meeting notes for me.",
+            "Bitte fasse die Besprechungsnotizen für mich zusammen.",
+        ] {
+            for &(name, category) in BUILTIN_L1_MODELS {
+                let config = L1ModelConfig::builtin(name);
+                let model = L1TextModel::load(category, &config).unwrap();
+                if model.evaluate(text, &[], &[]).score != f64::MIN {
+                    continue;
+                }
+                let no_clear = L1ModelConfig {
+                    clear_enabled: false,
+                    ..config
+                };
+                let outcome =
+                    L1TextModel::load(category, &no_clear)
+                        .unwrap()
+                        .evaluate(text, &[], &[]);
+                assert_eq!(outcome.score, f64::MIN, "{name}: {text}");
+                assert_eq!(outcome.outcome, StageOutcome::Escalate, "{name}: {text}");
+                gated += 1;
+            }
+        }
+        assert!(gated > 0);
     }
 
     #[test]
