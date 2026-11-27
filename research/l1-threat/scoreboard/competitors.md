@@ -1,13 +1,13 @@
 # L1 threat: head-to-head on the competitors' benchmarks
 
-Each benchmark is scored under its own protocol (metric and threshold rule of its paper) and, where it has negatives, by its TPR at 0.1 % FPR; reference classifiers measured here decide at 0.5. Benchmarks are evaluation only: never in training or calibration, no holdout source. Published competitor numbers are quoted only with the table they were read from. `n/r: not run`: not measured yet. Published values keep the unit of their source (percent or 0–1); measured values are percent. A negative TPR drop means the obfuscated rows were caught more often than the clean ones.
+Each benchmark is scored under its own protocol (metric and threshold rule of its paper) and, where it has negatives, by its TPR at 0.1 % FPR; reference classifiers measured here decide at 0.5. Benchmarks are evaluation only: never in training or calibration, no holdout source. Published competitor numbers are quoted only with the table they were read from. `n/r: not run`: not measured yet. Published values keep the unit of their source (percent or 0–1); measured values are percent. A negative TPR drop means the obfuscated rows were caught more often than the clean ones. TPR drop DE: the sampled positives of a benchmark with English rows (up to 30, `competitors_de.yaml`) in the runner's own German translation (ark_authored), against the same positives in the original.
 
 Measured on Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux.
 
 | benchmark | classes | licence | system | benchmark metric | TPR@0.1% FPR | TPR drop obfuscated (zw / tags / b64 / leet / homoglyph) | TPR drop DE | source |
 |---|---|---|---|---|---|---|---|---|
-| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK rules only | TPR@0.1% 14.9, TPR@1% 15.0 | 14.9 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | – | this run |
-| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK L1 model | TPR@0.1% 10.2, TPR@1% 10.8 | 10.2 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | – | this run |
+| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK rules only | TPR@0.1% 14.9, TPR@1% 15.0 | 14.9 | -10.2 / -4.5 / -3.3 / -4.8 / -10.3 | 0.0 | this run |
+| PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK L1 model | TPR@0.1% 10.2, TPR@1% 10.8 | 10.2 | -89.4 / -5.9 / -3.1 / -5.5 / -10.4 | -3.3 | this run |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | PromptGuard (mDeBERTa-v3-base) (published) | TPR@1% FPR % 12.78 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | PromptGuard (mDeBERTa-v3-base) (published) | TPR@0.1% FPR % 9.39 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
@@ -17,13 +17,13 @@ Measured on Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux.
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | InjecGuard (DeBERTa-v3-base) (published) | TPR@0.1% FPR % 6.61 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | PromptShield (DeBERTa-v3-base) (published) | TPR@1% FPR % 43.22 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
 | PromptShield benchmark, test split | instruction_injection | Apache-2.0 | PromptShield (DeBERTa-v3-base) (published) | TPR@0.1% FPR % 31.45 | – | – | – | [Table 4](https://arxiv.org/pdf/2501.15145v2) |
-| deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ARK rules only | F1 22.9 | 14.1 | -8.4 / -0.8 / -0.8 / -0.4 / -7.6 | – | this run |
-| deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ARK L1 model | F1 22.9 | 19.4 | -8.4 / -0.8 / -0.8 / -0.4 / -7.6 | – | this run |
+| deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ARK rules only | F1 22.9 | 14.1 | -8.4 / -0.8 / -0.8 / -0.4 / -7.6 | 0.0 | this run |
+| deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ARK L1 model | F1 38.0 | 19.4 | -70.7 / 3.0 / 6.5 / -15.6 / -20.5 | -4.5 | this run |
 | deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | ProtectAI v2 (published) | F1 0.536 | – | – | – | [Table 2](https://arxiv.org/pdf/2506.05446v1) |
 | deepset prompt-injections (Sentinel protocol) | instruction_injection | Apache-2.0 | Sentinel (published) | F1 0.857 | – | – | – | [Table 2](https://arxiv.org/pdf/2506.05446v1) |
-| jackhhao jailbreak-classification (Sentinel protocol) | jailbreak | Apache-2.0 | ARK rules only | F1 18.0 | 11.7 | -1.5 / -1.4 / 8.3 / -1.5 / -1.8 | – | this run |
-| jackhhao jailbreak-classification (Sentinel protocol) | jailbreak | Apache-2.0 | ARK L1 model | F1 18.0 | 9.9 | -1.5 / -1.4 / 8.3 / -1.5 / -1.8 | – | this run |
+| jackhhao jailbreak-classification (Sentinel protocol) | jailbreak | Apache-2.0 | ARK rules only | F1 18.0 | 11.7 | -1.5 / -1.4 / 8.3 / -1.5 / -1.8 | 10.0 | this run |
+| jackhhao jailbreak-classification (Sentinel protocol) | jailbreak | Apache-2.0 | ARK L1 model | F1 32.0 | 9.9 | -77.2 / 9.5 / 18.6 / -11.6 / 1.7 | 0.0 | this run |
 | jackhhao jailbreak-classification (Sentinel protocol) | jailbreak | Apache-2.0 | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | jackhhao jailbreak-classification (Sentinel protocol) | jailbreak | Apache-2.0 | ProtectAI v2 (trained on this set) (published) | F1 0.915 | – | – | – | [Table 2](https://arxiv.org/pdf/2506.05446v1) |
 | jackhhao jailbreak-classification (Sentinel protocol) | jailbreak | Apache-2.0 | Sentinel (published) | F1 0.985 | – | – | – | [Table 2](https://arxiv.org/pdf/2506.05446v1) |
@@ -32,29 +32,29 @@ Measured on Intel Core Processor (Haswell, no TSX), 6 usable CPUs, Linux.
 | WildJailbreak (Sentinel protocol) | jailbreak | ODC-BY-1.0 | Sentinel (published) | F1 0.935 | – | – | – | [Table 2](https://arxiv.org/pdf/2506.05446v1) |
 | MCP tool-poisoning detection (arXiv 2604.10534, binary) | tool_poisoning | unknown | ARK | dropped: holdout source: the malicious tool descriptions are MCPTox, a holdout set of this program, and the benign tool descriptions (own GitHub crawl, 142-row test split) are not released | | | | |
 | MCP tool-poisoning detection (arXiv 2604.10534, binary) | tool_poisoning | unknown | Cisco MCP-scanner YARA (published) | F1 % 31.25 | – | – | – | [Table 1](https://arxiv.org/pdf/2604.10534v1) |
-| OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | ARK rules only | F1 4.8 | 1.3 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | – | this run |
-| OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | ARK L1 model | F1 4.8 | 0.0 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | – | this run |
+| OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | ARK rules only | F1 4.8 | 1.3 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | 0.0 | this run |
+| OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | ARK L1 model | F1 25.4 | 0.0 | 14.8 / 14.8 / 15.1 / 14.9 / 14.8 | 14.3 | this run |
 | OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | Llama-Guard (published) | F1 % 75.8 | – | – | – | [Table 3](https://arxiv.org/pdf/2406.18495) |
 | OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | Llama-Guard2 (published) | F1 % 76.1 | – | – | – | [Table 3](https://arxiv.org/pdf/2406.18495) |
 | OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | WildGuard (Mistral-7B) (published) | F1 % 72.1 | – | – | – | [Table 3](https://arxiv.org/pdf/2406.18495) |
 | OpenAI moderation evaluation set (F1 at the decision) | harmful_content, toxic_language | MIT | OpenAI Moderation API (published) | F1 % 79 | – | – | – | [Table 3](https://arxiv.org/pdf/2406.18495) |
-| OpenAI moderation evaluation set (optimal F1) | harmful_content, toxic_language | MIT | ARK rules only | F1 4.8 | 1.3 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | – | this run |
-| OpenAI moderation evaluation set (optimal F1) | harmful_content, toxic_language | MIT | ARK L1 model | F1 52.4 | 0.0 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | – | this run |
+| OpenAI moderation evaluation set (optimal F1) | harmful_content, toxic_language | MIT | ARK rules only | F1 4.8 | 1.3 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | 0.0 | this run |
+| OpenAI moderation evaluation set (optimal F1) | harmful_content, toxic_language | MIT | ARK L1 model | F1 52.4 | 0.0 | 14.8 / 14.8 / 15.1 / 14.9 / 14.8 | 14.3 | this run |
 | OpenAI moderation evaluation set (optimal F1) | harmful_content, toxic_language | MIT | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | OpenAI moderation evaluation set (optimal F1) | harmful_content, toxic_language | MIT | ShieldGemma 2B (published) | optimal F1 0.812 | – | – | – | [Table 1](https://arxiv.org/pdf/2407.21772) |
 | OpenAI moderation evaluation set (optimal F1) | harmful_content, toxic_language | MIT | ShieldGemma 9B (published) | optimal F1 0.821 | – | – | – | [Table 1](https://arxiv.org/pdf/2407.21772) |
 | OpenAI moderation evaluation set (optimal F1) | harmful_content, toxic_language | MIT | LlamaGuard1 (7B) (published) | optimal F1 0.758 | – | – | – | [Table 1](https://arxiv.org/pdf/2407.21772) |
-| OpenAI moderation evaluation set (AUPRC) | harmful_content, toxic_language | MIT | ARK rules only | AUPRC 32.3 | 1.3 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | – | this run |
-| OpenAI moderation evaluation set (AUPRC) | harmful_content, toxic_language | MIT | ARK L1 model | AUPRC 44.9 | 0.0 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | – | this run |
+| OpenAI moderation evaluation set (AUPRC) | harmful_content, toxic_language | MIT | ARK rules only | AUPRC 32.3 | 1.3 | 0.0 / 0.0 / 0.4 / 0.2 / 0.0 | 0.0 | this run |
+| OpenAI moderation evaluation set (AUPRC) | harmful_content, toxic_language | MIT | ARK L1 model | AUPRC 44.9 | 0.0 | 14.8 / 14.8 / 15.1 / 14.9 / 14.8 | 14.3 | this run |
 | OpenAI moderation evaluation set (AUPRC) | harmful_content, toxic_language | MIT | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | OpenAI moderation evaluation set (AUPRC) | harmful_content, toxic_language | MIT | Llama Guard (7B) (published) | AUPRC 0.847 | – | – | – | [Table 2](https://arxiv.org/pdf/2312.06674) |
 | RP-Mod, test part (German comments rejected by newspaper moderators) | toxic_language | CC-BY-NC-SA-4.0 | ARK rules only | AUROC 50.1 | 0.1 | 0.0 / 0.0 / 0.0 / 0.1 / 0.0 | – | this run |
-| RP-Mod, test part (German comments rejected by newspaper moderators) | toxic_language | CC-BY-NC-SA-4.0 | ARK L1 model | AUROC 48.0 | 0.3 | 0.0 / 0.0 / 0.0 / 0.1 / 0.0 | – | this run |
+| RP-Mod, test part (German comments rejected by newspaper moderators) | toxic_language | CC-BY-NC-SA-4.0 | ARK L1 model | AUROC 48.0 | 0.3 | 1.1 / 1.1 / 1.1 / 1.0 / 1.1 | – | this run |
 | RP-Mod, test part (German comments rejected by newspaper moderators) | toxic_language | CC-BY-NC-SA-4.0 | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | RP-Mod, test part (German comments rejected by newspaper moderators) | toxic_language | CC-BY-NC-SA-4.0 | GBERT-base (multi-task) (published) | AUROC 0.791 | – | – | – | [Section 5 text](https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/file/c9e1074f5b3f9fc8ea15d152add07294-Paper-round2.pdf) |
 | RP-Crowd-3, test part (German comments rejected by at least three crowd raters) | toxic_language | CC-BY-NC-SA-4.0 | ARK rules only | AUROC 50.1 | 0.2 | 0.0 / 0.0 / 0.0 / 0.2 / 0.0 | – | this run |
-| RP-Crowd-3, test part (German comments rejected by at least three crowd raters) | toxic_language | CC-BY-NC-SA-4.0 | ARK L1 model | AUROC 59.3 | 0.5 | 0.0 / 0.0 / 0.0 / 0.2 / 0.0 | – | this run |
+| RP-Crowd-3, test part (German comments rejected by at least three crowd raters) | toxic_language | CC-BY-NC-SA-4.0 | ARK L1 model | AUROC 59.3 | 0.5 | 2.1 / 2.1 / 2.1 / 2.2 / 2.1 | – | this run |
 | RP-Crowd-3, test part (German comments rejected by at least three crowd raters) | toxic_language | CC-BY-NC-SA-4.0 | ARK cascade | n/r: not run | n/r: not run | – / – / – / – / – | – | this run |
 | RP-Crowd-3, test part (German comments rejected by at least three crowd raters) | toxic_language | CC-BY-NC-SA-4.0 | GBERT-base (multi-task) (published) | AUROC 0.914 | – | – | – | [Section 5 text](https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/file/c9e1074f5b3f9fc8ea15d152add07294-Paper-round2.pdf) |
 
@@ -64,5 +64,5 @@ Latency, all on CPU, same texts and machine (Intel Core Processor (Haswell, no T
 
 | system | 1 KiB p50 / p95 ms | 100 KiB p50 / p95 ms | throughput docs/s (1 KiB) |
 |---|---:|---:|---:|
-| ARK L1 model | 10.216 / 14.622 | 796.713 / 979.441 | 85 |
-| ARK rules only | 3.901 / 9.072 | 304.775 / 386.252 | 184 |
+| ARK L1 model | 12.065 / 32.378 | 967.813 / 1266.874 | 60 |
+| ARK rules only | 5.330 / 21.608 | 416.823 / 621.499 | 127 |
