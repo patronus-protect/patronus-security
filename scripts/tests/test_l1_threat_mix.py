@@ -242,6 +242,20 @@ def test_an_unreachable_level_falls_back_to_the_ladder_with_the_cut_from_calibra
     assert MODULE.NO_BUDGET not in decisive.split("|---|")[1]
 
 
+def test_held_out_scores_never_move_the_ladder_level():
+    # 0.3 % of the calibration negatives share the calibration's top score: 0.5 % is the first reachable level.
+    calibration = ([0.5] * 10, [0.5] * 3 + [0.0] * 997)
+    rows, scores = mix_rows({"calibration": calibration, "measurement": ([0.5] * 10, [0.0] * 1000)})
+    cell = MODULE.fair_cells(rows, scores, ["jailbreak"])["jailbreak"]["all"]["0.001"]
+    assert (cell["level"], cell["measurement"]["tpr"]) == ("0.005", 1.0)
+    # A report or measurement row above every calibration score moves neither the level nor the cut.
+    for part in ("report", "measurement"):
+        louder, louder_scores = mix_rows({"calibration": calibration, "measurement": ([0.5] * 10, [0.0] * 1000),
+                                          part: ([0.5] * 10 + [0.9], [0.0] * 1000)})
+        moved = MODULE.fair_cells(louder, louder_scores, ["jailbreak"])["jailbreak"]["all"]["0.001"]
+        assert (moved["level"], moved["cut"], moved["measurement"]["tpr"]) == (cell["level"], cell["cut"], 1.0)
+
+
 def test_a_cell_beyond_the_ladder_stays_not_reachable():
     # 6 % of the calibration negatives share the top score: no level up to 5 % holds.
     rows, scores = mix_rows({"calibration": ([1.0] * 10, [1.0] * 60 + [0.0] * 940),
