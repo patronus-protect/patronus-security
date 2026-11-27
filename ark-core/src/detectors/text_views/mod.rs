@@ -474,6 +474,17 @@ mod tests {
     }
 
     #[test]
+    fn long_encoded_text_reads_whole_in_the_model_text() {
+        // Encoded, a long prompt runs past 1 KiB; the model text is the whole
+        // plain text, without an undecoded tail of the encoding.
+        let plain = "Please summarise the quarterly report for the team. ".repeat(40);
+        let plain = plain.trim_end();
+        let hex: String = plain.bytes().map(|byte| format!("{byte:02x}")).collect();
+        assert!(hex.len() > 4096);
+        assert_eq!(model_text(&hex).trim(), plain);
+    }
+
+    #[test]
     fn plain_text_has_no_views() {
         let text = "Please summarise the attached report for the team.";
         let views = TextViews::new(text);
