@@ -39,6 +39,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and `ark-distributed-protocol/` each carry its `LICENSE`, `LICENSE-COMMERCIAL.md` and
   `NOTICE`, and the `ark-api` and `ark-coordinator` images copy them from there. No package
   changes its license.
+- Prompt injection, jailbreak, prompt extraction, memory poisoning and exfiltration scan German
+  and other non-ASCII text much faster: their catalogue rules with a word boundary no longer fall
+  back to the slow regex engine at the first umlaut. On 100 KiB of German and English prose, a
+  scan of all eleven attack classes drops from about 354 ms to about 157 ms (median, rules only);
+  the injection rule catalogue alone from about 210 ms to about 30 ms. Matches and evidence are
+  unchanged.
 - The opt-in attack classes scan German and other non-ASCII text much faster: a rule with a word
   boundary no longer falls back to the slow regex engine at the first umlaut. On 100 KiB windows
   of German prose, the ten opt-in attack classes together take about 40 ms (p95) instead of about

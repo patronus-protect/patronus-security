@@ -40,6 +40,14 @@ impl BoundarySearch {
             .find_at(text, leftmost_start(relaxed, anchored, text, at)?)
     }
 
+    /// Whether the pattern matches anywhere in `text`, as `Regex::is_match`.
+    pub fn is_match(&self, text: &str) -> bool {
+        match &self.relaxed {
+            Some((relaxed, anchored)) => leftmost_start(relaxed, anchored, text, 0).is_some(),
+            None => self.regex.is_match(text),
+        }
+    }
+
     /// The matches in order, as `Regex::find_iter` for a pattern that never
     /// matches the empty string.
     pub fn find_iter<'s, 't>(&'s self, text: &'t str) -> impl Iterator<Item = regex::Match<'t>> + 's

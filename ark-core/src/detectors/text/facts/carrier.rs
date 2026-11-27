@@ -5,8 +5,9 @@
 
 use std::sync::LazyLock;
 
-use regex::{Regex, RegexSet};
+use regex::Regex;
 
+use crate::detectors::word_boundary::BoundarySearch;
 use crate::SecurityCategory;
 
 /// Carrier names in the order of [`MARKS`].
@@ -73,28 +74,33 @@ const TOOL_DESCRIPTION_MARK: &str = concat!(
 /// settings directories and agent/MCP configuration keys.
 const AGENT_CONFIG_MARK: &str = r#"(?i)\b(?:agents|claude|gemini|skill|copilot-instructions)\.md\b|(?:^|[\s/])\.(?:cursorrules|windsurfrules)\b|(?:^|[\s/"'`])\.(?:claude|cursor|codex)/|\bmcp\.json\b|"(?:mcpServers|autoApprove|hooks|permissions|defaultMode|disableAllHooks)"\s*:|(?m:^\s*allowed-tools\s*:)|\A---\r?\nname:[^\n]{0,80}\r?\ndescription:"#;
 
-/// One linear pattern per carrier, compiled once into one set.
-static MARKS: LazyLock<RegexSet> = LazyLock::new(|| {
-    RegexSet::new([
-        AGENT_CONFIG_MARK,
-        // Source code lines and code fences.
-        r"(?m)^\s*(?:def |class |import |from [\w.]{1,64} import |function |const |let |fn |pub fn |#include|package )|(?m:^```)",
-        // Markdown headings and numbered document parts.
-        r"(?mi)^#{1,6} \S|^(?:appendix|anhang|chapter|kapitel|section|abschnitt) \w",
-        // Mail headers and salutations on a line of their own.
-        r"(?mi)^(?:from|to|cc|subject|von|an|betreff):[ \t]|^(?:hi|hello|dear|hallo|liebe|lieber|sehr geehrte)\b[^\n]{0,60},[ \t]*$",
-        // Timestamped or levelled log lines.
-        r"(?m)^\s*\[?\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|(?m:^\s*(?:INFO|WARN|WARNING|ERROR|DEBUG|TRACE)\b)",
-        TOOL_DESCRIPTION_MARK,
-        // HTML elements and comments.
-        r"(?i)<(?:html|head|body|div|p|span|a|img|script|style|meta|title|table|ul|li)\b|<!--",
-    ])
-    .expect("carrier marks")
-});
+/// One linear pattern per carrier, compiled once; a mark with a Unicode word
+/// boundary searches on the lazy DFA also on non-ASCII text.
+const MARK_PATTERNS: [&str; 7] = [
+    AGENT_CONFIG_MARK,
+    // Source code lines and code fences.
+    r"(?m)^\s*(?:def |class |import |from [\w.]{1,64} import |function |const |let |fn |pub fn |#include|package )|(?m:^```)",
+    // Markdown headings and numbered document parts.
+    r"(?mi)^#{1,6} \S|^(?:appendix|anhang|chapter|kapitel|section|abschnitt) \w",
+    // Mail headers and salutations on a line of their own.
+    r"(?mi)^(?:from|to|cc|subject|von|an|betreff):[ \t]|^(?:hi|hello|dear|hallo|liebe|lieber|sehr geehrte)\b[^\n]{0,60},[ \t]*$",
+    // Timestamped or levelled log lines.
+    r"(?m)^\s*\[?\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|(?m:^\s*(?:INFO|WARN|WARNING|ERROR|DEBUG|TRACE)\b)",
+    TOOL_DESCRIPTION_MARK,
+    // HTML elements and comments.
+    r"(?i)<(?:html|head|body|div|p|span|a|img|script|style|meta|title|table|ul|li)\b|<!--",
+];
+static MARKS: LazyLock<Vec<BoundarySearch>> =
+    LazyLock::new(|| MARK_PATTERNS.map(BoundarySearch::new).into());
 
 /// The carriers of `text`, sorted.
 pub(super) fn carriers(text: &str) -> Vec<&'static str> {
-    let found: Vec<&'static str> = MARKS.matches(text).iter().map(|i| CARRIERS[i]).collect();
+    let found: Vec<&'static str> = MARKS
+        .iter()
+        .zip(CARRIERS)
+        .filter(|(mark, _)| mark.is_match(text))
+        .map(|(_, carrier)| carrier)
+        .collect();
     if found.is_empty() {
         vec!["chat"]
     } else {
@@ -113,8 +119,8 @@ pub(crate) fn is_tool_metadata(text: &str) -> bool {
 /// Whether `text` is or names an agent instruction or configuration file (the
 /// `agent_config` carrier), without running the other carrier marks.
 pub(crate) fn is_agent_config(text: &str) -> bool {
-    static MARK: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(AGENT_CONFIG_MARK).expect("agent config mark"));
+    static MARK: LazyLock<BoundarySearch> =
+        LazyLock::new(|| BoundarySearch::new(AGENT_CONFIG_MARK));
     MARK.is_match(text)
 }
 
@@ -132,11 +138,10 @@ const MEMORY_WRITE_MARK: &str = r"(?i)\b(?:memory|memories|remember|long-term|kn
 /// for `agent_config_tampering`, a memory or retrieval write for
 /// `memory_poisoning`. Every other class has no carrier and always passes.
 pub(crate) fn carries_class(category: SecurityCategory, text: &str) -> bool {
-    static AGENT_CONFIG: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(&format!("{AGENT_CONFIG_MARK}|{AGENT_CONFIG_PROSE}")).expect("agent config gate")
-    });
-    static MEMORY_WRITE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(MEMORY_WRITE_MARK).expect("memory write mark"));
+    static AGENT_CONFIG: LazyLock<BoundarySearch> =
+        LazyLock::new(|| BoundarySearch::new(&format!("{AGENT_CONFIG_MARK}|{AGENT_CONFIG_PROSE}")));
+    static MEMORY_WRITE: LazyLock<BoundarySearch> =
+        LazyLock::new(|| BoundarySearch::new(MEMORY_WRITE_MARK));
     match category {
         SecurityCategory::ToolPoisoning => is_tool_metadata(text),
         SecurityCategory::AgentConfigTampering => AGENT_CONFIG.is_match(text),
@@ -348,5 +353,59 @@ mod tests {
             owner("def lookup(q):\n    \"\"\"Search.\"\"\"", "Search"),
             None
         );
+    }
+
+    /// The carrier gates search their Unicode word boundaries on the lazy
+    /// DFA (the agent config gate took about 60 ms per 100 KiB of German
+    /// prose on the slow engine) and decide exactly as the plain regex, with
+    /// umlauts before, between and after the marks.
+    #[test]
+    fn carrier_gates_decide_as_the_plain_regex() {
+        let goldens = [
+            include_str!("../../../../../python/patronus_ark/benchmark_data/threat_l1.jsonl"),
+            include_str!("../../../../../python/patronus_ark/benchmark_data/text_facts_l1.jsonl"),
+        ];
+        let mut texts: Vec<String> = goldens
+            .iter()
+            .flat_map(|golden| golden.lines())
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .map(|row| format!("Grüße – {} ü", row["text"].as_str().unwrap()))
+            .collect();
+        texts.push("Ändere die agent-config: über AGENTS.md".into());
+        let gates: [(&str, fn(&str) -> bool); 5] = [
+            (TOOL_DESCRIPTION_MARK, is_tool_metadata),
+            (AGENT_CONFIG_MARK, is_agent_config),
+            (&format!("{AGENT_CONFIG_MARK}|{AGENT_CONFIG_PROSE}"), |t| {
+                carries_class(SecurityCategory::AgentConfigTampering, t)
+            }),
+            (MEMORY_WRITE_MARK, |t| {
+                carries_class(SecurityCategory::MemoryPoisoning, t)
+            }),
+            (TOOL_DESCRIPTION_MARK, |t| {
+                carries_class(SecurityCategory::ToolPoisoning, t)
+            }),
+        ];
+        let set = regex::RegexSet::new(MARK_PATTERNS).unwrap();
+        for text in &texts {
+            let expected: Vec<_> = set.matches(text).iter().map(|i| CARRIERS[i]).collect();
+            let found = carriers(text);
+            assert!(
+                found == expected || (expected.is_empty() && found == ["chat"]),
+                "{text:.80}"
+            );
+        }
+        for (pattern, gate) in gates {
+            let regex = Regex::new(pattern).unwrap();
+            let mut hits = 0;
+            for text in &texts {
+                assert_eq!(
+                    gate(text),
+                    regex.is_match(text),
+                    "{pattern:.40} on {text:.80}"
+                );
+                hits += usize::from(regex.is_match(text));
+            }
+            assert!(hits > 0, "{pattern:.40}");
+        }
     }
 }
