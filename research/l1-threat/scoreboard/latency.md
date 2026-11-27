@@ -69,3 +69,81 @@ Byte- und Zeichenbereich der Eingabe (auch wenn nur eine normalisierte oder deko
 Fund zeigte); Konfidenzen in `[0, 1]`; eine Eingabe zweimal hintereinander senkt keine Konfidenz und
 verliert keine Evidenz. Monotonie der Punkte (`score.rs`): höhere Schwere, stärkerer Validator, mehr
 Anker oder besserer Kontext senken nie einen Score; Normalisierung senkt nie einen Angriffs-Score.
+
+## T38 (2026-11-27): Profil aller Threat-Klassen, erste Hotspots behoben
+
+Gemessen auf der VPS (Intel Core Processor (Haswell, no TSX), 6 CPUs), Release-Build, ein Prozess,
+Scanner einmal gebaut und je Größe einmal aufgewärmt (kein Prozessstart, kein Erstkompilat in der
+Messung), sequentiell. Werkzeug: `ark-core/examples/threat_profile.rs` (alle elf Angriffsklassen in
+einem Scanner wie `threat_cascade`; dazu jeder native Produzent einzeln auf einer frischen
+`NativeText`-Sicht und jedes L1-Modell über die Layer-Dauer seiner Kaskadenentscheidung). Texte: alle
+gutartigen Zeilen aus `$ARK_L1_DEV_DATA/train_dev` (DE + EN, 58 470 Zeilen, Seed 38 gemischt), in
+Fenster gepackt. Base = `main` (`3d726a49`), Head = dieser Branch. Regeln allein: `{"max_level":
+"l1", "cascade": {}}`; mit L1-Modellen: `research/l1-threat/scoreboard/cascade-config.json`.
+
+```bash
+cargo build --release -p patronus-ark-core --example threat_profile
+target/release/examples/threat_profile benign.jsonl                                   # Regeln
+target/release/examples/threat_profile benign.jsonl research/l1-threat/scoreboard/cascade-config.json
+```
+
+| Größe | Fenster | Base Regeln p50 / p95 ms | Head Regeln p50 / p95 ms | Head Regeln + L1-Modelle p50 / p95 ms | Summe L1-Modelle p50 ms |
+|---|---:|---:|---:|---:|---:|
+| short (256 B) | 200 | 1.318 / 3.539 | 1.453 / 3.178 | 2.668 / 5.688 | 0.8 |
+| 4 KiB | 60 | 10.714 / 19.130 | 9.599 / 16.402 | 18.557 / 25.647 | 8.7 |
+| 100 KiB | 20 | 354.063 / 484.292 | 149.596 / 180.329 | 335.799 / 407.575 | 175.2 |
+| 10 MiB | 2 | 62 422 / 63 910 | 27 289 / 30 789 | 39 555 / 48 447 | 9 913 |
+
+Produzenten bei 100 KiB (jeder einzeln, p50 / p95 ms; die zehn teuersten des Head):
+
+| Produzent (Klasse/Detektor) | Base | Head |
+|---|---:|---:|
+| `injection/native:injection_rule_catalog` | 210.185 / 327.254 | 29.643 / 43.292 |
+| `agent_config_tampering/native:threat_l1` | 19.290 / 21.041 | 1.168 / 1.461 |
+| `unsafe_action/native:threat_l1` | 9.949 / 13.676 | 10.130 / 14.970 |
+| `prompt_extraction/native:injection_rule_catalog` | 8.160 / 13.307 | 8.779 / 14.115 |
+| `jailbreak/native:injection_rule_catalog` | 6.523 / 16.062 | 6.442 / 7.677 |
+| `toxic_language/native:threat_l1` | 5.231 / 6.847 | 5.253 / 5.853 |
+| `tool_poisoning/native:threat_l1` | 4.499 / 5.658 | 4.208 / 7.346 |
+| `exfiltration/native:threat_l1` | 4.069 / 4.362 | 4.123 / 4.750 |
+| `memory_poisoning/native:injection_rule_catalog` | 8.773 / 10.060 | 2.903 / 3.709 |
+| `exfiltration/native:injection_rule_catalog` | 2.081 / 9.689 | 2.305 / 9.924 |
+
+L1-Modelle bei 100 KiB (Head, p50 / p95 ms): memory_poisoning 19.8 / 24.7, injection 19.5 / 25.7,
+exfiltration 19.4 / 24.9, harmful_content 19.0 / 24.1, resource_exhaustion 18.6 / 24.7,
+prompt_extraction 18.5 / 24.2, unsafe_action 18.4 / 25.4, jailbreak 18.3 / 24.2, toxic_language
+18.0 / 24.4, tool_poisoning 5.4 / 25.2, agent_config_tampering 0.3 / 20.3 (die beiden letzten laufen
+nur mit ihrem Träger).
+
+Hotspots (Einzelregeln auf einem 100-KiB-Fenster deutscher/englischer Prosa, `regex` allein):
+
+1. **Injection-Katalog mit Unicode-`\b`** (behoben): rund 30 Katalogregeln mit Unicode-Wortgrenze
+   fielen am ersten Umlaut von der Lazy-DFA auf die NFA zurück, je 5–38 ms
+   (`override.discard_prior`-Varianten 34–38 ms, `leak.system_prompt_extraction` 18 ms,
+   `override.authority_issued_replacement`, `skillspector.anti_refusal`, `guardrail.disable_directive`
+   je 12–14 ms). Jetzt wie Threat, PII und DLP über `word_boundary::captures_at` (Regel ohne
+   Wortgrenzen auf dem DFA, Kandidat verankert mit der Regel geprüft); Summe aller Katalogregeln auf
+   dem Fenster 321 → 78 ms, Katalog der Klasse `injection` p50 210 → 30 ms. Treffer, Captures und
+   Evidenz identisch (Paritätstest über Injection- und Threat-Goldens mit Umlauten).
+2. **Träger-Gates mit Unicode-`\b`** (behoben): `is_agent_config` (Gate der `ac_*`-Regeln) 23 ms,
+   `carries_class(agent_config_tampering)` (Gate des L1-Modells) 63 ms, die Träger-Marken der
+   Text-Facts (`RegexSet`) bis 41 ms; jetzt `BoundarySearch::is_match` ≈ 0,6 / 1,0 / 5 ms.
+   Entscheidungen identisch (Paritätstest gegen Regex und `RegexSet`).
+3. **L1-Modelle** (offen): jedes Modell extrahiert die Facts und zählt die n-Gramme über den ganzen
+   Text, ≈ 18–20 ms je Modell und 100 KiB, zusammen ≈ 175 ms. Nächste Schritte: die Facts einmal je
+   Scan teilen und nur begrenzte Fenster um Anker (sonst ein gedeckeltes Präfix) bewerten — das
+   ändert die Scores und braucht die TPR-Messung auf der sauberen Auswertung.
+4. **Verbleibende Katalogregeln** (offen): `indirect.code_insertion_en` (`override.replacement_directive`)
+   17–25 ms und die `leak.guarded_secret_*`-Varianten 6–8 ms, beide ohne Unicode-`\b`; lange
+   Satzanfangs-Alternationen mit `[^…]{0,39}?` vor dem Literal, die der Literal-Prefilter nicht
+   abfängt (Prefilter trifft auf normaler Prosa).
+5. **Threat-Regeln** (offen): `hc_evasion` 38 ms trotz entspannter Suche (viele Kandidaten),
+   `tx_dehumanisation`, `tx_insult_addressee`, `tx_insult_verdict` je 9–11 ms (gutartige
+   Prosa hat 10–29 Kandidaten je Regel), `tx_threat`, `ua_persistence`, `ac_tamper_request`,
+   `re_huge_output` je 4–6 ms.
+6. **Kurztexte**: Head p50 1,32 → 1,45 ms (p95 3,54 → 3,18 ms); die entspannte Suche macht je Kandidat
+   drei statt einer Suche, auf kurzen Texten ohne Treffer kaum messbar.
+
+Stand gegen das Ziel (100 KiB p95 ≤ 10 ms Regeln, ≤ 15 ms mit L1-Modellen): Regeln 180 ms, mit
+Modellen 408 ms — nicht erreicht. Der Lauf von `scripts/benchmark_injection_l1.py` und die
+Neuberechnung der E12-Latenztabelle stehen aus.

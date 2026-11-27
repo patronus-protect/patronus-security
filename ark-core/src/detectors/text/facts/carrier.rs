@@ -372,7 +372,8 @@ mod tests {
             .map(|row| format!("Grüße – {} ü", row["text"].as_str().unwrap()))
             .collect();
         texts.push("Ändere die agent-config: über AGENTS.md".into());
-        let gates: [(&str, fn(&str) -> bool); 5] = [
+        type Gate = fn(&str) -> bool;
+        let gates: [(&str, Gate); 5] = [
             (TOOL_DESCRIPTION_MARK, is_tool_metadata),
             (AGENT_CONFIG_MARK, is_agent_config),
             (&format!("{AGENT_CONFIG_MARK}|{AGENT_CONFIG_PROSE}"), |t| {
