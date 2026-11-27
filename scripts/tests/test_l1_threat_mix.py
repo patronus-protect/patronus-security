@@ -200,18 +200,66 @@ def test_decision_score_puts_heuristic_detections_above_every_model_score():
     assert MODULE.decision_score({**stage, "decided_by": "l3", "score": 0.7}) == 0.7
 
 
-def test_an_unreachable_budget_is_marked_not_reachable():
-    # 5 % of the calibration negatives share the top score: no cut above them holds 0.1 % FPR.
-    rows, scores = mix_rows({"calibration": ([1.0] * 10, [1.0] * 50 + [0.0] * 950),
+def fair_report_of(cell):
+    return {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": [], "missing": {}, "short_sources": [],
+            "excluded": {}, "trained": {"models": {}, "keys": 0},
+            "parts": {"calibration": 1010, "measurement": 1010, "report": 0, "rows": 2020, "sources": 1},
+            "systems": {"rules": {"jailbreak": {"all": cell}}}}
+
+
+def test_the_first_reachable_level_of_the_ladder_wins():
+    # 0.3 % of the negatives share the top score: 0.1 % and 0.2 % are out of reach, 0.5 % is the first level within.
+    negatives = [1.0] * 3 + [0.5] * 7 + [0.0] * 990
+    level, cut, reachable = MODULE.ladder_cut(negatives, 1.0, 0.001)
+    assert (level, reachable) == (0.005, True) and cut == MODULE.mix_cut(negatives, 0.005) and 0.5 < cut <= 1.0
+    # A reachable level keeps its own cut; a lower ladder level wins over a higher one.
+    assert MODULE.ladder_cut(negatives, 1.0, 0.01) == (0.01, MODULE.mix_cut(negatives, 0.01), True)
+    assert MODULE.ladder_cut([1.0] * 3 + [0.5] * 997, 1.0, 0.001)[0] == 0.005
+    assert MODULE.ladder_cut([1.0] * 2 + [0.5] * 998, 1.0, 0.001)[0] == 0.002
+    # No level of the ladder is reachable.
+    assert MODULE.ladder_cut([1.0] * 60 + [0.0] * 940, 1.0, 0.001) == (0.001, MODULE.mix_cut([1.0] * 60 + [0.0] * 940,
+                                                                                              0.001), False)
+
+
+def test_an_unreachable_level_falls_back_to_the_ladder_with_the_cut_from_calibration_only():
+    calibration = ([1.0] * 10, [1.0] * 3 + [0.5] * 7 + [0.0] * 990)
+    rows, scores = mix_rows({"calibration": calibration,
+                             "measurement": ([1.0] * 6 + [0.5] * 4, [1.0] * 2 + [0.0] * 998)})
+    cell = MODULE.fair_cells(rows, scores, ["jailbreak"])["jailbreak"]["all"]
+    assert cell["0.001"]["level"] == "0.005" and cell["0.001"]["reachable"]
+    assert cell["0.001"]["cut"] == MODULE.mix_cut(calibration[1], 0.005)
+    assert cell["0.001"]["measurement"]["tpr"] == 0.6 and cell["0.001"]["measurement"]["fpr"] == 0.002
+    assert cell["0.01"]["level"] == "0.01"
+    # Measurement negatives at the top score move neither the level nor the cut.
+    noisy, noisy_scores = mix_rows({"calibration": calibration, "measurement": ([1.0] * 10, [1.0] * 1000)})
+    moved = MODULE.fair_cells(noisy, noisy_scores, ["jailbreak"])["jailbreak"]["all"]["0.001"]
+    assert (moved["level"], moved["cut"]) == (cell["0.001"]["level"], cell["0.001"]["cut"])
+    text = MODULE.render_fair(fair_report_of(cell), "T", [])
+    decisive, one_percent = text.split("## At 1% FPR")
+    # The fallback cell names its level and is set apart, so it is never read as a 0.1 % number.
+    assert "| jailbreak | all | 10 | 1 | 1000 | 0 | *60.0 / 0.20 @0.5%* |" in decisive
+    assert "| jailbreak | all | 10 | 1 | 1000 | 0 | 100.0 / 0.20 |" in one_percent
+    assert MODULE.NO_BUDGET not in decisive.split("|---|")[1]
+
+
+def test_a_cell_beyond_the_ladder_stays_not_reachable():
+    # 6 % of the calibration negatives share the top score: no level up to 5 % holds.
+    rows, scores = mix_rows({"calibration": ([1.0] * 10, [1.0] * 60 + [0.0] * 940),
                              "measurement": ([1.0] * 10, [0.0] * 1000)})
     cell = MODULE.fair_cells(rows, scores, ["jailbreak"])["jailbreak"]["all"]
     assert not cell["0.001"]["reachable"] and cell["0.001"]["measurement"]["tpr"] == 0.0
-    report = {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": [], "missing": {}, "short_sources": [],
-              "excluded": {}, "trained": {"models": {}, "keys": 0},
-              "parts": {"calibration": 1010, "measurement": 1010, "report": 0, "rows": 2020, "sources": 1},
-              "systems": {"rules": {"jailbreak": {"all": cell}}}}
     budget = MODULE.NO_BUDGET
-    assert f"| jailbreak | all | 10 | 1 | 1000 | 0 | {budget} |" in MODULE.render_fair(report, "T", [])
+    assert f"| jailbreak | all | 10 | 1 | 1000 | 0 | {budget} |" in MODULE.render_fair(fair_report_of(cell), "T", [])
+
+
+def test_best_heuristic_ranks_a_fallback_cut_as_nothing_at_the_level():
+    plain, plain_scores = mix_rows({"calibration": ([0.9] * 2 + [0.0] * 8, [0.0] * 1000),
+                                    "measurement": ([0.9] * 10, [0.0] * 1000)})
+    fallback, fallback_scores = mix_rows({"calibration": ([1.0] * 10, [1.0] * 3 + [0.0] * 997),
+                                          "measurement": ([1.0] * 10, [0.0] * 1000)})
+    best = MODULE.best_of({"a": MODULE.fair_cells(fallback, fallback_scores, ["jailbreak"]),
+                           "b": MODULE.fair_cells(plain, plain_scores, ["jailbreak"])})
+    assert best["jailbreak"]["all"]["system"] == "b"
 
 
 def test_training_rows_are_left_out_of_both_parts_and_counted_per_source():
