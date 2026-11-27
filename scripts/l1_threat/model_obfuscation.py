@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""How the built-in L1 models react to obfuscation alone: each model's flag rate, at its own detect cut, on benign and
+"""How the built-in L1 models react to obfuscation alone: each model's flag rate, at its detect cut, on benign and
 hard-negative text and its TPR on its positives, clean and with zero-width characters, Unicode tags, base64,
 leetspeak or homoglyphs applied (``generators.OBFUSCATIONS``, as the competitor benchmarks apply them).
 
-Rows: the dev sets (no report set), without any row a built-in model was trained on (``scoreboard.trained_keys``);
-benign rows up to ``--benign`` per language and every hard benign, positives up to ``--positives`` per class and
-language, each sample the lowest ``MIX.text_sha`` keys. The models answer on the text alone (no rule findings), through
-``ark-core/examples/l1_models.rs``.
+Rows: the measurement mix of ``scoreboard.py mix`` (``--mix``; no row any built-in model was trained on). The detect
+cut of each model and language holds 0.1 % FPR on the clean negatives of the mix's calibration part (benign rows and
+the positives of the other classes), as the scoreboard cuts every model; the obfuscated text never sets a cut. The
+flag rates come from the measurement part: benign rows up to ``--benign`` per language and every hard benign,
+positives up to ``--positives`` per class and language, each sample the lowest ``MIX.text_sha`` keys. The models
+answer on the text alone (no rule findings), through ``ark-core/examples/l1_models.rs``.
 
-    python3 scripts/l1_threat/model_obfuscation.py run [--dev DIR] [--out research/l1-threat/scoreboard/model-obfuscation.md]
+    python3 scripts/l1_threat/model_obfuscation.py run --mix MIX [--dev DIR] [--out research/l1-threat/scoreboard/model-obfuscation.md]
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import os
 import subprocess
 import sys
@@ -27,9 +30,9 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 OUT = ROOT / "research" / "l1-threat" / "scoreboard" / "model-obfuscation.md"
-DEV_DIRS = ("train_dev", "generated", "translated")
 KINDS = ("zero_width", "unicode_tags", "base64", "leetspeak", "homoglyph")
 LANGUAGES = ("de", "en")
+TARGET_FPR = 0.001
 
 SCOREBOARD = sys.modules.get("_ark_l1_threat_scoreboard")
 if SCOREBOARD is None:
@@ -71,14 +74,39 @@ def variants(rows: list[dict[str, Any]]) -> list[dict[str, str]]:
         {"id": f"{row['id']}~{kind}", "text": OBFUSCATIONS[kind](row["text"])} for row in rows for kind in KINDS]
 
 
-def predict(texts: list[dict[str, str]], binary: Path | None = None) -> dict[str, list[str]]:
-    """Row id -> the built-in models whose answer is Detected; ``binary``: a built ``l1_models`` example instead of
-    building it with cargo."""
+def predict(texts: list[dict[str, str]], binary: Path | None = None) -> dict[str, dict[str, float]]:
+    """Row id -> built-in model -> its decision score as a probability (sigmoid of the logit, 0 without a score);
+    ``binary``: a built ``l1_models`` example instead of building it with cargo."""
     command = [str(binary)] if binary else ["cargo", "run", "--release", "-q", "-p", "patronus-ark-core", "--example",
                                             "l1_models"]
     stdin = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in texts)
     done = subprocess.run(command, input=stdin, capture_output=True, text=True, check=True, cwd=ROOT)
-    return {item["id"]: item["flagged"] for item in map(json.loads, done.stdout.splitlines())}
+    return {item["id"]: {model: 1.0 / (1.0 + math.exp(-min(max(logit, -700.0), 700.0)))
+                         for model, logit in item["scores"].items()}
+            for item in map(json.loads, done.stdout.splitlines())}
+
+
+def cuts(rows: list[dict[str, Any]], scores: dict[str, dict[str, float]]) -> dict[tuple[str, str], float]:
+    """(model, language) -> the detect cut at 0.1 % FPR of the model's clean negatives among ``rows`` (benign rows
+    and the positives of the other classes, ``scoreboard.mix_label``)."""
+    out = {}
+    for model in SCOREBOARD.CLASSES:
+        for lang in LANGUAGES:
+            negatives = [scores[row["id"]].get(model, 0.0) for row in rows
+                         if row["language"] == lang and SCOREBOARD.mix_label(row, model) is False]
+            if negatives:
+                out[(model, lang)] = SCOREBOARD.mix_cut(negatives, TARGET_FPR)
+    return out
+
+
+def flags(rows: list[dict[str, Any]], scores: dict[str, dict[str, float]],
+          cut: dict[tuple[str, str], float]) -> dict[str, list[str]]:
+    """Text id (``<id>`` and ``<id>~<kind>``) -> the models at or above their cut for the row's language."""
+    language = {row["id"]: row["language"] for row in rows}
+    return {text_id: [model for model, score in models.items()
+                      if (model, language[text_id.split("~")[0]]) in cut
+                      and score >= cut[(model, language[text_id.split("~")[0]])]]
+            for text_id, models in scores.items()}
 
 
 def rates(rows: list[dict[str, Any]], flags: dict[str, list[str]]) -> dict[str, Any]:
@@ -105,10 +133,11 @@ def render(result: dict[str, Any], note: str) -> str:
 
     lines = ["# Built-in L1 models under obfuscation", "",
              "Generated by `scripts/l1_threat/model_obfuscation.py run`; do not edit by hand.", "", note, "",
-             "Each built-in L1 model at its own detect cut (0.1 % FPR, per language), answering on the text alone. "
+             "Each built-in L1 model at its detect cut: 0.1 % FPR on the clean negatives of the mix's calibration part, per "
+             "language (the obfuscated text never sets a cut), answering on the text alone. "
              "Flag rate in percent of benign rows, hard benign rows and TPR on the model's positives, clean and with "
              "each obfuscation applied to the whole text (zw: zero-width characters, tags: Unicode tags, b64: base64, "
-             "leet: leetspeak, homoglyph). Rows: dev sets without the rows any built-in model was trained on.", "",
+             "leet: leetspeak, homoglyph). Rows: the mix's measurement part (no row any built-in model was trained on).", "",
              "| model | lang | group | rows | clean | zw | tags | b64 | leet | homoglyph |",
              "|---|---|---|---|---|---|---|---|---|---|"]
     for key, cell in result.items():
@@ -119,18 +148,21 @@ def render(result: dict[str, Any], note: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run(dev: Path, benign: int, positives: int, binary: Path | None = None) -> dict[str, Any]:
-    keys = set().union(*SCOREBOARD.trained_keys(dev).values())
-    rows = [row for name in DEV_DIRS for entry in SCOREBOARD.split_sets(dev / name)
-            for row in SCOREBOARD.BASELINES.read_rows(entry.path) if SCOREBOARD.MIX.text_sha(row) not in keys]
-    picked = sample(rows, benign, positives)
-    return rates(picked, predict(variants(picked), binary))
+def run(dev: Path, mix_root: Path, benign: int, positives: int, binary: Path | None = None) -> dict[str, Any]:
+    sets, _ = SCOREBOARD.mix_sets(dev, mix_root)
+    parts = SCOREBOARD.load_parts(mix_root, sets)["parts"]
+    mix = SCOREBOARD.mix_rows(sets, [], parts)
+    calibration = [item.row for item in mix if item.part == "calibration" and item.row["language"] in LANGUAGES]
+    picked = sample([item.row for item in mix if item.part == "measurement"], benign, positives)
+    cut = cuts(calibration, predict([{"id": row["id"], "text": row["text"]} for row in calibration], binary))
+    return rates(picked, flags(picked, predict(variants(picked), binary), cut))
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=["run"])
     parser.add_argument("--dev", type=Path, default=Path(os.environ.get("ARK_L1_DEV_DATA", "")))
+    parser.add_argument("--mix", type=Path, required=True, help="mix root written by `scoreboard.py mix`")
     parser.add_argument("--benign", type=int, default=3000)
     parser.add_argument("--positives", type=int, default=200)
     parser.add_argument("--binary", type=Path, help="a built l1_models example (default: cargo run)")
@@ -138,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", type=Path)
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args(argv)
-    result = run(args.dev, args.benign, args.positives, args.binary)
+    result = run(args.dev, args.mix, args.benign, args.positives, args.binary)
     if args.json:
         args.json.write_text(json.dumps(result, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     args.out.write_text(render(result, args.note), encoding="utf-8")

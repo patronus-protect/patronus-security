@@ -42,3 +42,20 @@ def test_rates_are_per_model_language_and_group():
     assert result["jailbreak|en|positive"]["base64"] == 100.0
     assert result["jailbreak|de|benign"]["rows"] == 0
     assert "| jailbreak | en | benign | 1 | 0.00 | 100.00 |" in MODULE.render(result, "note")
+
+
+def test_cuts_come_from_clean_negatives_per_language():
+    rows = [row(f"b{i}", "en", True) for i in range(1000)] + [row("p", "en", False, ["jailbreak"])]
+    scores = {f"b{i}": {"jailbreak": i / 1000} for i in range(1000)}
+    scores["p"] = {"jailbreak": 1.0}
+    cut = MODULE.cuts(rows, scores)
+    # 0.1 % of 1000 negatives: one benign row may sit at or above the cut, the positive never sets it.
+    assert sum(scores[f"b{i}"]["jailbreak"] >= cut[("jailbreak", "en")] for i in range(1000)) == 1
+    assert ("jailbreak", "de") not in cut
+
+
+def test_flags_use_the_cut_of_the_row_language():
+    rows = [row("a", "de", True), row("b", "en", True)]
+    cut = {("jailbreak", "de"): 0.5, ("jailbreak", "en"): 0.9}
+    scores = {"a": {"jailbreak": 0.6}, "a~base64": {"jailbreak": 0.4}, "b": {"jailbreak": 0.6}}
+    assert MODULE.flags(rows, scores, cut) == {"a": ["jailbreak"], "a~base64": [], "b": []}
