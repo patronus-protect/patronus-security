@@ -59,6 +59,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   of German prose, the ten opt-in attack classes together take about 40 ms (p95) instead of about
   170 ms; on German text with many imperative requests, `harmful_content` drops from about 160 ms
   to about 5 ms. Findings are unchanged.
+- **Breaking (Rust API of Ark Core):** a built-in L1 model now reads the text as the scan already
+  prepared it for the rules, so decoding and folding run once per text. `L1TextModel::evaluate`,
+  `Cascade::l1_scan_answer`, `Cascade::l1_model_stage` and `text::extract_with` take a
+  `&threat::NativeText` instead of a `&str`; wrap a plain string with `NativeText::new(text)`.
+  Scores are unchanged.
 
 ### Detection changes
 
