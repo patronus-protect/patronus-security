@@ -512,7 +512,12 @@ ist T38d.
 Qualität: `threat_cascade` (Release) von `main` (`40b3350c`) und diesem Branch über alle 109 632
 Zeilen unter `$ARK_L1_DEV_DATA` (`train_dev` 83 765, `report` 20 955, `generated` 4 312, `translated` 600), mit der
 Regel-Konfiguration und mit `cascade-config.json`: 0 abweichende Vorhersagen (Scores, `flagged`,
-Kaskade; nur `ms` ausgenommen), je 12 290 markierte Zeilen.
+Kaskade; nur `ms` ausgenommen), je 12 290 markierte Zeilen. Dazu die 7 927 Zeilen, die die
+Messmischung von `scoreboard.py` über `$ARK_L1_DEV_DATA` hinaus enthält (`pii_texts` 3 872,
+`dlp_texts` 3 455, `trigger_negatives` 600, aus `scoreboard.py mix`): ebenfalls 0 Abweichungen mit
+beiden Konfigurationen. Damit sind die Vorhersagen auf jeder Zeile der Mischung und der Report-Sets
+gleich; `scoreboard.py refresh` lässt `baseline.md` und `cascade.md` unverändert (ein Report, dessen
+Zahlen und Eingaben gleich bleiben, wird nicht neu geschrieben), daher kein Refresh-Commit.
 
 `scripts/benchmark_injection_l1.py` (Injection-Pfad des Gateways über die Python-Bindung, Release
 `maturin develop --release` je Stand in eigener venv, 50 Läufe nach 10 Aufwärmläufen; abwechselnd
