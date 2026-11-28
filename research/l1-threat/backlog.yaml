@@ -1105,11 +1105,45 @@ tasks:
       counts these rows as native; the clean evaluation re-rendered on E14's and E14b's data with the real
       rows reported separately from the synthetic ones (rules only and L1 model: TPR on the real positives,
       FPR on the real benign rows); German and resource_exhaustion named as gaps with the reason
+  # Owner, 2026-11-28 (E14b report): on hand-labelled real artefacts the agent-class detectors find almost
+  # nothing (tool_poisoning 0/17, memory_poisoning 0/13, agent_config_tampering 1/27 at 0.1% FPR) and the L1
+  # model flags 9-10% of real benign agent configs and memory conversations at its 1% cut: rules and models
+  # fit the synthetic generator families, not real files.
+  - id: T39
+    title: "Agent classes on real artefacts: on E14b's hand-labelled real rows tool_poisoning finds 0 of 17, memory_poisoning 0 of 13 and agent_config_tampering 1 of 27 at 0.1% FPR, and the L1 model flags 9-10% of real benign configs and memory conversations at 1% FPR; rules from the real advisory patterns and real benign files as hard negatives"
+    type: recall-fix
+    deps: []
+    accept: >-
+      the real rows split once, frozen, into a train part and an evaluation part stratified by class and
+      source (a test fails on any overlap; the evaluation part is never used for rules, training or cuts);
+      rule families for the attack patterns of the real advisories (named in taxonomy.yaml, prefiltered,
+      goldens DE + EN with real-file carriers and real benign hard negatives); the L1 models of the three
+      classes retrained with the real benign train rows as negatives (the fixed synthetic train split
+      otherwise unchanged); on the real evaluation part FPR at most 0.1% per class at the detect cut and the
+      TPR of rules only and L1 model reported (target: above 0 for every class), next to the unchanged
+      synthetic numbers; no other class loses TPR at 0.1% FPR; L1 100 KiB p95 within +5 %
+  # Owner, 2026-11-28: the cascade column has never had a number. cascade-config.json says "budget not
+  # reachable with the heuristic's scores" for every class, so no clear or detect cut exists and the
+  # refresh has no Core predictions of a config with a later layer. Every DEV re-freeze also changes the
+  # set hashes and empties the baseline cache, so the baseline columns fall back to "not run".
+  - id: E15
+    title: "Measure the cascade at last, and keep the baseline columns filled: calibrate the clear and detect cuts of every class on the L1 model scores (the heuristic scores never reach the budget), run the cascade with Wolf L3 on the rows the L1 leaves undecided, and refill the baseline cache after every DEV re-freeze"
+    type: eval-infra
+    deps: []
+    accept: >-
+      scoreboard.py calibrate sets a clear and a detect cut per class and language from the L1 model scores
+      on the calibration part (or names the class where no cut reaches the budget, with its best FPR);
+      cascade-config.json regenerated; the refresh produces Core predictions of the cascade config with
+      Wolf Defender Edge fp32 at its default threshold on the escalated rows, with the escalation rate and
+      Wolf's cost per row reported; the cascade column of cascade.md has a number (or a named reason) in
+      every cell, with the report-set column; the baseline cache is refilled whenever the DEV set hashes
+      change (a runner or refresh step, documented in research/l1-threat/README.md), so Prompt Guard 2,
+      ProtectAI v2 and the heuristic columns never fall back to "not run" after a re-freeze
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T36b, T38, T38b, T38c, T38d]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T36b, T38, T38b, T38c, T38d, T39, E15]}
 
 recurring:
   - id: TRIAGE
