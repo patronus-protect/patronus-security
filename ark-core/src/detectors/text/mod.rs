@@ -28,7 +28,7 @@ mod schema;
 mod tf1;
 
 pub use facts::{data_refs, extract, DataRef, Finding, FindingFacts, Sink, TextFacts};
-pub use l1_model::{L1ModelConfig, L1ModelOutcome, L1TextModel, L1_MODEL_LAYER};
+pub use l1_model::{L1ModelConfig, L1ModelOutcome, L1TextModel, SharedFacts, L1_MODEL_LAYER};
 pub use model::{CategoryModel, TEXT_MODEL};
 pub use schema::schema;
 pub use tf1::{tf1, visit_tf1};

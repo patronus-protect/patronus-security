@@ -739,13 +739,7 @@ impl PiiPipeline {
         text: &'t str,
         at: usize,
     ) -> Option<regex::Captures<'t>> {
-        let Some((relaxed, anchored)) = &self.rule(index).relaxed else {
-            return regex.captures_at(text, at);
-        };
-        regex.captures_at(
-            text,
-            word_boundary::leftmost_start(relaxed, anchored, text, at)?,
-        )
+        word_boundary::captures_at(regex, self.rule(index).relaxed.as_ref(), text, at)
     }
 }
 

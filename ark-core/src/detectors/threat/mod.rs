@@ -7,7 +7,6 @@ use std::{
 };
 
 use regex::{Captures, Regex, RegexBuilder};
-use regex_automata::{meta, util::syntax};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -164,20 +163,15 @@ struct RuleRegexes {
     sources: Option<Regex>,
     /// A rule with a Unicode word boundary: the rule without its word
     /// boundaries and the rule for anchored probes, so that a non-ASCII text
-    /// stays on the lazy DFA ([`word_boundary::leftmost_start`]).
-    relaxed: Option<(Regex, meta::Regex)>,
+    /// stays on the lazy DFA ([`word_boundary::captures_at`]).
+    relaxed: Option<word_boundary::Relaxed>,
 }
 
 impl RuleRegexes {
     /// The leftmost match from `at`, as `regex.captures_at`.
     fn captures_at<'t>(&self, text: &'t str, at: usize, ascii: bool) -> Option<Captures<'t>> {
-        match &self.relaxed {
-            Some((relaxed, anchored)) if !ascii => self.regex.captures_at(
-                text,
-                word_boundary::leftmost_start(relaxed, anchored, text, at)?,
-            ),
-            _ => self.regex.captures_at(text, at),
-        }
+        let relaxed = self.relaxed.as_ref().filter(|_| !ascii);
+        word_boundary::captures_at(&self.regex, relaxed, text, at)
     }
 }
 
@@ -198,18 +192,10 @@ impl CompiledRule {
                 regex.capture_names().flatten().count() >= 2,
                 "Threat rules require components"
             );
-            let relaxed =
-                word_boundary::without_unicode_word_boundaries(&self.rule.pattern).map(|relaxed| {
-                    let anchored = meta::Builder::new()
-                        .configure(
-                            meta::Config::new()
-                                .hybrid_cache_capacity(super::dlp::prefilter::RULE_DFA_CACHE_BYTES),
-                        )
-                        .syntax(syntax::Config::new().case_insensitive(true))
-                        .build(&self.rule.pattern)
-                        .expect("valid bounded Threat regex");
-                    (build(&relaxed), anchored)
-                });
+            let relaxed = word_boundary::relaxed_case_insensitive(
+                &self.rule.pattern,
+                super::dlp::prefilter::RULE_DFA_CACHE_BYTES,
+            );
             RuleRegexes {
                 sources: without_record_branch(&self.rule.pattern).map(|p| build(&p)),
                 regex,

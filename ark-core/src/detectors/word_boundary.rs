@@ -6,8 +6,8 @@
 //! without its word boundaries stays on the DFA and matches wherever the
 //! pattern does: each of its match starts is probed anchored with the pattern
 //! itself, and only a start that holds is searched with it (H03, H06-6).
-use regex::Regex;
-use regex_automata::{meta, Anchored, Input};
+use regex::{Captures, Regex, RegexBuilder};
+use regex_automata::{meta, util::syntax, Anchored, Input};
 use regex_syntax::ast;
 use regex_syntax::hir::{Hir, HirKind, Look};
 
@@ -38,6 +38,14 @@ impl BoundarySearch {
         };
         self.regex
             .find_at(text, leftmost_start(relaxed, anchored, text, at)?)
+    }
+
+    /// Whether the pattern matches anywhere in `text`, as `Regex::is_match`.
+    pub fn is_match(&self, text: &str) -> bool {
+        match &self.relaxed {
+            Some((relaxed, anchored)) => leftmost_start(relaxed, anchored, text, 0).is_some(),
+            None => self.regex.is_match(text),
+        }
     }
 
     /// The matches in order, as `Regex::find_iter` for a pattern that never
@@ -72,6 +80,46 @@ pub(crate) fn leftmost_start(
             return Some(candidate);
         }
         start = candidate + text[candidate..].chars().next()?.len_utf8();
+    }
+}
+
+/// A rule with a Unicode word boundary, ready for [`captures_at`]: the
+/// rule without its word boundaries and the rule for anchored probes.
+pub(crate) type Relaxed = (Regex, meta::Regex);
+
+/// The [`Relaxed`] pair of a case-insensitive rule `pattern` if it has a
+/// Unicode word boundary, else `None`; `cache_bytes` bounds the lazy DFA of
+/// each.
+pub(crate) fn relaxed_case_insensitive(pattern: &str, cache_bytes: usize) -> Option<Relaxed> {
+    let relaxed = without_unicode_word_boundaries(pattern)?;
+    let anchored = meta::Builder::new()
+        .configure(meta::Config::new().hybrid_cache_capacity(cache_bytes))
+        .syntax(syntax::Config::new().case_insensitive(true))
+        .build(pattern)
+        .expect("a valid rule pattern");
+    let relaxed = RegexBuilder::new(&relaxed)
+        .case_insensitive(true)
+        .dfa_size_limit(cache_bytes)
+        .build()
+        .expect("a pattern without assertions stays valid");
+    Some((relaxed, anchored))
+}
+
+/// The leftmost match of `regex` from `at`, as `regex.captures_at`; with its
+/// [`Relaxed`] pair the search stays on the lazy DFA on non-ASCII text
+/// ([`leftmost_start`]). Pass `None` for a rule without a Unicode word
+/// boundary or an ASCII text, where the lazy DFA handles the boundary itself.
+pub(crate) fn captures_at<'t>(
+    regex: &Regex,
+    relaxed: Option<&Relaxed>,
+    text: &'t str,
+    at: usize,
+) -> Option<Captures<'t>> {
+    match relaxed {
+        Some((relaxed, anchored)) => {
+            regex.captures_at(text, leftmost_start(relaxed, anchored, text, at)?)
+        }
+        None => regex.captures_at(text, at),
     }
 }
 

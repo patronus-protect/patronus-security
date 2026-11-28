@@ -820,13 +820,14 @@ without a decision envelope); else Clear below the `clear_threshold`;
 else Escalate.
 
 ```rust
-pub fn l1_scan_answer<'a>(
+pub fn l1_scan_answer<'a, 't>(
     &self,
     levels: &LayerExecution,
     module: SecurityCategory,
     ran: bool,
     scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
-    text: &str,
+    text: &'t str,
+    facts: &SharedFacts<'t>,
 ) -> L1Stage;
 ```
 
@@ -839,15 +840,17 @@ and a host's own L1 producers; also when they reported no result: the
 module is then clear of evidence), else [`Self::l1_off`]; then the
 module's L1 model ([`Self::l1_model`]) on an escalation
 ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
-scan: the model reads their rule findings, as in training.
+scan: the model reads their rule findings, as in training. `facts`
+are shared by the L1 models of every module of the scan.
 
 ```rust
-pub fn l1_model_stage(
+pub fn l1_model_stage<'t>(
     &self,
     mut stage: L1Stage,
     model: Option<&L1TextModel>,
-    text: &str,
-    findings: &[Finding<'_>],
+    text: &'t str,
+    findings: Vec<Finding<'static>>,
+    facts: &SharedFacts<'t>,
 ) -> L1Stage;
 ```
 
@@ -856,7 +859,8 @@ escalated; its Detected or Clear replaces the escalation, its
 Escalate passes on. A decided stage or no model leaves `stage` as is.
 `findings` are the scan's rule findings as the model is trained on
 them (the accepted Threat points findings, see
-[`crate::detectors::threat::facts_findings`]).
+[`crate::detectors::threat::facts_findings`]); the model reads their
+facts from `facts`.
 
 ```rust
 pub fn decide(
