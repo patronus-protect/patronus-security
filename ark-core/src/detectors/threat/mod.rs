@@ -25,8 +25,6 @@ mod toxic_lexicon;
 
 const RULES: &str = include_str!("rules.json");
 const MAX_FINDINGS: usize = 256;
-const WINDOW_BYTES: usize = 8192;
-const OVERLAP_BYTES: usize = 4096;
 /// A points rule accepts its finding from this score on (50 points) unless
 /// the host sets `threat_points_acceptance`.
 pub const DEFAULT_POINTS_ACCEPTANCE: f64 = 0.5;
@@ -385,19 +383,19 @@ impl ThreatPipeline {
         let mut points_score: Option<f64> = None;
         let mut matched_rules = Vec::new();
         let mut seen = HashSet::new();
-        let mut window_start = 0;
         let mut capped = false;
-        'windows: while window_start < text.len() && !enabled.is_empty() {
-            let mut window_end = (window_start + WINDOW_BYTES).min(text.len());
-            while !text.is_char_boundary(window_end) {
-                window_end -= 1;
-            }
+        let windows = if enabled.is_empty() {
+            &[][..]
+        } else {
+            prepared.rule_windows()
+        };
+        'windows: for (range, anchors) in windows {
+            let (window_start, window_end) = (range.start, range.end);
             let window = &text[window_start..window_end];
             let ascii = window.is_ascii();
             // The anchor words of the window, from the text's one
             // Aho-Corasick pass: a rule whose required literals are not in
             // this window cannot match in it and does not read it.
-            let anchors = prepared.anchors_within(window_start..window_end);
             for &(compiled, regexes) in &enabled {
                 if anchors
                     .as_ref()
@@ -694,13 +692,6 @@ impl ThreatPipeline {
                         end_char: 0,
                     });
                 }
-            }
-            if window_end == text.len() {
-                break;
-            }
-            window_start = window_end - OVERLAP_BYTES;
-            while !text.is_char_boundary(window_start) {
-                window_start += 1;
             }
         }
         let (model_score, model_accepted) = scorer::score(&matched_rules);

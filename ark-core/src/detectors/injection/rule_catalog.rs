@@ -117,6 +117,34 @@ impl RuleDefinition {
     }
 }
 
+/// Per catalog (in [`CATALOG_JSONS`] order) and rule the folded words one of
+/// which every match of the rule's regex holds; empty without a regex or such
+/// a set. They join the anchor automaton, so this reads the patterns only.
+pub(crate) fn rule_words() -> &'static [Vec<Vec<String>>] {
+    static WORDS: OnceLock<Vec<Vec<Vec<String>>>> = OnceLock::new();
+    WORDS.get_or_init(|| {
+        CATALOG_JSONS
+            .iter()
+            .map(|(_, catalog_json)| {
+                let catalog: RuleCatalog = serde_json::from_str(catalog_json)
+                    .expect("embedded injection rule catalog must parse");
+                catalog
+                    .rules
+                    .iter()
+                    .map(|rule| {
+                        rule.pattern
+                            .as_deref()
+                            .and_then(|pattern| {
+                                crate::detectors::anchor_gate::necessary_words(pattern, true)
+                            })
+                            .unwrap_or_default()
+                    })
+                    .collect()
+            })
+            .collect()
+    })
+}
+
 #[derive(Debug)]
 struct CompiledCatalog {
     catalog: RuleCatalog,
@@ -127,6 +155,10 @@ struct CompiledCatalog {
     ordered_relations: Vec<(usize, OrderedTokenRelation)>,
     embedded_file: String,
     anchor_gates: Vec<crate::detectors::anchor_gate::AnchorGate>,
+    /// Per rule its anchor gate and, for a regex rule, its necessary words:
+    /// the literal prefilter of the text and of each window, from the one
+    /// Aho-Corasick pass of the anchor automaton.
+    prefilters: Vec<crate::detectors::anchor_gate::AnchorGate>,
 }
 
 /// The regex of a catalogue rule, its literal prefilter and, for a rule with
@@ -220,7 +252,8 @@ impl InjectionRuleCatalogPipeline {
     fn compile(selected: impl Fn(&RuleDefinition) -> bool) -> Self {
         let catalogs = CATALOG_JSONS
             .into_iter()
-            .map(|(embedded_file, catalog_json)| {
+            .enumerate()
+            .map(|(catalog_index, (embedded_file, catalog_json))| {
                 let catalog: RuleCatalog = serde_json::from_str(catalog_json)
                     .expect("embedded injection rule catalog must parse");
                 validate_catalog(&catalog);
@@ -242,7 +275,7 @@ impl InjectionRuleCatalogPipeline {
                             .map(|definition| (index, OrderedTokenRelation::compile(definition)))
                     })
                     .collect();
-                let anchor_gates = catalog
+                let anchor_gates: Vec<crate::detectors::anchor_gate::AnchorGate> = catalog
                     .rules
                     .iter()
                     .map(|rule| {
@@ -283,8 +316,17 @@ impl InjectionRuleCatalogPipeline {
                 for (rule, gate) in catalog.rules.iter_mut().zip(&anchor_gates) {
                     rule.points = rule_points(rule, gate);
                 }
+                let prefilters = anchor_gates
+                    .iter()
+                    .zip(&rule_words()[catalog_index])
+                    .map(|(gate, words)| {
+                        use crate::detectors::anchor_gate::AnchorGate;
+                        AnchorGate::all(vec![gate.clone(), AnchorGate::words(words)])
+                    })
+                    .collect();
                 CompiledCatalog {
                     anchor_gates,
+                    prefilters,
                     catalog,
                     regexes,
                     ordered_relations,
@@ -324,20 +366,29 @@ impl InjectionRuleCatalogPipeline {
         let mut matches = Vec::new();
         for compiled in &self.catalogs {
             for (rule_index, slot) in &compiled.regexes {
-                let gate = &compiled.anchor_gates[*rule_index];
+                let gate = &compiled.prefilters[*rule_index];
                 let rule = &compiled.catalog.rules[*rule_index];
                 if !allows_rule(rule.rule_id()) || !prepared.admits(gate) {
                     continue;
                 }
+                let spans = allowed_spans(prepared, gate);
                 let (regex, prefilter, relaxed) = compiled.rule_regex(*rule_index, slot);
-                if prefilter
-                    .as_ref()
-                    .is_some_and(|filter| !filter.is_match(text))
-                {
+                if prefilter.as_ref().is_some_and(|filter| {
+                    !spans
+                        .iter()
+                        .any(|span| filter.is_match(&text[span.clone()]))
+                }) {
                     continue;
                 }
                 let relaxed = relaxed.as_ref().filter(|_| !ascii);
-                push_regex_matches(&mut matches, compiled, *rule_index, (regex, relaxed), text);
+                push_regex_matches(
+                    &mut matches,
+                    compiled,
+                    *rule_index,
+                    (regex, relaxed),
+                    text,
+                    &spans,
+                );
             }
             for (rule_index, relation) in &compiled.ordered_relations {
                 let rule = &compiled.catalog.rules[*rule_index];
@@ -360,7 +411,7 @@ impl InjectionRuleCatalogPipeline {
             let decoded_ascii = decoded.is_ascii();
             for compiled in &self.catalogs {
                 for (rule_index, slot) in &compiled.regexes {
-                    let gate = &compiled.anchor_gates[*rule_index];
+                    let gate = &compiled.prefilters[*rule_index];
                     let rule = &compiled.catalog.rules[*rule_index];
                     if !allows_rule(rule.rule_id()) || !decoded_view.admits(gate) {
                         continue;
@@ -374,6 +425,7 @@ impl InjectionRuleCatalogPipeline {
                         *rule_index,
                         (regex, relaxed),
                         decoded,
+                        &[0..decoded.len()],
                     );
                     for (catalog, rule, matched) in hidden_matches {
                         let components = matched
@@ -549,23 +601,78 @@ impl InjectionRuleCatalogPipeline {
     }
 }
 
-/// The matches of `regex` in `text`, as `regex.captures_iter`; `relaxed`
-/// keeps a rule with a Unicode word boundary on the lazy DFA on non-ASCII
-/// text ([`word_boundary::captures_at`]).
+/// The spans of the text a rule behind `gate` reads: the windows whose anchor
+/// words, from the text's one Aho-Corasick pass, allow it, adjacent ones
+/// joined.
+fn allowed_spans(
+    prepared: &crate::threat::NativeText<'_>,
+    gate: &crate::detectors::anchor_gate::AnchorGate,
+) -> Vec<std::ops::Range<usize>> {
+    let mut spans: Vec<std::ops::Range<usize>> = Vec::new();
+    for (range, anchors) in prepared.rule_windows() {
+        if anchors
+            .as_ref()
+            .is_some_and(|anchors| !gate.allows(anchors))
+        {
+            continue;
+        }
+        match spans.last_mut() {
+            Some(span) if range.start <= span.end => span.end = range.end,
+            _ => spans.push(range.clone()),
+        }
+    }
+    spans
+}
+
+/// The matches of `regex` in `text`, as `regex.captures_iter`, that start in
+/// one of the sorted `spans` (byte ranges of `text`); `relaxed` keeps a rule
+/// with a Unicode word boundary on the lazy DFA on non-ASCII text
+/// ([`word_boundary::captures_at`]). A span reads the text before it as
+/// context; a match that reaches the end of a span before the end of the
+/// text stops that span (the overlapping next window holds it whole).
 fn push_regex_matches<'a>(
     matches: &mut Vec<CatalogMatch<'a>>,
     compiled: &'a CompiledCatalog,
     rule_index: usize,
     (regex, relaxed): (&Regex, Option<&word_boundary::Relaxed>),
     text: &str,
+    spans: &[std::ops::Range<usize>],
 ) {
-    let rule = &compiled.catalog.rules[rule_index];
     let mut at = 0;
-    while let Some(captures) = (at <= text.len())
-        .then(|| word_boundary::captures_at(regex, relaxed, text, at))
+    for span in spans {
+        at = at.max(span.start);
+        at = push_span_matches(
+            matches,
+            compiled,
+            rule_index,
+            (regex, relaxed),
+            text,
+            &text[..span.end],
+            at,
+        );
+    }
+}
+
+/// The matches of [`push_regex_matches`] from `at` in `haystack`, a prefix of
+/// `text`; returns where the next search starts.
+fn push_span_matches<'a>(
+    matches: &mut Vec<CatalogMatch<'a>>,
+    compiled: &'a CompiledCatalog,
+    rule_index: usize,
+    (regex, relaxed): (&Regex, Option<&word_boundary::Relaxed>),
+    text: &str,
+    haystack: &str,
+    mut at: usize,
+) -> usize {
+    let rule = &compiled.catalog.rules[rule_index];
+    while let Some(captures) = (at <= haystack.len())
+        .then(|| word_boundary::captures_at(regex, relaxed, haystack, at))
         .flatten()
     {
         let matched = captures.get(0).unwrap();
+        if haystack.len() < text.len() && matched.end() == haystack.len() {
+            break;
+        }
         at = if matched.is_empty() {
             match text[matched.end()..].chars().next() {
                 Some(next) => matched.end() + next.len_utf8(),
@@ -633,6 +740,7 @@ fn push_regex_matches<'a>(
             L1Match::from_captures(regex, &captures, None),
         ));
     }
+    at
 }
 
 /// Whether the line up to byte `at` is a code comment: it starts with `#`,
@@ -1045,7 +1153,14 @@ mod tests {
         for (compiled, set) in pipeline().catalogs.iter().zip(sets) {
             for index in set.matches(text).iter() {
                 let (rule_index, regex, _) = compiled.rule_regexes().nth(index).unwrap();
-                push_regex_matches(&mut matches, compiled, *rule_index, (regex, None), text);
+                push_regex_matches(
+                    &mut matches,
+                    compiled,
+                    *rule_index,
+                    (regex, None),
+                    text,
+                    &[0..text.len()],
+                );
             }
             for (rule_index, relation) in &compiled.ordered_relations {
                 for matched in relation.find_iter(text) {
@@ -1135,11 +1250,25 @@ mod tests {
             .unwrap();
         let prefilter = prefilter.expect("fixture must exercise a prefiltered rule");
         let mut original = Vec::new();
-        push_regex_matches(&mut original, compiled, rule_index, (regex, None), text);
+        push_regex_matches(
+            &mut original,
+            compiled,
+            rule_index,
+            (regex, None),
+            text,
+            &[0..text.len()],
+        );
         assert_eq!(!original.is_empty(), expected_match, "{rule_id}: {text:?}");
         let mut filtered = Vec::new();
         if prefilter.is_match(text) {
-            push_regex_matches(&mut filtered, compiled, rule_index, (regex, None), text);
+            push_regex_matches(
+                &mut filtered,
+                compiled,
+                rule_index,
+                (regex, None),
+                text,
+                &[0..text.len()],
+            );
         }
         let evidence = |matches: Vec<CatalogMatch<'_>>| {
             matches
@@ -1148,6 +1277,70 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(evidence(filtered), evidence(original), "{rule_id}");
+    }
+
+    /// A rule reads only the windows of a long text whose anchor words allow
+    /// it, yet finds every match of the whole-text search: the goldens with
+    /// 9 KiB of prose between them, with umlauts, a long s and a
+    /// size-changing lowercase letter.
+    #[test]
+    fn the_window_prefilter_finds_every_catalog_match() {
+        let goldens = [
+            include_str!("../../../../python/patronus_ark/benchmark_data/injection.jsonl"),
+            include_str!("../../../../python/patronus_ark/benchmark_data/threat_l1.jsonl"),
+        ];
+        let prose = "Das Wetter war mild. The weather was fine. ".repeat(220);
+        let rows: Vec<String> = goldens
+            .iter()
+            .flat_map(|golden| golden.lines())
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .map(|row| row["text"].as_str().unwrap().to_string())
+            .collect();
+        let texts = [
+            rows.join(&format!("\n{prose}Grüße – ")),
+            format!("İ {} Kelvin \u{212a}", rows.join(&format!(" {prose} "))),
+            format!("ſ {}", rows.join(&prose)),
+        ];
+        let evidence = |matches: Vec<CatalogMatch<'_>>| {
+            matches
+                .into_iter()
+                .map(|(_, rule, matched)| json!([rule.id, matched.range(), matched.components]))
+                .collect::<Vec<_>>()
+        };
+        let (mut skipped, mut matched) = (0, 0);
+        for text in &texts {
+            let prepared = crate::threat::NativeText::new(text);
+            assert!(prepared.rule_windows().len() > 2);
+            for compiled in &pipeline().catalogs {
+                for (index, slot) in &compiled.regexes {
+                    let id = &compiled.catalog.rules[*index].id;
+                    let gate = &compiled.prefilters[*index];
+                    let (regex, _, relaxed) = compiled.rule_regex(*index, slot);
+                    let relaxed = relaxed.as_ref().filter(|_| !text.is_ascii());
+                    let all = [0..text.len()];
+                    let mut whole = Vec::new();
+                    push_regex_matches(&mut whole, compiled, *index, (regex, relaxed), text, &all);
+                    if !prepared.admits(gate) {
+                        assert!(whole.is_empty(), "{id}");
+                        continue;
+                    }
+                    let spans = allowed_spans(&prepared, gate);
+                    let mut windowed = Vec::new();
+                    push_regex_matches(
+                        &mut windowed,
+                        compiled,
+                        *index,
+                        (regex, relaxed),
+                        text,
+                        &spans,
+                    );
+                    skipped += usize::from(spans.as_slice() != all.as_slice());
+                    matched += whole.len();
+                    assert_eq!(evidence(windowed), evidence(whole), "{id}");
+                }
+            }
+        }
+        assert!(skipped > 50 && matched > 100, "{skipped} {matched}");
     }
 
     /// A Unicode word boundary sends the lazy DFA to the slow NFA at the
@@ -1182,8 +1375,22 @@ mod tests {
                 relaxed_rules += 1;
                 for text in &texts {
                     let (mut reference, mut fast) = (Vec::new(), Vec::new());
-                    push_regex_matches(&mut reference, compiled, *index, (regex, None), text);
-                    push_regex_matches(&mut fast, compiled, *index, (regex, Some(relaxed)), text);
+                    push_regex_matches(
+                        &mut reference,
+                        compiled,
+                        *index,
+                        (regex, None),
+                        text,
+                        &[0..text.len()],
+                    );
+                    push_regex_matches(
+                        &mut fast,
+                        compiled,
+                        *index,
+                        (regex, Some(relaxed)),
+                        text,
+                        &[0..text.len()],
+                    );
                     matched += reference.len();
                     assert_eq!(
                         evidence(fast),

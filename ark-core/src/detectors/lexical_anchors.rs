@@ -117,9 +117,14 @@ impl LexicalAnchorScanner {
                     }
                 }
             }
-            // The necessary words of the threat rules ride on the same pass as
-            // gates only: they belong to no anchor.
-            for word in crate::detectors::threat::rule_words().iter().flatten() {
+            // The necessary words of the threat and injection catalogue rules
+            // ride on the same pass as gates only: they belong to no anchor.
+            let catalog_words = crate::detectors::injection::rule_catalog::rule_words();
+            for word in crate::detectors::threat::rule_words()
+                .iter()
+                .chain(catalog_words.iter().flatten())
+                .flatten()
+            {
                 if !indices.contains_key(word) {
                     indices.insert(word.clone(), words.len());
                     words.push(word.clone());

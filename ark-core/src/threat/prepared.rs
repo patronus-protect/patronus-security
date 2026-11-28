@@ -6,11 +6,23 @@ use crate::detectors::evidence::MatchText;
 use crate::detectors::text_views::{self, Encoding};
 
 pub(super) const WINDOW_BYTES: usize = 512;
+/// The windows of the rule regexes ([`NativeText::rule_windows`]): a match
+/// shorter than the overlap lies whole in one window.
+pub(crate) const RULE_WINDOW_BYTES: usize = 8192;
+pub(crate) const RULE_WINDOW_OVERLAP_BYTES: usize = 4096;
+
+/// A rule window: its byte range and the anchor words inside it (`None`: the
+/// whole text's presence stands for it).
+pub(crate) type RuleWindow = (
+    Range<usize>,
+    Option<crate::detectors::lexical_anchors::AnchorPresence>,
+);
 
 pub struct NativeText<'a> {
     original: Cow<'a, str>,
     lower: OnceLock<MatchText>,
     windows: OnceLock<Vec<(Range<usize>, MatchText)>>,
+    rule_windows: OnceLock<Vec<RuleWindow>>,
     hidden: OnceLock<Vec<HiddenView<'a>>>,
     anchors: OnceLock<(
         crate::detectors::lexical_anchors::AnchorPresence,
@@ -32,6 +44,7 @@ impl<'a> NativeText<'a> {
             original,
             lower: OnceLock::new(),
             windows: OnceLock::new(),
+            rule_windows: OnceLock::new(),
             hidden: OnceLock::new(),
             anchors: OnceLock::new(),
             structure: OnceLock::new(),
@@ -87,6 +100,38 @@ impl<'a> NativeText<'a> {
             crate::detectors::lexical_anchors::LexicalAnchorScanner::shared()
                 .presence_within(hits, window),
         )
+    }
+
+    /// The overlapping windows the rule regexes read (8 KiB, 4 KiB overlap,
+    /// cut at character boundaries; one window for a shorter text), each
+    /// with its anchor words from the text's one Aho-Corasick pass: a rule
+    /// whose prefilter a window does not allow has no match shorter than the
+    /// overlap that starts in it.
+    pub(crate) fn rule_windows(&self) -> &[RuleWindow] {
+        self.rule_windows.get_or_init(|| {
+            let text = self.text();
+            let mut windows = Vec::new();
+            let mut start = 0;
+            while start < text.len() {
+                let mut end = (start + RULE_WINDOW_BYTES).min(text.len());
+                while !text.is_char_boundary(end) {
+                    end -= 1;
+                }
+                // A single window needs no positions: the text's presence is its own.
+                let anchors = (start > 0 || end < text.len())
+                    .then(|| self.anchors_within(start..end))
+                    .flatten();
+                windows.push((start..end, anchors));
+                if end == text.len() {
+                    break;
+                }
+                start = end - RULE_WINDOW_OVERLAP_BYTES;
+                while !text.is_char_boundary(start) {
+                    start += 1;
+                }
+            }
+            windows
+        })
     }
 
     /// Whether the text's anchors allow a rule behind `gate`: the one
