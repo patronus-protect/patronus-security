@@ -887,9 +887,17 @@ einfacher Gewichtung lag die echte FPR am fairen Schnitt bei 1,06 / 3,11 / 1,74 
 kommt aber nur aus synthetischen Kalibrier-Negativen, die echten Konfigurationen nicht ähneln, und liegt tiefer. Synthetisch
 (Messteil, L1-Modell bei 0,1 %): `tool_poisoning` 91,3 / 0,15, `agent_config_tampering` 86,4 / 0,15, `memory_poisoning`
 93,3 / 0,09 (TPR / FPR). Basis (Commit vor dem Neutraining) auf demselben DEV und Mix: synthetisch 91,3 / 0,16, 86,4 / 0,10,
-93,3 / 0,14; echt L1-Modell 1/8, 4/13, 1/6 bei FPR 1,06 / 3,40 / 3,18 %; alle übrigen Klassen in jeder Zelle bei 0,1 % gleich. Offen (BLOCKED): echte Benign-Zeilen in der
-Kalibrierung (z. B. eine Kalibrierhälfte des Train-Teils, die nicht trainiert) oder ein Schnitt je Träger, damit der faire
-Detect-Schnitt auf echten Dateien 0,1 % hält — beides ändert Teilung oder Kalibrierregel und braucht den Owner.
+93,3 / 0,14; echt L1-Modell 1/8, 4/13, 1/6 bei FPR 1,06 / 3,40 / 3,18 %; alle übrigen Klassen in jeder Zelle bei 0,1 % gleich. Runde 3: `scoreboard.py` misst den echten
+Evaluationsteil zusätzlich am Detect-Schnitt, den die ausgelieferte Konfiguration anwendet (Annahme der Heuristik;
+Detect-Schwellen der Modelle, nur auf synthetischen Zeilen kalibriert — keine echte Zeile liegt in deren Kalibrierung),
+neben dem synthetischen Messteil am selben Schnitt (`detect_cells`, Abschnitt „At the detect cut“ in
+`fasttext-all-classes.md`; Test in `test_l1_threat_mix.py`). Evaluationsteil: Regeln allein 1/8, 1/13, 1/6 bei FPR
+0/1.035, 1/1.030 (0,097 %), 0/1.037; L1-Modell (Regeln → Modell) 1/8, 2/13, 1/6 bei FPR 0/1.035, 1/1.030 (0,097 %),
+0/1.037 — je Klasse ≤ 0,1 %, TPR > 0. Synthetisch am selben Schnitt (nur synthetische Messzeilen, 38/46/53 Positive):
+Regeln und L1-Modell je 100 % bei FPR 0,00 / 0,01 / 0,03 %. Die Tabellen bei 0,1 %/1 % (Schnitt aus dem Kalibrierteil des
+Mixes) bleiben unverändert daneben stehen; dort liegt die echte FPR des Modells über dem Budget, weil der Mix-Schnitt
+tiefer liegt als die Detect-Schwelle. Der Refresh braucht die Zitate im DEV: `real_agent.py fetch --out DEV/real`
+(57/57 SHA-256 gleich); ohne sie fehlen die echten Positiven im Mix.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).
