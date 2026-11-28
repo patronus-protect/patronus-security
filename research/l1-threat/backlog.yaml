@@ -1014,6 +1014,7 @@ tasks:
   # is that the models score the raw text and react to the zero-width characters themselves, which would
   # also flag benign text carrying them; the rules (-8 to -10) read the normalized and decoded views.
   - id: T36
+    status: done
     title: "L1 models read the shared prepared views (part a, split 2026-11-27): the text is prepared once per scan and the rules, the text facts and every built-in L1 model read the same normalized and decoded view; F:OBF/F:DEC tokens dropped in Rust and Python; the flag rate on obfuscated benign and hard-negative text is measured and reported"
     type: precision-fix
     deps: []
