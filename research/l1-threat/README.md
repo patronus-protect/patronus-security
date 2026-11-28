@@ -886,7 +886,8 @@ einfacher Gewichtung lag die echte FPR am fairen Schnitt bei 1,06 / 3,11 / 1,74 
 (synthetische Kalibrierhälfte) flaggen sie 1/1.035, 0/1.030, 0/1.037 echte Benign-Zeilen (vorher 11, 17, 3); der faire Schnitt
 kommt aber nur aus synthetischen Kalibrier-Negativen, die echten Konfigurationen nicht ähneln, und liegt tiefer. Synthetisch
 (Messteil, L1-Modell bei 0,1 %): `tool_poisoning` 91,3 / 0,15, `agent_config_tampering` 86,4 / 0,15, `memory_poisoning`
-93,3 / 0,09 (TPR / FPR); die übrigen Klassen sind zwischen beiden Refreshs gleich. Offen (BLOCKED): echte Benign-Zeilen in der
+93,3 / 0,09 (TPR / FPR). Basis (Commit vor dem Neutraining) auf demselben DEV und Mix: synthetisch 91,3 / 0,16, 86,4 / 0,10,
+93,3 / 0,14; echt L1-Modell 1/8, 4/13, 1/6 bei FPR 1,06 / 3,40 / 3,18 %; alle übrigen Klassen in jeder Zelle bei 0,1 % gleich. Offen (BLOCKED): echte Benign-Zeilen in der
 Kalibrierung (z. B. eine Kalibrierhälfte des Train-Teils, die nicht trainiert) oder ein Schnitt je Träger, damit der faire
 Detect-Schnitt auf echten Dateien 0,1 % hält — beides ändert Teilung oder Kalibrierregel und braucht den Owner.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
