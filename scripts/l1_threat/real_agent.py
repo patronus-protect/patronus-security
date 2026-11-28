@@ -24,6 +24,7 @@ output.
     python3 scripts/l1_threat/real_agent.py counts           # rows per family and label
     python3 scripts/l1_threat/real_agent.py agree --check research/l1-threat/labels/real_agent_second_pass.jsonl
     python3 scripts/l1_threat/real_agent.py fetch --out DEV/real   # quoted positives, frozen
+    python3 scripts/l1_threat/real_agent.py overlap          # shared repositories with the holdout sources, exit 1 on one
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LABELS_PATH = ROOT / "research/l1-threat/labels/real_agent.jsonl"
 REGISTRY_PATH = ROOT / "scripts/l1_threat/datasets.yaml"
 QUOTES_PATH = ROOT / "research/l1-threat/labels/real_agent_quotes.jsonl"
+ENTITY_MAP_PATH = ROOT / "research/l1-threat/entity_map.yaml"
 QUOTES_SET = "real_agent_quotes"
 QUOTE_KEYS = {"id", "class", "reason", "page_url", "raw_url", "repo", "revision", "licence", "commercial", "extract", "start", "end", "sha256"}
 EXTRACTS = ("raw", "html_text")
@@ -106,6 +108,38 @@ def agree(rows: list[dict[str, Any]], second: list[dict[str, Any]]) -> dict[str,
     return {"sample": len(first), "checked": len(set(first) & set(given)), "missing": missing, "disagreements": disagreements}
 
 
+def repository(locator: str) -> str:
+    """``github:owner/repo``, ``hf:owner/name`` or the host and path of a URL or holdout ``source`` (lower case)."""
+    locator = locator.strip().lower()
+    for prefix, kind in (("https://github.com/", "github"), ("https://raw.githubusercontent.com/", "github"),
+                         ("https://huggingface.co/datasets/", "hf"), ("github:", "github"), ("hf:", "hf")):
+        if locator.startswith(prefix):
+            return f"{kind}:" + "/".join(locator[len(prefix):].split()[0].split("/")[:2])
+    return re.sub(r"^https?://(www\.)?", "", locator).split("?")[0].split("#")[0]
+
+
+def overlap(rows: list[dict[str, Any]], quotes: list[dict[str, Any]], emap: dict[str, Any]) -> dict[str, Any]:
+    """Repositories and pages of the real rows against every holdout source of ``entity_map.yaml``.
+
+    A real repository is shared with a holdout set when both name the same GitHub or Hugging Face repository (or a
+    holdout source names only the owner, e.g. ``github:OWASP``), or when the holdout set's id or name (letters and
+    digits, at least five) occurs in the real locator: free-text holdout sources (BrowseSafe, MaliciousSkillBench)
+    are matched by name."""
+    real = sorted({repository(row["source"]) for row in rows} | {repository(quote["page_url"]) for quote in quotes}
+                  | {repository(quote["raw_url"]) for quote in quotes} | {f"github:{quote['repo'].lower()}" for quote in quotes if quote["repo"]})
+    holdout = [dataset for dataset in emap["datasets"] if dataset["split"] == "holdout"]
+    shared = []
+    for dataset in holdout:
+        source = repository(dataset["source"])
+        names = {re.sub(r"[^a-z0-9]", "", value.lower()) for value in (dataset["id"], dataset["name"])}
+        for locator in real:
+            flat = re.sub(r"[^a-z0-9]", "", locator)
+            same = locator == source or (source.count("/") == 0 and ":" in source and locator.startswith(source + "/"))
+            if same or any(len(name) >= 5 and name in flat for name in names):
+                shared.append({"holdout": dataset["id"], "real": locator})
+    return {"real_locators": len(real), "holdout_sources": len(holdout), "shared": shared}
+
+
 def document_text(raw: bytes, extract: str) -> str:
     """The text a quote span points into: the UTF-8 document, or for ``html_text`` the page without tags."""
     text = raw.decode("utf-8", errors="replace")
@@ -139,9 +173,8 @@ def _download(url: str) -> bytes:
         return response.read()
 
 
-def fetch(quotes: list[dict[str, Any]], out: Path, download: Callable[[str], bytes] = _download) -> dict[str, Any]:
-    """Freeze the quoted positives under ``out`` (rows, manifest, ready marker); returns the manifest entry."""
-    corpora = _corpora()
+def quote_rows(quotes: list[dict[str, Any]], download: Callable[[str], bytes] = _download) -> tuple[list[dict[str, Any]], Counter[str]]:
+    """The corpus rows of the quotes whose span still has its SHA-256, and the count of dropped quotes by cause."""
     documents: dict[tuple[str, str], str] = {}
     rows, dropped = [], Counter()
     for quote in quotes:
@@ -160,6 +193,13 @@ def fetch(quotes: list[dict[str, Any]], out: Path, download: Callable[[str], byt
             "classes": [quote["class"]], "reported_classes": [], "families": {}, "labels": [quote["reason"]],
             "contamination": {}, "source": quote["page_url"], "licence": quote["licence"],
         })
+    return rows, dropped
+
+
+def fetch(quotes: list[dict[str, Any]], out: Path, download: Callable[[str], bytes] = _download) -> dict[str, Any]:
+    """Freeze the quoted positives under ``out`` (rows, manifest, ready marker); returns the manifest entry."""
+    corpora = _corpora()
+    rows, dropped = quote_rows(quotes, download)
     out.mkdir(parents=True, exist_ok=True)
     body = "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows).encode("utf-8")
     (out / f"{QUOTES_SET}.jsonl").write_bytes(body)
@@ -192,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     agree_parser.add_argument("--check", type=Path, required=True)
     fetch_parser = sub.add_parser("fetch")
     fetch_parser.add_argument("--out", type=Path, required=True)
+    sub.add_parser("overlap")
     args = parser.parse_args(argv)
     rows, quotes = load(), load(QUOTES_PATH)
     if args.command == "check":
@@ -204,6 +245,10 @@ def main(argv: list[str] | None = None) -> int:
         for label, count in sorted(Counter(quote["class"] for quote in quotes).items()):
             print(f"quoted\t{label}\t{count}")
         return 0
+    if args.command == "overlap":
+        result = overlap(rows, quotes, yaml.safe_load(ENTITY_MAP_PATH.read_text(encoding="utf-8")))
+        print(json.dumps(result, indent=1))
+        return 1 if result["shared"] else 0
     if args.command == "fetch":
         print(json.dumps(fetch(quotes, args.out), indent=1, sort_keys=True))
         return 0

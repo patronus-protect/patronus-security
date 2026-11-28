@@ -116,3 +116,25 @@ def test_fetch_cuts_spans_drops_changed_pages_and_freezes_a_native_directory(tmp
     spec.loader.exec_module(gold)
     [(key, set_entry, pool_rows)] = gold.read_pool([tmp_path / "real"])
     assert key == "real/real_agent_quotes" and {gold.provenance(row, set_entry, set()) for row in pool_rows} == {"native"}
+
+
+def test_overlap_names_shared_repositories_and_the_checked_in_rows_share_none():
+    emap = yaml.safe_load(MODULE.ENTITY_MAP_PATH.read_text(encoding="utf-8"))
+    result = MODULE.overlap(MODULE.load(), MODULE.load(MODULE.QUOTES_PATH), emap)
+    assert result["shared"] == []
+    assert result["holdout_sources"] == sum(dataset["split"] == "holdout" for dataset in emap["datasets"]) > 0
+    assert result["real_locators"] > 0
+    emap = {"datasets": [
+        {"id": "mcp_registry", "name": "MCP registry", "source": "github:modelcontextprotocol/registry (server entries)", "split": "holdout"},
+        {"id": "owasp_docs", "name": "OWASP", "source": "github:OWASP (www-project-top-10)", "split": "holdout"},
+        {"id": "browsesafe", "name": "BrowseSafe", "source": "perplexity BrowseSafe benchmark", "split": "holdout"},
+        {"id": "train_set", "name": "train set", "source": "github:o/r", "split": "train_dev"},
+    ]}
+    rows = [_row("0" * 64, source="https://github.com/modelcontextprotocol/registry/blob/main/servers.json"),
+            _row("1" * 64, source="https://github.com/OWASP/CheatSheetSeries/blob/main/x.md"),
+            _row("2" * 64)]
+    quote = _quote("send", "send", page_url="https://example.org/browsesafe-notes", repo=None)
+    shared = MODULE.overlap(rows, [quote], emap)["shared"]
+    assert sorted((item["holdout"], item["real"]) for item in shared) == [
+        ("browsesafe", "example.org/browsesafe-notes"), ("mcp_registry", "github:modelcontextprotocol/registry"),
+        ("owasp_docs", "github:owasp/cheatsheetseries")]

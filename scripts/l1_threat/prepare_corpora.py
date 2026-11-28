@@ -79,6 +79,8 @@ BENIGN_CODE = _load_file("_ark_l1_dlp_benign_code", HERE.parent / "l1_dlp" / "be
 # Loaded under its own name: other script directories have an entity_map module too.
 entity_map = _load_file("_ark_l1_threat_entity_map", HERE / "entity_map.py")
 taxonomy = _load_file("_ark_l1_threat_taxonomy", HERE / "taxonomy.py")
+# The quoted real-world positives (``per_row``): the holdout drops what they hold, like a ready dev set.
+REAL_AGENT = _load_file("_ark_l1_threat_real_agent", HERE / "real_agent.py")
 
 REGISTRY_PATH = HERE / "datasets.yaml"
 SCHEMA = "ark-l1-threat-datasets-v1"
@@ -693,6 +695,22 @@ def fetch(entry: dict[str, Any], sources: Path, offline: bool, download: Callabl
     return root
 
 
+def quote_rows(sources: Path, offline: bool, download: Callable[[str], bytes] = PRESIDIO.download) -> list[dict[str, Any]]:
+    """The quoted positives of ``real_agent.py``, their documents cached under ``sources`` like a set's files."""
+    cache = sources / REAL_AGENT.QUOTES_SET
+
+    def cached(url: str) -> bytes:
+        path = cache / hashlib.sha256(url.encode("utf-8")).hexdigest()
+        if not path.is_file():
+            if offline:
+                raise ValueError(f"{REAL_AGENT.QUOTES_SET}: {url} is not in the download cache (--offline)")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(download(url))
+        return path.read_bytes()
+
+    return REAL_AGENT.quote_rows(REAL_AGENT.load(REAL_AGENT.QUOTES_PATH), cached)[0]
+
+
 def cap_rows(rows: list[dict[str, Any]], cap: int, seed: str, dataset_id: str) -> list[dict[str, Any]]:
     """At most ``cap`` rows, stratified by (benign, classes, language); input order kept.
 
@@ -816,10 +834,13 @@ def build(
     }
     if not members:
         return None
-    # Cross-split: the holdout drops what a train_dev or report set already holds.
+    # Cross-split: the holdout drops what a train_dev or report set already holds, the quoted positives included.
     other = None
     if split == "holdout":
-        other = _index((row for i, e in entries.items() if datasets[i]["split"] != "holdout" and is_ready(e) for row in capped_of(i)), dedup)
+        quoted = REAL_AGENT.QUOTES_SET in entries and datasets[REAL_AGENT.QUOTES_SET]["split"] != "holdout"
+        quotes = quote_rows(sources, offline, download) if quoted else []
+        other = _index([*(row for i, e in entries.items() if datasets[i]["split"] != "holdout" and is_ready(e) for row in capped_of(i)),
+                        *quotes], dedup)
     # Holdout rows are only read by a call that prepares the holdout itself.
     visible = [
         i for i, entry in entries.items() if is_ready(entry) and (split == "holdout" or with_holdout or datasets[i]["split"] != "holdout")
