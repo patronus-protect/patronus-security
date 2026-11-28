@@ -456,3 +456,60 @@ werden. Nötig wären (je eine eigene Aufgabe):
    gemeinsame Suche für die Threat-Regeln von `toxic_language` und `unsafe_action`.
 
 Qualität: unverändert gegenüber Runde 2 (kein Detektor-Code geändert).
+
+### T38b Runde 4 (2026-11-28): Abschlussmessung gegen `main` (Aufgabe nach dem Split)
+
+Seit dem Split vom 2026-11-28 verlangt T38b den gemeinsamen Anker-Pass und die Fenster für
+Threat-Regeln und Injection-Katalog, 0 Vorhersageänderungen und die Messung vorher/nachher; das
+10-ms-Ziel liegt bei T38d. Kein neuer Detektor-Code gegenüber Runde 3; gemessen wird der ganze
+Branch gegen seine Base `main` (`40b3350c`), beide Release-Builds in derselben Sitzung, VPS (Intel
+Core Processor (Haswell, no TSX), 6 CPUs), ohne andere Last, Läufe abwechselnd Base, Head, Base,
+Head.
+
+`threat_profile` (58 470 gutartige `train_dev`-Zeilen, Seed 38, Regeln allein
+`{"max_level": "l1", "cascade": {}}`; p50 / p95 ms, Lauf 1, Lauf 2):
+
+| Größe | Regeln vorher (`main`) | Regeln nachher (Branch) |
+|---|---:|---:|
+| short (256 B) | 1.200 / 3.465, 1.167 / 3.616 | 0.633 / 2.697, 0.639 / 2.479 |
+| 4 KiB | 9.331 / 17.000, 9.277 / 17.223 | 6.338 / 11.524, 6.602 / 11.413 |
+| 100 KiB | 132.283 / 174.469, 135.225 / 190.644 | 103.699 / 131.433, 105.680 / 145.161 |
+| 10 MiB | 25 870 / 27 124, 24 810 / 26 729 | 22 347 / 23 628, 21 719 / 22 460 |
+
+Aufteilung nach Produzent bei 100 KiB (p50 / p95 ms, Lauf 1, Lauf 2). „im Scan“ ist die Dauer des
+Produzenten im gemeinsamen Scan (der erste Threat-Produzent eines Texts trägt die gemeinsame
+Vorbereitung: Kleinschreibung, Anker-Pass mit Positionen, Fenster); „einzeln“ ist derselbe Produzent
+allein auf einer frischen `NativeText`-Sicht:
+
+| Produzent | vorher (`main`) | nachher (Branch) |
+|---|---:|---:|
+| `injection/injection_l1` (im Scan) | 42.9 / 55.2, 43.4 / 55.8 | 40.0 / 49.5, 39.7 / 53.7 |
+| Katalog `injection` (einzeln) | 29.5 / 41.7, 29.7 / 42.2 | 25.3 / 37.7, 26.4 / 40.4 |
+| `unsafe_action/threat_l1` (im Scan) | 18.8 / 23.6, 18.4 / 23.6 | 8.8 / 13.3, 9.6 / 13.4 |
+| `jailbreak/injection_l1` (im Scan) | 11.2 / 12.7, 11.2 / 15.0 | 9.3 / 13.9, 9.7 / 11.5 |
+| `exfiltration/threat_l1` (im Scan) | 10.0 / 16.7, 10.0 / 15.8 | 7.5 / 13.1, 7.4 / 15.4 |
+| Threat-Regeln `unsafe_action` (einzeln) | 9.9 / 13.4, 10.1 / 13.6 | 4.2 / 7.9, 4.2 / 8.5 |
+| `toxic_language/threat_l1` (im Scan) | 9.8 / 13.2, 9.7 / 13.9 | 9.7 / 13.1, 10.4 / 12.9 |
+| Katalog `prompt_extraction` (einzeln) | 8.3 / 13.8, 8.3 / 13.8 | 6.1 / 9.3, 6.0 / 9.5 |
+| `harmful_content/threat_l1` (im Scan) | 7.0 / 14.2, 6.7 / 13.8 | 1.8 / 7.9, 2.0 / 8.2 |
+| Katalog `jailbreak` (einzeln) | 6.3 / 7.3, 6.4 / 7.3 | 4.6 / 5.9, 4.7 / 6.5 |
+| Threat-Regeln `toxic_language` (einzeln) | 5.4 / 5.7, 5.2 / 7.2 | 5.2 / 5.8, 5.3 / 6.5 |
+| `resource_exhaustion/threat_l1` (im Scan) | 4.5 / 6.7, 4.5 / 6.3 | 4.2 / 5.5, 4.0 / 6.5 |
+| `tool_poisoning/threat_l1` (im Scan) | 4.3 / 7.5, 4.2 / 7.6 | 4.3 / 7.4, 4.6 / 7.2 |
+| Threat-Regeln `exfiltration` (einzeln) | 4.0 / 4.3, 4.1 / 4.4 | 3.0 / 3.2, 2.9 / 3.4 |
+| Katalog `memory_poisoning` (einzeln) | 2.7 / 3.4, 2.8 / 4.0 | 2.2 / 3.2, 2.3 / 3.2 |
+| `agent_config_tampering/threat_l1` (im Scan) | 2.3 / 6.4, 2.3 / 5.7 | 1.2 / 1.9, 1.2 / 2.2 |
+| Katalog `exfiltration` (einzeln) | 2.2 / 7.4, 2.1 / 7.3 | 1.2 / 6.0, 1.3 / 6.0 |
+| Threat-Regeln `harmful_content` (einzeln) | 1.5 / 10.9, 1.5 / 11.4 | 0.6 / 9.5, 0.6 / 11.2 |
+| Threat-Regeln `agent_config_tampering` (einzeln) | 1.2 / 1.2, 1.2 / 1.2 | 0.6 / 0.7, 0.6 / 0.7 |
+| übrige Detektoren ohne Katalog und Threat-Regeln (einzeln, Summe p50) | 12.4, 12.4 | 12.1, 12.3 |
+
+Ergebnis: Regeln aller elf Klassen bei 100 KiB p50 132–135 → 104–106 ms (−21 %), p95 174–191 →
+131–145 ms (−24 %); bei 4 KiB p95 17.0–17.2 → 11.4–11.5 ms. Kein Produzent wird langsamer
+(`toxic_language`, `tool_poisoning`, die übrigen Detektoren im Rauschen). Das 10-ms-Ziel
+ist T38d.
+
+Qualität: `threat_cascade` (Release) von `main` (`40b3350c`) und diesem Branch über alle 109 632
+Zeilen unter `$ARK_L1_DEV_DATA` (`train_dev` 83 765, `report` 20 955, `generated` 4 312, `translated` 600), mit der
+Regel-Konfiguration und mit `cascade-config.json`: 0 abweichende Vorhersagen (Scores, `flagged`,
+Kaskade; nur `ms` ausgenommen), je 12 290 markierte Zeilen.
