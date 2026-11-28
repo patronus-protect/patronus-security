@@ -1053,6 +1053,7 @@ tasks:
       at 100 KiB p95 measured natively on the VPS before and after, rules only and rules + L1 models, both
       numbers in the PR; no quality change on dev, holdout and goldens
   - id: T38b
+    status: done
     title: "Threat rules gated per window on the shared anchor pass (part a, split 2026-11-28): the injection catalogue rules run only in 8 KiB windows the shared anchor pass lets through, windows shared with the other threat rules; no prediction change"
     type: perf
     deps: [T38]
