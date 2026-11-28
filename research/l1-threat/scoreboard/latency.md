@@ -336,3 +336,71 @@ Gegen die T38-Zahlen (100 KiB gutartig 9.022 / 12.377, Angriff 16.792 / 22.604) 
 Streuung zwischen Läufen; ein Base-Lauf in derselben Sitzung fehlt. Der Injection-Pfad nutzt die
 Fenster-Prefilter nicht, zahlt aber den einen Anker-Pass mit Positionen und den zusätzlichen
 Wörtern der Threat-Regeln im Automaten; das gehört in der nächsten Runde gegen `main` gemessen.
+
+### T38b Runde 2 (2026-11-28): der Injection-Katalog auf denselben Fenster-Prefilter
+
+Was sich ändert (reine Suchwege, Treffer identisch):
+
+1. **Katalogwörter im einen Pass**: die notwendigen Wörter jeder Regex-Regel der sechs
+   Injection-Kataloge (`rule_catalog::rule_words`, dasselbe `necessary_words`) hängen neben denen
+   der Threat-Regeln im Anker-Automaten. Jede Katalogregel hat damit einen `prefilter` aus
+   Anker-Gate und notwendigen Wörtern; er gatet den ganzen Text und die entschlüsselten Sichten.
+2. **Gemeinsame Fenster**: `NativeText::rule_windows` schneidet den Text einmal in die 8-KiB-Fenster
+   (4 KiB Überlappung) und hält zu jedem Fenster seine Ankerwörter; Threat-Regeln und Katalog lesen
+   dieselbe Liste (vorher rechnete die Threat-Schleife die Fenster und `anchors_within` selbst).
+   Ein Text bis 8 KiB ist ein Fenster, also unverändert der ganze Text.
+3. **Katalog nur auf erlaubten Fenstern**: eine Katalogregel sucht nur in den Fenstern, deren
+   Wörter ihren Prefilter erfüllen (benachbarte zu einem Bereich verbunden). Die Suche läuft auf
+   dem Text bis zum Bereichsende ab dem Bereichsanfang, sieht also den Text davor als Kontext
+   (Wortgrenzen, Kommentarzeilen, Offsets unverändert); ein Treffer, der genau am Bereichsende vor
+   dem Textende endet, bleibt dem überlappenden nächsten Fenster. Test
+   `the_window_prefilter_finds_every_catalog_match`: für jede Katalogregel liefert die Fenstersuche
+   auf den Goldens (Injection und Threat, je 9 KiB Prosa dazwischen, mit Umlauten, langem s und
+   längenändernden Kleinbuchstaben) genau die Treffer (Spannen und Komponenten) der Suche über den
+   ganzen Text.
+
+Messung (VPS, wie oben, `threat_profile`, 58 470 gutartige `train_dev`-Zeilen, Regeln allein).
+Vorher = Runde 1 (`a19c076e`), Nachher = dieser Stand; je zwei Läufe abwechselnd in derselben
+Sitzung:
+
+| Größe | Regeln p50 / p95 ms vorher (Lauf 1, 2) | Regeln p50 / p95 ms nachher (Lauf 1, 2) |
+|---|---:|---:|
+| short (256 B) | 0.926 / 2.778, 0.801 / 2.525 | 0.586 / 2.200, 0.576 / 2.210 |
+| 4 KiB | 7.017 / 13.652, 6.638 / 12.291 | 5.864 / 11.987, 5.896 / 10.249 |
+| 100 KiB | 126.109 / 149.491, 115.943 / 139.762 | 104.746 / 143.305, 100.541 / 131.926 |
+
+Katalog-Produzenten bei 100 KiB (p50 / p95 ms, Lauf 1 vorher → nachher): `injection`
+31.6 / 43.3 → 25.1 / 37.6, `prompt_extraction` 8.3 / 15.2 → 5.9 / 8.6, `jailbreak` 6.5 / 9.8 →
+4.7 / 5.6, `exfiltration` 2.1 / 10.1 → 1.1 / 5.1, `memory_poisoning` 2.9 / 4.1 → 2.3 / 2.9.
+
+Warum das Ziel trotzdem weit weg ist: im Injection-Katalog bleiben bei 100 KiB gutartiger Prosa
+etwa 22 ms in der Regex-Suche selbst (Teilmessung im Scan: Regex 22 ms, geordnete Relationen
+2 ms, entschlüsselte Sichten 5 ms, Entscheidung 1 ms). Die notwendigen Wörter der meisten
+Katalogregeln (Verben wie „ignore“, „show“, „vergiss“, Nomen wie „instructions“, „system“) stehen
+in fast jedem 8-KiB-Fenster gewöhnlicher Prosa; das Fenster-Gate überspringt deshalb wenig. Dazu
+kommen die Threat-Regeln von `toxic_language`, `unsafe_action`, `tool_poisoning`,
+`resource_exhaustion` und `exfiltration` (je 3–5 ms) und die übrigen Injection-Detektoren. Weiter
+kommt man nur mit einem engeren Prefilter je Regel (mehrere notwendige Wörter in fester Nähe statt
+eines Worts je Fenster, Kandidatenstellen statt Fenster) oder mit weniger, zusammengelegten
+Katalogregeln; beides ist mehr als eine Runde.
+
+Stand gegen das Ziel (100 KiB p95 ≤ 10 ms, Regeln aller Klassen): 132–143 ms — **nicht erreicht**.
+
+Qualität: `threat_cascade` (Release) von `a19c076e` und diesem Stand über alle 109 632 Zeilen unter
+`$ARK_L1_DEV_DATA` (`train_dev`, `generated`, `translated`, `report`), mit der Regel-Konfiguration
+und mit `cascade-config.json`: 0 abweichende Vorhersagen (Scores, `flagged`, Kaskade; nur `ms`
+ausgenommen), je 12 290 markierte Zeilen. Holdout ist in der Sandbox nicht zugänglich; jede Zeile bis
+8 KiB wird über denselben ganzen Text gesucht, längere bekommen dieselben Treffer (Test oben).
+
+`scripts/benchmark_injection_l1.py` (Release, 50 Läufe nach 10 Aufwärmläufen; zwei Läufe; p50 / p95
+ms):
+
+| Größe | gutartig (Lauf 1, 2) | mit eingebettetem Angriff (Lauf 1, 2) |
+|---|---:|---:|
+| 1 KiB | 0.298 / 0.379, 0.230 / 0.331 | 1.879 / 2.920, 1.627 / 2.091 |
+| 10 KiB | 1.326 / 1.520, 0.986 / 1.460 | 3.050 / 4.089, 3.168 / 4.577 |
+| 100 KiB | 7.797 / 10.489, 7.924 / 12.570 | 12.974 / 16.334, 12.811 / 19.816 |
+
+Gegen Runde 1 (100 KiB gutartig 9.7 / 13.0–14.1, Angriff 16.8–17.1 / 23.3–27.2): schneller, der
+Injection-Pfad allein liegt bei 100 KiB gutartig im Median unter 10 ms, im p95 noch darüber.
+
