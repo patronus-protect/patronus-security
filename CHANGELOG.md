@@ -61,7 +61,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to about 5 ms. Findings are unchanged.
 - **Breaking (Rust API of Ark Core):** a built-in L1 model now reads the text as the scan already
   prepared it for the rules, so decoding and folding run once per text. `L1TextModel::evaluate`,
-  `Cascade::l1_scan_answer`, `Cascade::l1_model_stage` and `text::extract_with` take a
+  `L1TextModel::evaluate_with`, `SharedFacts::of`, `Cascade::l1_scan_answer`,
+  `Cascade::l1_model_stage` and `text::extract_with` take a
   `&threat::NativeText` instead of a `&str`; wrap a plain string with `NativeText::new(text)`.
   Scores are unchanged.
 
