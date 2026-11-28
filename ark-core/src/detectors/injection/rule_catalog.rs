@@ -387,7 +387,7 @@ impl InjectionRuleCatalogPipeline {
                     *rule_index,
                     (regex, relaxed),
                     text,
-                    &spans,
+                    spans,
                 );
             }
             for (rule_index, relation) in &compiled.ordered_relations {
@@ -425,7 +425,7 @@ impl InjectionRuleCatalogPipeline {
                         *rule_index,
                         (regex, relaxed),
                         decoded,
-                        &[0..decoded.len()],
+                        std::iter::once(0..decoded.len()),
                     );
                     for (catalog, rule, matched) in hidden_matches {
                         let components = matched
@@ -636,7 +636,7 @@ fn push_regex_matches<'a>(
     rule_index: usize,
     (regex, relaxed): (&Regex, Option<&word_boundary::Relaxed>),
     text: &str,
-    spans: &[std::ops::Range<usize>],
+    spans: impl IntoIterator<Item = std::ops::Range<usize>>,
 ) {
     let mut at = 0;
     for span in spans {
@@ -1159,7 +1159,7 @@ mod tests {
                     *rule_index,
                     (regex, None),
                     text,
-                    &[0..text.len()],
+                    std::iter::once(0..text.len()),
                 );
             }
             for (rule_index, relation) in &compiled.ordered_relations {
@@ -1256,7 +1256,7 @@ mod tests {
             rule_index,
             (regex, None),
             text,
-            &[0..text.len()],
+            std::iter::once(0..text.len()),
         );
         assert_eq!(!original.is_empty(), expected_match, "{rule_id}: {text:?}");
         let mut filtered = Vec::new();
@@ -1267,7 +1267,7 @@ mod tests {
                 rule_index,
                 (regex, None),
                 text,
-                &[0..text.len()],
+                std::iter::once(0..text.len()),
             );
         }
         let evidence = |matches: Vec<CatalogMatch<'_>>| {
@@ -1317,14 +1317,22 @@ mod tests {
                     let gate = &compiled.prefilters[*index];
                     let (regex, _, relaxed) = compiled.rule_regex(*index, slot);
                     let relaxed = relaxed.as_ref().filter(|_| !text.is_ascii());
-                    let all = [0..text.len()];
+                    let all = 0..text.len();
                     let mut whole = Vec::new();
-                    push_regex_matches(&mut whole, compiled, *index, (regex, relaxed), text, &all);
+                    push_regex_matches(
+                        &mut whole,
+                        compiled,
+                        *index,
+                        (regex, relaxed),
+                        text,
+                        [all.clone()],
+                    );
                     if !prepared.admits(gate) {
                         assert!(whole.is_empty(), "{id}");
                         continue;
                     }
                     let spans = allowed_spans(&prepared, gate);
+                    skipped += usize::from(spans != [all.clone()]);
                     let mut windowed = Vec::new();
                     push_regex_matches(
                         &mut windowed,
@@ -1332,9 +1340,8 @@ mod tests {
                         *index,
                         (regex, relaxed),
                         text,
-                        &spans,
+                        spans,
                     );
-                    skipped += usize::from(spans.as_slice() != all.as_slice());
                     matched += whole.len();
                     assert_eq!(evidence(windowed), evidence(whole), "{id}");
                 }
@@ -1381,7 +1388,7 @@ mod tests {
                         *index,
                         (regex, None),
                         text,
-                        &[0..text.len()],
+                        std::iter::once(0..text.len()),
                     );
                     push_regex_matches(
                         &mut fast,
@@ -1389,7 +1396,7 @@ mod tests {
                         *index,
                         (regex, Some(relaxed)),
                         text,
-                        &[0..text.len()],
+                        std::iter::once(0..text.len()),
                     );
                     matched += reference.len();
                     assert_eq!(
