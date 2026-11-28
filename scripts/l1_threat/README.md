@@ -215,7 +215,14 @@ python3 scripts/l1_threat/real_agent.py check            # Exit 1 bei jedem Prob
 python3 scripts/l1_threat/real_agent.py counts
 python3 scripts/l1_threat/real_agent.py agree --check research/l1-threat/labels/real_agent_second_pass.jsonl
 python3 scripts/l1_threat/real_agent.py fetch --out DEV/real
+python3 scripts/l1_threat/real_agent.py overlap          # geteilte Repositories mit Holdout-Quellen, Exit 1 bei einem
 ```
+
+`overlap` vergleicht die Repositories und Seiten hinter jeder echten Zeile mit jeder Holdout-Quelle der Entity-Map
+(gleiches GitHub- oder Hugging-Face-Repository, eine Quelle nur mit Owner, oder der Name des Holdout-Satzes im Pfad).
+Auf Zeilenebene verwirft die Holdout-Vorbereitung (`prepare_corpora.py`) jede Holdout-Zeile, die einer Zeile eines
+fertigen Dev-Satzes oder einem Zitat gleicht oder nahekommt (exakt und MinHash); die Zitat-Dokumente landen dafür im
+Download-Cache unter `--sources`.
 
 Tests: `scripts/tests/test_l1_threat_real_agent.py`.
 

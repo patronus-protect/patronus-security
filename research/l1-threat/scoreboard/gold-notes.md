@@ -517,13 +517,24 @@ every label sits in `research/l1-threat/labels/` by text SHA-256, never with tex
   the first labels: 213 rows (206 benign rows, 7 quotes), 0 disagreements
   (`research/l1-threat/labels/real_agent_second_pass.jsonl`). One borderline note: a rules-file clause that denies the
   existence of rules and memory was read as agent_config_tampering by both passes (memory_poisoning possible).
-- **Holdout overlap:** the four benign sets are prepared corpora, so preparing the holdout drops every holdout row equal
-  to or near a row of theirs (exact and MinHash), as for every train_dev set; the quotes are a dev directory that
-  `gold.py leakage` compares with the holdout. No repository is shared with the MCP registry source: the tool
-  descriptions come from BFCL function definitions, not from MCP servers, and no quote comes from
-  `modelcontextprotocol/registry` or from any holdout source of `entity_map.yaml` (MCPTox, MalSkillBench,
-  MaliciousSkillBench, MemForm, AutoRedClaw, agentapprove, NVD, OWASP, MITRE, the Radware IPI collection). The leakage
-  run itself needs the holdout and is part of the owner commands below.
+- **Holdout overlap:** checked against all 44 holdout sources of `entity_map.yaml` with `real_agent.py overlap`: the 22
+  repositories and pages behind the real rows (label sources, quote pages and quoted documents) share none with a holdout
+  source (same GitHub or Hugging Face repository, an owner-only source such as `github:OWASP`, or the holdout set's name
+  in the locator for the free-text sources); in particular none is `modelcontextprotocol/registry`, the MCP registry
+  holdout source (the tool descriptions are BFCL function definitions, not MCP servers). Rows: preparing the holdout
+  drops every holdout row equal to or near (exact and MinHash) a row of a ready dev set, so of the four benign sets, and
+  since this round also of the quoted positives (`prepare_corpora.py` fetches the quotes into its download cache for
+  the holdout step), so no holdout row can share a row with these sets; the run that counts such drops sees the holdout
+  and is the owner's (`gold.py leakage` with `DEV/real` and `DEV/real_train_dev` among the dev directories).
+- **Counts in this report:** the five sets were frozen in a writable copy of the dev root (the shared one is read-only to
+  the runner) with the recipes of this branch: 4 sets by `prepare_corpora.py` (dedup within and across these sets drops
+  60 BFCL tool descriptions and 7 rules files as near duplicates (MinHash): 250 rules files, 421 Copilot files, 1,034 tool
+  descriptions, 323 memory turns), the quotes by `real_agent.py fetch` (57 of 57 spans unchanged). Their 2,085 rows
+  are added to the dev summary as native rows (tables above: native EN positives tool_poisoning 17,
+  agent_config_tampering 27, memory_poisoning 13; 2,028 native benign rows), the other sets' counts unchanged. Spot-check
+  of the new sets: 50 rows each from `gold.py sample`, verdict from the hand label (and the second pass where the row is
+  in its sample): 250 rows, 0 wrong. Without the cross-set dedup against the other dev sets, which only the full
+  preparation does, the owner's freeze can drop a few more rows.
 - **Preview on the real rows (not the fair measurement):** this checkout's Core predictor (`threat_cascade`) over all
   2,152 real rows, at Core's own decisions, not at a cut from the calibration part (the fair reports need the frozen
   sets). Rules alone (L1 heuristic detected): tool_poisoning 0 of 17, agent_config_tampering 1 of 27, memory_poisoning

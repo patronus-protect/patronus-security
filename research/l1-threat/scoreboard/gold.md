@@ -25,15 +25,15 @@ Spot-check: at least 50 rows per set (all rows of a smaller set), verdict ok / w
 | instruction_injection | 268 | 4762 | 0 | 11711 | 4370 | 159 | 501 | 11711 | 0 | 0 |
 | jailbreak | 492 | 2884 | 63 | 1086 | 3220 | 0 | 156 | 647 | 0 | 502 |
 | prompt_extraction | 387 | 15143 | 0 | 725 | 15073 | 300 | 157 | 331 | 0 | 394 |
-| tool_poisoning | 522 | 521 | 63 | 894 | 0 | 0 | 1043 | 474 | 0 | 483 |
-| agent_config_tampering | 525 | 522 | 63 | 347 | 0 | 3 | 1044 | 285 | 0 | 125 |
-| memory_poisoning | 522 | 521 | 63 | 665 | 0 | 0 | 1043 | 232 | 0 | 496 |
+| tool_poisoning | 522 | 538 | 63 | 894 | 17 | 0 | 1043 | 474 | 0 | 483 |
+| agent_config_tampering | 525 | 549 | 63 | 347 | 27 | 3 | 1044 | 285 | 0 | 125 |
+| memory_poisoning | 522 | 534 | 63 | 665 | 13 | 0 | 1043 | 232 | 0 | 496 |
 | exfiltration | 551 | 797 | 225 | 11936 | 113 | 1 | 1234 | 11711 | 0 | 450 |
 | unsafe_action | 135 | 643 | 63 | 144 | 382 | 6 | 390 | 82 | 0 | 125 |
 | resource_exhaustion | 522 | 521 | 63 | 62 | 0 | 0 | 1043 | 0 | 0 | 125 |
 | harmful_content | 461 | 731 | 0 | 172 | 731 | 461 | 0 | 172 | 0 | 0 |
 | toxic_language | 223 | 831 | 1999 | 2162 | 831 | 223 | 0 | 4161 | 0 | 0 |
-| benign | 26606 | 37913 | 17191 | 15030 | 46306 | 12314 | 5899 | 37235 | 0 | 2100 |
+| benign | 26606 | 39941 | 17191 | 15030 | 48334 | 12314 | 5899 | 37235 | 0 | 2100 |
 
 ## Dev targets per class and language
 
@@ -52,13 +52,13 @@ Scored dev positives per class and language against the target, from at least 2 
 | toxic_language | de | 200 | 223 | 3 | 0 | 223 | 0 | yes |
 | toxic_language | en | 200 | 831 | 3 | 831 | 0 | 0 | yes |
 | tool_poisoning | de | 100 | 522 | 4 | 0 | 0 | 522 | yes |
-| tool_poisoning | en | 100 | 521 | 4 | 0 | 0 | 521 | yes |
+| tool_poisoning | en | 100 | 538 | 5 | 17 | 0 | 521 | yes |
 | memory_poisoning | de | 100 | 522 | 4 | 0 | 0 | 522 | yes |
-| memory_poisoning | en | 100 | 521 | 4 | 0 | 0 | 521 | yes |
+| memory_poisoning | en | 100 | 534 | 5 | 13 | 0 | 521 | yes |
 | resource_exhaustion | de | 100 | 522 | 4 | 0 | 0 | 522 | yes |
 | resource_exhaustion | en | 100 | 521 | 4 | 0 | 0 | 521 | yes |
 | agent_config_tampering | de | 100 | 525 | 5 | 0 | 3 | 522 | yes |
-| agent_config_tampering | en | 100 | 522 | 4 | 0 | 0 | 522 | yes |
+| agent_config_tampering | en | 100 | 549 | 5 | 27 | 0 | 522 | yes |
 | exfiltration | de | 100 | 551 | 4 | 0 | 1 | 550 | yes |
 | exfiltration | en | 100 | 797 | 5 | 113 | 0 | 684 | yes |
 | unsafe_action | de | 100 | 135 | 2 | 0 | 6 | 129 | yes |
@@ -77,6 +77,11 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | generated/class_templates | dev | 925 | 56 | 0 | 0 | 0.0% | 0 / 8 |
 | generated/exfil_lookalikes | dev | 600 | 50 | 0 | 0 | 0.0% | 0 / 25 |
 | generated/obfuscation_slices | dev | 388 | 54 | 0 | 0 | 0.0% | 0 / 0 |
+| real/real_agent_quotes | dev | 57 | 50 | 0 | 0 | 0.0% | 0 / 0 |
+| real_train_dev/real_bfcl_memory | dev | 323 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| real_train_dev/real_bfcl_tools | dev | 1034 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| real_train_dev/real_copilot_customizations | dev | 421 | 50 | 0 | 0 | 0.0% | 0 / 50 |
+| real_train_dev/real_cursorrules | dev | 250 | 50 | 0 | 0 | 0.0% | 0 / 50 |
 | report/ailuminate_demo | report | 1200 | 50 | 3 | 12 | 30.0% | 0 / 0 |
 | report/civil_comments | report | 6000 | 50 | 1 | 7 | 16.0% | 0 / 25 |
 | report/deepset_prompt_injections | report | 645 | 50 | 2 | 6 | 16.0% | 0 / 25 |
@@ -111,7 +116,7 @@ Benign chat pool (dev): de 11172, en 11225 rows.
 | train_dev/xsafety_de | dev | 152 | 50 | 0 | 2 | 4.0% | 0 / 0 |
 | translated/runner_translations_de | dev | 600 | 52 | 0 | 1 | 1.9% | 0 / 13 |
 
-Benign pool (dev, scored sets): 0 of 528 reviewed benign rows wrong or unclear.
+Benign pool (dev, scored sets): 0 of 728 reviewed benign rows wrong or unclear.
 
 ## Spot-check holdout
 
@@ -768,13 +773,24 @@ every label sits in `research/l1-threat/labels/` by text SHA-256, never with tex
   the first labels: 213 rows (206 benign rows, 7 quotes), 0 disagreements
   (`research/l1-threat/labels/real_agent_second_pass.jsonl`). One borderline note: a rules-file clause that denies the
   existence of rules and memory was read as agent_config_tampering by both passes (memory_poisoning possible).
-- **Holdout overlap:** the four benign sets are prepared corpora, so preparing the holdout drops every holdout row equal
-  to or near a row of theirs (exact and MinHash), as for every train_dev set; the quotes are a dev directory that
-  `gold.py leakage` compares with the holdout. No repository is shared with the MCP registry source: the tool
-  descriptions come from BFCL function definitions, not from MCP servers, and no quote comes from
-  `modelcontextprotocol/registry` or from any holdout source of `entity_map.yaml` (MCPTox, MalSkillBench,
-  MaliciousSkillBench, MemForm, AutoRedClaw, agentapprove, NVD, OWASP, MITRE, the Radware IPI collection). The leakage
-  run itself needs the holdout and is part of the owner commands below.
+- **Holdout overlap:** checked against all 44 holdout sources of `entity_map.yaml` with `real_agent.py overlap`: the 22
+  repositories and pages behind the real rows (label sources, quote pages and quoted documents) share none with a holdout
+  source (same GitHub or Hugging Face repository, an owner-only source such as `github:OWASP`, or the holdout set's name
+  in the locator for the free-text sources); in particular none is `modelcontextprotocol/registry`, the MCP registry
+  holdout source (the tool descriptions are BFCL function definitions, not MCP servers). Rows: preparing the holdout
+  drops every holdout row equal to or near (exact and MinHash) a row of a ready dev set, so of the four benign sets, and
+  since this round also of the quoted positives (`prepare_corpora.py` fetches the quotes into its download cache for
+  the holdout step), so no holdout row can share a row with these sets; the run that counts such drops sees the holdout
+  and is the owner's (`gold.py leakage` with `DEV/real` and `DEV/real_train_dev` among the dev directories).
+- **Counts in this report:** the five sets were frozen in a writable copy of the dev root (the shared one is read-only to
+  the runner) with the recipes of this branch: 4 sets by `prepare_corpora.py` (dedup within and across these sets drops
+  60 BFCL tool descriptions and 7 rules files as near duplicates (MinHash): 250 rules files, 421 Copilot files, 1,034 tool
+  descriptions, 323 memory turns), the quotes by `real_agent.py fetch` (57 of 57 spans unchanged). Their 2,085 rows
+  are added to the dev summary as native rows (tables above: native EN positives tool_poisoning 17,
+  agent_config_tampering 27, memory_poisoning 13; 2,028 native benign rows), the other sets' counts unchanged. Spot-check
+  of the new sets: 50 rows each from `gold.py sample`, verdict from the hand label (and the second pass where the row is
+  in its sample): 250 rows, 0 wrong. Without the cross-set dedup against the other dev sets, which only the full
+  preparation does, the owner's freeze can drop a few more rows.
 - **Preview on the real rows (not the fair measurement):** this checkout's Core predictor (`threat_cascade`) over all
   2,152 real rows, at Core's own decisions, not at a cut from the calibration part (the fair reports need the frozen
   sets). Rules alone (L1 heuristic detected): tool_poisoning 0 of 17, agent_config_tampering 1 of 27, memory_poisoning

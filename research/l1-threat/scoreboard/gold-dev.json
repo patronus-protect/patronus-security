@@ -9,6 +9,7 @@
       "generated/agent_casebook": 400,
       "generated/agent_scenarios": 160,
       "generated/class_templates": 84,
+      "real/real_agent_quotes": 27,
       "train_dev/approve_or_deny_de": 3
     },
     "benign": {
@@ -18,6 +19,10 @@
       "generated/carrier_insertion": 585,
       "generated/class_templates": 425,
       "generated/exfil_lookalikes": 300,
+      "real_train_dev/real_bfcl_memory": 323,
+      "real_train_dev/real_bfcl_tools": 1034,
+      "real_train_dev/real_copilot_customizations": 421,
+      "real_train_dev/real_cursorrules": 250,
       "report/civil_comments": 5856,
       "report/deepset_prompt_injections": 394,
       "report/germeval2021": 2685,
@@ -85,7 +90,8 @@
       "generated/advisory_shapes": 400,
       "generated/agent_casebook": 400,
       "generated/agent_scenarios": 160,
-      "generated/class_templates": 83
+      "generated/class_templates": 83,
+      "real/real_agent_quotes": 13
     },
     "prompt_extraction": {
       "generated/carrier_insertion": 86,
@@ -107,7 +113,8 @@
       "generated/advisory_shapes": 400,
       "generated/agent_casebook": 400,
       "generated/agent_scenarios": 160,
-      "generated/class_templates": 83
+      "generated/class_templates": 83,
+      "real/real_agent_quotes": 17
     },
     "toxic_language": {
       "report/civil_comments": 144,
@@ -132,11 +139,11 @@
   "classes": {
     "agent_config_tampering": {
       "de": 525,
-      "en": 522
+      "en": 549
     },
     "benign": {
       "de": 26606,
-      "en": 37913
+      "en": 39941
     },
     "exfiltration": {
       "de": 551,
@@ -156,7 +163,7 @@
     },
     "memory_poisoning": {
       "de": 522,
-      "en": 521
+      "en": 534
     },
     "prompt_extraction": {
       "de": 387,
@@ -168,7 +175,7 @@
     },
     "tool_poisoning": {
       "de": 522,
-      "en": 521
+      "en": 538
     },
     "toxic_language": {
       "de": 223,
@@ -196,13 +203,15 @@
       },
       "en": {
         "provenance": {
+          "native": 27,
           "synthetic": 522
         },
         "sources": {
           "advisory_shapes": 200,
           "agent_casebook": 200,
           "agent_scenarios": 80,
-          "generators": 42
+          "generators": 42,
+          "real_agent_quotes": 27
         }
       }
     },
@@ -319,13 +328,15 @@
       },
       "en": {
         "provenance": {
+          "native": 13,
           "synthetic": 521
         },
         "sources": {
           "advisory_shapes": 200,
           "agent_casebook": 200,
           "agent_scenarios": 80,
-          "generators": 41
+          "generators": 41,
+          "real_agent_quotes": 13
         }
       }
     },
@@ -392,13 +403,15 @@
       },
       "en": {
         "provenance": {
+          "native": 17,
           "synthetic": 521
         },
         "sources": {
           "advisory_shapes": 200,
           "agent_casebook": 200,
           "agent_scenarios": 80,
-          "generators": 41
+          "generators": 41,
+          "real_agent_quotes": 17
         }
       }
     },
@@ -1125,11 +1138,12 @@
   ],
   "provenance": {
     "agent_config_tampering": {
+      "native": 27,
       "synthetic": 1044,
       "translated": 3
     },
     "benign": {
-      "native": 46306,
+      "native": 48334,
       "synthetic": 5899,
       "translated": 12314
     },
@@ -1152,6 +1166,7 @@
       "synthetic": 156
     },
     "memory_poisoning": {
+      "native": 13,
       "synthetic": 1043
     },
     "prompt_extraction": {
@@ -1163,6 +1178,7 @@
       "synthetic": 1043
     },
     "tool_poisoning": {
+      "native": 17,
       "synthetic": 1043
     },
     "toxic_language": {
@@ -1251,6 +1267,61 @@
       "reviewed": 54,
       "role": "dev",
       "rows": 388,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "real/real_agent_quotes": {
+      "benign_errors": 0,
+      "benign_reviewed": 0,
+      "dataset": "real_agent_quotes",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 57,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "real_train_dev/real_bfcl_memory": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "real_bfcl_memory",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 323,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "real_train_dev/real_bfcl_tools": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "real_bfcl_tools",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 1034,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "real_train_dev/real_copilot_customizations": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "real_copilot_customizations",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 421,
+      "unclear": 0,
+      "wrong": 0
+    },
+    "real_train_dev/real_cursorrules": {
+      "benign_errors": 0,
+      "benign_reviewed": 50,
+      "dataset": "real_cursorrules",
+      "error_rate": 0.0,
+      "reviewed": 50,
+      "role": "dev",
+      "rows": 250,
       "unclear": 0,
       "wrong": 0
     },
