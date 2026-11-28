@@ -1076,6 +1076,7 @@ tasks:
   # build a hand-labelled dev set from real files and verbatim advisory artefacts; small positive counts
   # are accepted and named; German and resource_exhaustion stay synthetic as named gaps.
   - id: E14b
+    status: done
     title: "A hand-labelled real-world dev set for the agent classes: real rules files, agent configs and MCP tool manifests from licence-checked open repositories (mostly benign, the first real hard negatives for these classes) plus poisoned descriptions, rules and memory writes quoted verbatim in public advisories and write-ups as positives; German and resource_exhaustion stay synthetic as named gaps"
     type: eval-infra
     deps: [E14]
