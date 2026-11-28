@@ -1042,6 +1042,7 @@ tasks:
   # 9-11 ms for pii + dlp. The threat rules do not use the anchor-based prefilters PII and DLP use, and the
   # L1 models (TF-IDF style, should be cheap) read the whole text.
   - id: T38
+    status: done
     title: "Threat L1 profiling and shared text facts (part a, split 2026-11-27): a threat_profile example profiles every attack-class detector and L1 model at 256 B / 4 KiB / 100 KiB / 10 MiB in one warm process, the hotspots are written up, and the eleven built-in L1 models extract the text facts once per scan instead of once each"
     type: perf
     deps: []

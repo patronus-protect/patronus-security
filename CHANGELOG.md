@@ -39,6 +39,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and `ark-distributed-protocol/` each carry its `LICENSE`, `LICENSE-COMMERCIAL.md` and
   `NOTICE`, and the `ark-api` and `ark-coordinator` images copy them from there. No package
   changes its license.
+- Prompt injection, jailbreak, prompt extraction, memory poisoning and exfiltration scan German
+  and other non-ASCII text much faster: their catalogue rules with a word boundary no longer fall
+  back to the slow regex engine at the first umlaut. On 100 KiB of German and English prose, a
+  scan of all eleven attack classes drops from about 370 ms to about 135 ms (median, rules only);
+  the injection rule catalogue alone from about 210 ms to about 30 ms. Matches and evidence are
+  unchanged.
+- The built-in L1 models of a cascade share one reading of the text: the facts they score
+  (language, carrier, context terms, rule findings) are extracted once per scan instead of once
+  per model, and the catalogue scoring of every class reuses the context scan its rules already
+  made, and their carrier checks no longer fall back to the slow regex engine at the first
+  umlaut. On 100 KiB of German and English prose the eleven L1 models together take about 50 ms
+  instead of about 400 ms (median); scores and decisions are bit for bit the same. Rust API:
+  `Cascade::l1_scan_answer` and `Cascade::l1_model_stage` take the scan's
+  `detectors::text::SharedFacts`, and `injection_l1::category_results` takes the prepared
+  `NativeText` instead of the bare text.
 - The opt-in attack classes scan German and other non-ASCII text much faster: a rule with a word
   boundary no longer falls back to the slow regex engine at the first umlaut. On 100 KiB windows
   of German prose, the ten opt-in attack classes together take about 40 ms (p95) instead of about
