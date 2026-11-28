@@ -267,3 +267,59 @@ eingecheckt. Da Regeln, Modelle, Scores und Schwellen bitgleich bleiben, ändert
 ein Refresh in der Owner-Umgebung (`python3 scripts/l1_threat/scoreboard.py refresh --dev
 "$ARK_L1_DEV_DATA" --cache <gate-cache> --baseline-cache <voller Baseline-Cache>`) muss dieselben
 Zahlen ergeben.
+
+## T38b (2026-11-28): ein Aho-Corasick-Pass als Prefilter jeder Threat-Regel
+
+Was sich ändert (reine Suchwege, Treffer identisch):
+
+1. **Positionen aus dem einen Pass**: der Anker-Automat (`LexicalAnchorScanner`, ein
+   Aho-Corasick über die Kleinschreib-Sicht) liefert in demselben Durchlauf, in dem er die Anker
+   eines Texts findet, auch wo jedes Wort steht (`NativeText::anchors_within`, Bytebereiche des
+   Originals; ohne Positionen nur bei einem langen s im Text, dann gilt die Präsenz des ganzen
+   Texts).
+2. **Notwendige Wörter jeder Regel**: aus dem Regex jeder Threat-Regel kommt eine Wortmenge, von
+   der jeder Treffer eines enthält (`anchor_gate::necessary_words`; Literal-Läufe, Alternationen
+   mit allen Zweigen, vom Parser ausgeklammerte Präfixe gehen in jeden Zweig). Diese Wörter hängen
+   im selben Automaten, gehören zu keinem Anker (lexikalische Signale und Ankerpunkte unverändert)
+   und bilden mit dem Anker-Gate den `prefilter` der Regel. Damit haben alle 98 Threat-Regeln einen
+   Literal-Prefilter, auch die zehn ohne Anker-Gate (`hc_howto_hazard`, `hc_evasion`,
+   `ua_home_dir_delete`, `tp_secrecy`, `re_recursive_spawn`, `re_tool_flood`,
+   `ex_send_directive`, `ex_secret_to_sink`, `ex_tool_param_egress`, `ex_dns_channel`).
+3. **Fenster statt ganzer Text**: eine Regel läuft nur auf den 8-KiB-Fenstern, deren Wörter ihren
+   Prefilter erfüllen. Ein Treffer liegt ganz in seinem Fenster und enthält dort seine Wörter;
+   ein übersprungenes Fenster verliert also keinen Treffer (Test
+   `the_window_prefilter_admits_every_match`: jeder Treffer jeder Regel auf den Threat-Goldens
+   nach 9 KiB Prosa, mit Umlauten, langem s und längenändernden Kleinbuchstaben).
+
+Messung (VPS, Intel Core Processor (Haswell, no TSX), 6 CPUs, Release, ein warmer Prozess,
+`threat_profile` wie in T38, 58 470 gutartige `train_dev`-Zeilen, Seed 38, Regeln allein
+`{"max_level": "l1", "cascade": {}}`). Vorher = `main` (`6ebdbd4c`), Nachher = dieser Branch; je
+zwei Läufe abwechselnd, ohne andere Last:
+
+| Größe | Regeln p50 / p95 ms vorher (Lauf 1, 2) | Regeln p50 / p95 ms nachher (Lauf 1, 2) |
+|---|---:|---:|
+| short (256 B) | 1.152 / 3.550, 1.098 / 3.344 | 0.848 / 3.302, 0.856 / 3.463 |
+| 4 KiB | 8.114 / 14.878, 8.784 / 14.980 | 7.070 / 12.890, 6.788 / 13.205 |
+| 100 KiB | 130.665 / 167.412, 130.671 / 170.204 | 118.830 / 147.503, 111.178 / 148.908 |
+
+Produzenten bei 100 KiB (im Scan, p50 / p95 ms, vorher → nachher): `unsafe_action/threat_l1`
+17.9 / 25.1 → 10.1 / 13.8, `exfiltration/threat_l1` 9.3 / 16.0 → 7.8 / 12.5, Regeln von
+`unsafe_action` allein 9.7 / 13.6 → 4.6 / 8.0, Regeln von `exfiltration` allein 4.0 / 4.4 →
+3.1 / 3.4; `toxic_language` (≈ 10 ms), `harmful_content`, `tool_poisoning`, `resource_exhaustion`
+unverändert im Rauschen (ihre Wörter stehen in fast jedem Fenster gutartiger Prosa, die Kosten
+liegen in der Prüfung der Kandidaten, nicht im Regex über den ganzen Text).
+
+Stand gegen das Ziel (100 KiB p95 ≤ 10 ms, Regeln aller Klassen): 148 ms — **nicht erreicht**. Der
+größte Teil liegt nicht in den Threat-Regeln, sondern im Injection-Pfad: `injection/injection_l1`
+44 / 54 ms (davon Katalog 30 / 43 ms), `jailbreak/injection_l1` 11 / 13 ms, Katalog
+`prompt_extraction` 8 / 15 ms. Die 184 Katalogregeln hängen noch am Text-Gate (`admits`) und
+laufen über den ganzen Text; 39 von ihnen haben kein Anker-Gate. Nächster Schritt: denselben
+Fenster-Prefilter mit `necessary_words` im Injection-Katalog (`rule_catalog.rs`), danach die
+Kandidatenprüfung von `toxic_language` und `harmful_content`.
+
+Qualität: `threat_cascade` (Release) von `main` (`6ebdbd4c`) und diesem Branch über alle 109 632
+Zeilen unter `$ARK_L1_DEV_DATA` (`train_dev`, `generated`, `translated`, `report`), mit der
+Regel-Konfiguration und mit `cascade-config.json`: 0 abweichende Vorhersagen (Scores, `flagged`,
+Kaskadenentscheidung; nur `ms` ausgenommen), je 12 290 markierte Zeilen. Holdout ist in der Sandbox
+nicht zugänglich; bei identischen Treffern ändert er sich nicht. `scripts/benchmark_injection_l1.py`
+ist in dieser Runde nicht gelaufen.
