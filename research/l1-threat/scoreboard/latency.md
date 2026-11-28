@@ -404,3 +404,55 @@ ms):
 Gegen Runde 1 (100 KiB gutartig 9.7 / 13.0–14.1, Angriff 16.8–17.1 / 23.3–27.2): schneller, der
 Injection-Pfad allein liegt bei 100 KiB gutartig im Median unter 10 ms, im p95 noch darüber.
 
+
+### T38b Runde 3 (2026-11-28): Nachmessung und Abstand zum Ziel
+
+Kein neuer Code; Nachmessung des Stands `b0f1268b` (Runde 2 plus Umbau ohne Verhaltensänderung)
+mit beiden Werkzeugen der Aufgabe, VPS wie oben, ohne andere Last.
+
+`threat_profile` (58 470 gutartige `train_dev`-Zeilen, Seed 38, Regeln allein; zwei Läufe, p50 / p95 ms):
+
+| Größe | Lauf 1 | Lauf 2 |
+|---|---:|---:|
+| short (256 B) | – | 0.630 / 2.613 |
+| 4 KiB | – | 6.245 / 11.004 |
+| 100 KiB | 100.220 / 135.263 | 105.591 / 147.554 |
+
+Wohin die 100 KiB gehen (im Scan, p50 / p95 ms, Lauf 1): `injection/injection_l1` 39.9 / 51.1
+(davon Katalog als Einzelproduzent 25.4 / 38.8), `toxic_language/threat_l1` 10.1 / 13.0,
+`jailbreak/injection_l1` 9.5 / 11.1, `unsafe_action/threat_l1` 9.0 / 13.7,
+`exfiltration/threat_l1` 7.2 / 14.5 (trägt die gemeinsame Vorbereitung: Kleinschreibung,
+Anker-Pass mit Positionen, Fenster; als Einzelproduzent 3.0 / 3.2), `tool_poisoning/threat_l1`
+4.2 / 7.2, `resource_exhaustion/threat_l1` 4.0 / 5.8, `harmful_content/threat_l1` 1.9 / 8.1,
+Katalog `prompt_extraction` 5.9 / 8.7, übrige Injection-Detektoren zusammen ≈ 9.
+
+`scripts/benchmark_injection_l1.py` (Release, 50 Läufe nach 10 Aufwärmläufen; zwei Läufe; p50 / p95 ms):
+
+| Größe | gutartig (Lauf 1, 2) | mit eingebettetem Angriff (Lauf 1, 2) |
+|---|---:|---:|
+| 1 KiB | 0.234 / 0.341, 0.243 / 0.335 | 1.484 / 1.927, 1.454 / 1.750 |
+| 10 KiB | 0.925 / 1.109, 0.972 / 1.583 | 2.737 / 3.682, 3.556 / 4.266 |
+| 100 KiB | 7.817 / 8.868, 7.636 / 8.991 | 12.385 / 13.839, 11.894 / 12.993 |
+
+Stand gegen das Ziel: der Injection-Pfad allein hält bei 100 KiB gutartig das p95 ≤ 10 ms
+(8.9 / 9.0 ms), mit eingebettetem Angriff nicht (13.0–13.8 ms). Regeln aller elf Klassen in einem
+Scan: 135–148 ms p95 — **nicht erreicht**, Faktor ≈ 14 über dem Ziel.
+
+Warum das keine Restarbeit dieser Aufgabe ist: der Prefilter-Teil der Aufgabe steht (jede
+Threat- und Katalogregel hinter Anker-Gate und notwendigen Wörtern auf dem einen
+Aho-Corasick-Pass, nur zugelassene 8-KiB-Fenster). Die verbleibende Zeit liegt in der Regex-Suche
+auf Fenstern, die der Prefilter zu Recht zulässt, weil die notwendigen Wörter der Regeln in fast
+jedem Fenster gewöhnlicher Prosa stehen, und verteilt sich auf viele Produzenten (keiner allein
+über 40 % der Summe). Für 10 ms müsste jeder große Produzent um eine Größenordnung schneller
+werden. Nötig wären (je eine eigene Aufgabe):
+
+1. Kandidatenstellen statt Fenster: aus `regex_syntax` die größte Treffer-Länge jeder Regel
+   (`maximum_len`) und die Suche nur um die Treffer ihrer notwendigen Wörter; dafür müssen
+   Wortgrenzen und die Linkstreue der Treffer am Rand der Teilstücke gleich bleiben (Paritätstest
+   über Goldens und alle Dev-Zeilen).
+2. Engere Prefilter: zwei notwendige Wörter in fester Nähe (Verb und Objekt) statt eines Worts je
+   Fenster, für die Katalogregeln mit häufigen Verben.
+3. Weniger, zusammengelegte Katalogregeln (gleiche Relation in DE/EN-Varianten) und eine
+   gemeinsame Suche für die Threat-Regeln von `toxic_language` und `unsafe_action`.
+
+Qualität: unverändert gegenüber Runde 2 (kein Detektor-Code geändert).
