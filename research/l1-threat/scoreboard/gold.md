@@ -775,6 +775,15 @@ every label sits in `research/l1-threat/labels/` by text SHA-256, never with tex
   `modelcontextprotocol/registry` or from any holdout source of `entity_map.yaml` (MCPTox, MalSkillBench,
   MaliciousSkillBench, MemForm, AutoRedClaw, agentapprove, NVD, OWASP, MITRE, the Radware IPI collection). The leakage
   run itself needs the holdout and is part of the owner commands below.
+- **Preview on the real rows (not the fair measurement):** this checkout's Core predictor (`threat_cascade`) over all
+  2,152 real rows, at Core's own decisions, not at a cut from the calibration part (the fair reports need the frozen
+  sets). Rules alone (L1 heuristic detected): tool_poisoning 0 of 17, agent_config_tampering 1 of 27, memory_poisoning
+  0 of 13; 0 of 2,095 real benign rows flagged for any of the three, 6 flagged for some other class. With the built-in L1
+  models of `cascade-config.json` (up to L1, shipped cuts): tool_poisoning 0 of 17 (2 of 678 agent-config files
+  flagged), agent_config_tampering 3 of 27 (15 of 678 agent-config files flagged, 2.2 %), memory_poisoning 0 of 13 (0
+  flagged); 221 real benign rows are flagged for some class. The synthetic positives of these classes are detected far
+  more often: the rules and models fit the generator phrasing, not real poisoned artefacts, and the real config files are
+  the hard negatives the models had not seen.
 - **Gaps:** German has no real source for these classes (the open repositories and write-ups are English; a translation
   would not be real data), and resource_exhaustion has none (OverThink is one decoy template, see the E14b search
   above); both stay synthetic.
