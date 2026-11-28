@@ -513,3 +513,21 @@ Qualität: `threat_cascade` (Release) von `main` (`40b3350c`) und diesem Branch 
 Zeilen unter `$ARK_L1_DEV_DATA` (`train_dev` 83 765, `report` 20 955, `generated` 4 312, `translated` 600), mit der
 Regel-Konfiguration und mit `cascade-config.json`: 0 abweichende Vorhersagen (Scores, `flagged`,
 Kaskade; nur `ms` ausgenommen), je 12 290 markierte Zeilen.
+
+`scripts/benchmark_injection_l1.py` (Injection-Pfad des Gateways über die Python-Bindung, Release
+`maturin develop --release` je Stand in eigener venv, 50 Läufe nach 10 Aufwärmläufen; abwechselnd
+Base, Head, Base, Head; p50 / p95 ms, Lauf 1, Lauf 2):
+
+| Größe | Eingabe | vorher (`main`) | nachher (Branch) |
+|---|---|---:|---:|
+| 1 KiB | gutartig | 0.261 / 0.334, 0.361 / 0.500 | 0.349 / 0.430, 0.255 / 0.423 |
+| 1 KiB | mit eingebettetem Angriff | 1.705 / 2.380, 2.122 / 2.520 | 1.963 / 2.378, 1.483 / 2.046 |
+| 10 KiB | gutartig | 1.101 / 1.519, 1.178 / 1.701 | 1.408 / 1.645, 1.002 / 1.449 |
+| 10 KiB | mit eingebettetem Angriff | 3.177 / 4.082, 4.101 / 5.327 | 4.226 / 5.164, 2.819 / 3.297 |
+| 100 KiB | gutartig | 8.774 / 9.670, 8.841 / 10.490 | 8.408 / 11.933, 7.398 / 7.973 |
+| 100 KiB | mit eingebettetem Angriff | 16.411 / 21.073, 16.615 / 23.664 | 15.020 / 20.356, 12.664 / 16.899 |
+
+Bei 1 und 10 KiB (ein bis zwei Fenster) liegen beide Stände in der Streuung zwischen Läufen; bei
+100 KiB ist der Branch im Median schneller (gutartig 8.8 → 7.4–8.4 ms, Angriff 16.4–16.6 →
+12.7–15.0 ms). Das eine p95 von 11.9 ms (Head, Lauf 1, gutartig) ist ein Ausreißer desselben
+Laufs, dessen Median im Bereich der Base liegt; Lauf 2 hält 8.0 ms.

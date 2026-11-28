@@ -58,9 +58,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   text that can hold a match: the one keyword pass over the text now also records where each
   keyword occurs, every rule is gated by the words one of which each of its matches must contain,
   and a rule runs only on the 8 KiB windows that hold them instead of on the whole text. On 100 KiB
-  of German and English prose a scan of all eleven attack classes (rules only) takes about 103 ms
-  instead of about 130 ms (median), `unsafe_action` about 10 ms instead of about 18 ms, the
-  injection catalogue about 25 ms instead of about 32 ms. Matches, evidence, scores and decisions
+  of German and English prose a scan of all eleven attack classes (rules only) takes about 105 ms
+  instead of about 133 ms (median) and about 140 ms instead of about 180 ms (p95),
+  `unsafe_action` about 9 ms instead of about 19 ms, the injection catalogue about 26 ms instead
+  of about 30 ms. Matches, evidence, scores and decisions
   are unchanged.
 - The opt-in attack classes scan German and other non-ASCII text much faster: a rule with a word
   boundary no longer falls back to the slow regex engine at the first umlaut. On 100 KiB windows
