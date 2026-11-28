@@ -207,7 +207,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "fetch":
         print(json.dumps(fetch(quotes, args.out), indent=1, sort_keys=True))
         return 0
-    result = agree(rows, load(args.check))
+    # The sample spans both files: quotes are keyed by the SHA-256 of the quote, labelled by their class.
+    result = agree(rows + [{"sha256": quote["sha256"], "label": quote["class"]} for quote in quotes], load(args.check))
     print(json.dumps(result, indent=1))
     return 1 if result["missing"] else 0
 
