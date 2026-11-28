@@ -344,9 +344,10 @@ pub(super) fn producers(category: SecurityCategory) -> Vec<NativeProducerSpec> {
         }
         SecurityCategory::Injection
         | SecurityCategory::Jailbreak
-        | SecurityCategory::PromptExtraction
-        | SecurityCategory::MemoryPoisoning => add_injection_rules(&mut specs, category),
-        SecurityCategory::ToolPoisoning | SecurityCategory::AgentConfigTampering => {
+        | SecurityCategory::PromptExtraction => add_injection_rules(&mut specs, category),
+        SecurityCategory::ToolPoisoning
+        | SecurityCategory::AgentConfigTampering
+        | SecurityCategory::MemoryPoisoning => {
             add_threat_rules(&mut specs, category);
             add_injection_rules(&mut specs, category);
         }

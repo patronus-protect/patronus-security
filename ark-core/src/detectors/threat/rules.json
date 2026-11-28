@@ -972,7 +972,8 @@
         "base_score": 35,
         "validator": "format",
         "requires_context": false
-      }
+      },
+      "own_carrier": true
     },
     {
       "id": "ark.threat.ac_config_write",
@@ -984,7 +985,8 @@
         "base_score": 40,
         "validator": "structure",
         "requires_context": false
-      }
+      },
+      "own_carrier": true
     },
     {
       "id": "ark.threat.ex_markdown_beacon",
@@ -1188,6 +1190,160 @@
         "base_score": 45,
         "validator": "format",
         "requires_context": false
+      }
+    },
+    {
+      "id": "ark.threat.tp_tagged_tool_directive",
+      "class_name": "tool_poisoning",
+      "family": "tagged_tool_directive",
+      "upstream_groups": [],
+      "pattern": "(?P<tag><(?:important|wichtig)>)[^<]{0,300}?(?P<directive>\\b(?:before\\s{1,4}(?:(?:using|calling|running)\\s{1,4}(?:this|the)\\s{1,4}(?:tool|function)|returning|answering|responding)|after\\s{1,4}(?:retrieving|calling|using|returning|a\\s{1,4}\\w{1,20}\\s{1,4}lookup)|when\\s{1,4}\\(?[\\w.]{1,40}\\)?\\s{1,4}[\\w.]{1,40}\\s{1,4}is\\s{1,4}(?:invoked|called)|you\\s{1,4}must\\s{1,4}(?:first|also)|bevor\\s{1,4}(?:du\\s{1,4})?(?:dieses|das)\\s{1,4}(?:tool|werkzeug)|du\\s{1,4}musst\\s{1,4}(?:zuerst|au(?:ß|ss)erdem|auch))\\b)",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.tp_connected_forward",
+      "class_name": "tool_poisoning",
+      "family": "cross_server_forward",
+      "upstream_groups": [],
+      "pattern": "(?P<collect>\\b(?:retrieve|collect|gather|read))\\b[^.]{0,80}?\\bfrom\\s{1,4}(?:all\\s{1,4})?(?:the\\s{1,4})?(?P<peer>(?:connected|other)\\s{1,4}(?:services|servers|tools))\\b[^.]{0,80}?\\b(?P<forward>forward|send|pass|relay)\\b|(?P<peer_de>\\b(?:aus|von)\\s{1,4}(?:allen\\s{1,4})?(?:verbundenen|anderen)\\s{1,4}(?:diensten|servern|tools))\\b[^.]{0,80}?\\b(?P<forward_de>weiterleiten|weiter|senden|übergeben|leite|sende)\\b",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.ac_no_confirmation",
+      "class_name": "agent_config_tampering",
+      "family": "approval_bypass",
+      "upstream_groups": [],
+      "pattern": "(?P<never>\\b(?:never|do\\s{1,4}not|don't)\\s{1,4}ask)\\s{1,4}(?:the\\s{1,4}user\\s{1,4})?for\\s{1,4}(?:user\\s{1,4})?(?P<confirm>confirmation|approval|permission)\\s{1,4}before\\s{1,4}(?:executing|running|writing|making|applying)\\b|(?P<scope>\\b(?:all|every)\\s{1,4}(?:code\\s{1,4})?(?:changes|commands|actions|file\\s{1,4}writes))\\s{1,4}are\\s{1,4}(?P<preapproved>pre-?approved|auto-?approved)\\b|(?P<always>\\balways)\\s{1,4}(?P<autoapprove>auto-?approve)\\b|(?P<never_de>\\bfrage\\s{1,4}(?:den\\s{1,4}(?:nutzer|benutzer)\\s{1,4})?nie(?:mals)?)\\s{1,4}nach\\s{1,4}(?:einer\\s{1,4})?(?P<confirm_de>bestätigung|freigabe|erlaubnis)\\b|(?P<scope_de>\\balle\\s{1,4}(?:änderungen|befehle|aktionen))\\s{1,4}sind\\s{1,4}(?:vorab\\s{1,4}|bereits\\s{1,4})?(?P<preapproved_de>freigegeben|genehmigt)\\b",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.ac_stealth_rules",
+      "class_name": "agent_config_tampering",
+      "family": "concealment",
+      "upstream_groups": [],
+      "pattern": "(?P<hide>\\b(?:never|do\\s{1,4}not|don't)\\s{1,4}(?:mention|reveal|disclose|show))\\s{1,4}(?:the\\s{1,4}(?:contents?|existence)\\s{1,4}of\\s{1,4})?(?P<object>(?:this|these)\\s{1,4}(?:file|rules?(?:\\s{1,4}files?)?|endpoint))\\b[^\\n]{0,30}?\\bto\\s{1,4}the\\s{1,4}user\\b|(?P<deny>\\bdeny)\\s{1,4}the\\s{1,4}existence\\s{1,4}of\\s{1,4}(?P<custom>(?:any\\s{1,4})?(?:custom\\s{1,4})?(?:rules|memory|files?))\\b|(?P<hide_de>\\berwähne)\\s{1,4}(?P<object_de>diese\\s{1,4}(?:datei|regeln?|regeldatei))\\s{1,4}(?:gegenüber\\s{1,4}dem\\s{1,4}(?:nutzer|benutzer)\\s{1,4})?nie(?:mals)?\\b|(?P<deny_de>\\bleugne)\\s{1,4}die\\s{1,4}existenz\\s{1,4}(?P<custom_de>(?:von\\s{1,4}|der\\s{1,4}|dieser\\s{1,4})?(?:regeln|regeldatei|datei))",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.ac_secret_read_directive",
+      "class_name": "agent_config_tampering",
+      "family": "secret_harvest",
+      "upstream_groups": [],
+      "pattern": "(?P<trigger>\\bbefore\\s{1,4}(?:responding|answering|replying)\\s{1,4}to\\s{1,4}any|\\bbefore\\s{1,4}starting\\s{1,4}any\\s{1,4}task|\\bbevor\\s{1,4}du\\s{1,4}(?:auf\\s{1,4})?(?:eine|jede)\\s{1,4}anfrage)\\b[\\s\\S]{0,80}?\\b(?:read|lies|execute|run|führe)\\b[\\s\\S]{0,120}?(?P<secret>~/\\.env|\\.aws/credentials|\\bid_rsa|~/\\.ssh|\\.env\\s{1,4}files|\\bcurl\\s)",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.ac_code_sabotage",
+      "class_name": "agent_config_tampering",
+      "family": "code_sabotage",
+      "upstream_groups": [],
+      "pattern": "(?P<insert>\\b(?:introduce|add|insert))\\s{1,4}(?P<flaw>subtle\\s{1,4}(?:weaknesses|vulnerabilities|bugs|flaws|backdoors?))\\b|(?P<insert_de>\\b(?:baue|füge))\\s{1,4}(?:immer\\s{1,4})?(?P<flaw_de>(?:unauffällige|versteckte|subtile)\\s{1,4}(?:schwachstellen|sicherheitslücken|hintertüren|fehler))\\b|(?P<endpoint>\\b(?:add|create|expose)\\s{1,4}(?:a\\s{1,4})?(?:secondary\\s{1,4}|hidden\\s{1,4})?admin\\s{1,4}endpoint)\\b[^\\n]{0,80}?\\b(?P<noauth>without\\s{1,4}authentication)\\b",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.ac_sandbox_off",
+      "class_name": "agent_config_tampering",
+      "family": "permission_widening",
+      "upstream_groups": [],
+      "pattern": "(?P<key>(?:sandbox_mode|sandboxMode)\\s{0,4}[=:]\\s{0,4}\\x22?)(?P<value>danger-full-access)\\b|(?P<trust_key>trustedCommands\\x22?\\s{0,4}[:=]\\s{0,4})(?P<wildcard>\\[\\s{0,4}\\x22\\*\\x22\\s{0,4}\\])",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.mp_persistent_trigger",
+      "class_name": "memory_poisoning",
+      "family": "persistent_trigger",
+      "upstream_groups": [],
+      "pattern": "(?P<remember>\\bremember)\\b[^.\\n]{0,60}?\\b(?:highest|top)\\s{1,4}priority\\b[^\\n]{0,120}?(?P<trigger>\\b(?:whenever|every\\s{1,4}time|each\\s{1,4}time|for\\s{1,4}every))\\b|(?P<remember_de>\\bmerke?\\s{1,4}dir)\\b[^.\\n]{0,60}?\\b(?:höchster?|oberster?)\\s{1,4}priorität\\b[^\\n]{0,120}?(?P<trigger_de>\\b(?:wann\\s{1,4}immer|jedes\\s{1,4}mal|immer\\s{1,4}wenn|bei\\s{1,4}jeder))\\b",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.mp_memory_tool_feed",
+      "class_name": "memory_poisoning",
+      "family": "memory_tool_write",
+      "upstream_groups": [],
+      "pattern": "(?P<feed>\\b(?:feed|inject|plant|smuggle))\\b[^\\n]{0,40}?\\b(?:to|into|in)\\s{1,4}(?:the\\s{1,4})?(?P<tool>(?:bio|memory)\\s{1,4}tool)\\b|(?P<route>\\bto=)(?P<bio>bio)\\b|(?P<feed_de>\\b(?:schleuse|schmuggle|pflanze))\\b[^\\n]{0,40}?\\b(?:in\\s{1,4}das|ins)\\s{1,4}(?P<tool_de>(?:bio|memory|gedächtnis)[- ]?(?:tool|werkzeug))\\b",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.mp_forged_memory_entry",
+      "class_name": "memory_poisoning",
+      "family": "forged_memory_entry",
+      "upstream_groups": [],
+      "pattern": "(?P<entry>\\btype:\\s{0,4}(?:user|feedback|reference|project))(?:\\\\n|[\\s\\x22']){0,40}---(?:\\\\n|[\\s\\x22'])[\\s\\S]{0,400}?(?P<override>\\b(?:always|never|immer|nie|asked\\s{1,4}to)\\s{1,4}(?:(?:disable|skip|bypass|deaktiviere|überspringe|umgehe)\\s{1,4}(?:all\\s{1,4}|alle\\s{1,4})?(?:security|safety|sicherheits)\\w{0,12}|fetch\\s{1,4}and\\s{1,4}follow|operate\\s{1,4}at\\s{1,4}maximum\\s{1,4}autonomy|run\\s{1,4}commands\\s{1,4}(?:as\\s{1,4}root|with\\s{1,4}elevated)|hole\\s{1,4}und\\s{1,4}befolge)|\\b(?:deaktiviere|überspringe|umgehe)\\s{1,4}(?:immer\\s{1,4})?(?:alle\\s{1,4}|die\\s{1,4})?sicherheits\\w{0,12})",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
+      }
+    },
+    {
+      "id": "ark.threat.mp_every_turn_beacon",
+      "class_name": "memory_poisoning",
+      "family": "memory_beacon",
+      "upstream_groups": [],
+      "pattern": "(?P<every>\\bfor\\s{1,4}every\\s{1,4}(?:user\\s{1,4})?(?:interaction|conversation|message|request)|\\bbei\\s{1,4}jeder\\s{1,4}(?:interaktion|unterhaltung|nachricht|anfrage))\\b[\\s\\S]{0,160}?\\b(?:call|fetch|browse|send|rufe|öffne|sende)\\b[\\s\\S]{0,80}?(?:https?://|\\{[A-Z_]{1,30}URL\\})[\\s\\S]{0,200}?(?P<secrecy>\\bdo\\s{1,4}not\\s{1,4}mention|\\bdon't\\s{1,4}mention|\\bwithout\\s{1,4}telling|\\berwähne\\s{1,4}(?:das|dies)\\w{0,2}\\s{1,4}nicht|\\bohne\\s{1,4}(?:es\\s{1,4})?zu\\s{1,4}erwähnen|\\?data=)",
+      "own_carrier": true,
+      "points": {
+        "base_score": 40,
+        "validator": "format",
+        "requires_context": false,
+        "own_phrase": true
       }
     }
   ]
