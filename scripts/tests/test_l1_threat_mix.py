@@ -338,3 +338,31 @@ def test_no_training_row_of_a_shipped_model_is_in_calibration_or_measurement(tmp
 @pytest.mark.skipif(not os.environ.get("ARK_L1_DEV_DATA"), reason="needs the dev split (ARK_L1_DEV_DATA)")
 def test_no_training_row_of_a_shipped_model_is_measured_on_the_dev_split(tmp_path):
     assert_no_training_row_is_measured(Path(os.environ["ARK_L1_DEV_DATA"]), tmp_path / "mix")
+
+
+def test_real_rows_are_reported_apart_with_every_positive_and_measured_negatives():
+    synthetic, scores = mix_rows({"calibration": ([0.9] * 10, [0.0] * 1000), "measurement": ([0.9] * 10, [0.0] * 1000)})
+    real = []
+    for part, label, value in (("calibration", "p", 0.9), ("measurement", "p", 0.0), ("calibration", "n", 0.0),
+                               ("measurement", "n", 0.95), ("measurement", "n", 0.0), ("report", "p", 0.9)):
+        rid = f"real:{part}:{label}:{len(real)}"
+        row = {"id": rid, "dataset": "real_cursorrules", "benign": label == "n", "language": "en",
+               "classes": ["tool_poisoning"] if label == "p" else []}
+        real.append(MODULE.MixRow(row, "real_cursorrules", part))
+        scores[rid] = {"tool_poisoning": value}
+    tool = [MODULE.MixRow({**r.row, "classes": ["tool_poisoning"] if r.row["classes"] else []}, r.source, r.part) for r in synthetic]
+    tool_scores = {rid: {"tool_poisoning": s.get("jailbreak", s.get("tool_poisoning"))} for rid, s in scores.items()}
+    cells = MODULE.fair_cells(tool + real, tool_scores, ["tool_poisoning"])
+    entry = cells["tool_poisoning"]["en"]["0.001"]
+    # Both real positives (calibration and measurement, never the report sets), the two measured real negatives.
+    assert entry["real"] == {"pos": 2, "tp": 1, "neg": 2, "fp": 1, "tpr": 0.5, "fpr": 0.5}
+    report = {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": [], "missing": {}, "short_sources": [],
+              "excluded": {}, "trained": {"models": {}, "keys": 0},
+              "parts": {"calibration": 1012, "measurement": 1013, "report": 1, "rows": 2025, "sources": 2},
+              "systems": {"rules": cells}}
+    text = MODULE.render_fair(report, "T", [])
+    real_part = text.split("## Real-world rows of the agent classes")[1]
+    assert "| tool_poisoning | en | 2 | 2 | 50.0 / 50.00 |" in real_part
+    assert "L1 model" not in real_part.split("\n### At 1% FPR")[0].split("| class")[1].split("\n")[0]
+    without = {**report, "systems": {"rules": MODULE.fair_cells(tool, tool_scores, ["tool_poisoning"])}}
+    assert "Real-world rows" not in MODULE.render_fair(without, "T", [])

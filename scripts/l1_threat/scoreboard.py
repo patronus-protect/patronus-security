@@ -169,6 +169,11 @@ BOOTSTRAP_SEED = 20261114
 # they make up the hard-benign pool.
 HARD_BENIGN_SETS = frozenset({"notinject", "or_bench_hard", "xstest", "wildjailbreak", "wildguardmix", "l1_goldens",
                               "trigger_negatives"})
+# Real-world sets of the agent classes (hand-labelled, `real_agent.py`): reported apart from the synthetic rows.
+REAL_SETS = frozenset({"real_agent_quotes", "real_cursorrules", "real_copilot_customizations", "real_bfcl_tools",
+                       "real_bfcl_memory"})
+REAL_CLASSES = ("tool_poisoning", "agent_config_tampering", "memory_poisoning")
+REAL_SYSTEMS = (("rules", "Rules only"), ("l1_model", "L1 model"))
 JOBS = 4
 # The Core predictor: an example of patronus-ark-core, built from these sources.
 PREDICTOR = "threat_cascade"
@@ -1250,6 +1255,7 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
     language_of = np.asarray([r.row.get("language") or "unknown" for r in rows])
     source = np.asarray([r.source for r in rows])
     hard = np.asarray([is_hard_benign(r.row) for r in rows], dtype=bool)
+    real = np.isin(source, list(REAL_SETS))
     out: dict[str, Any] = {}
     for cls in classes:
         labels = [mix_label(r.row, cls) for r in rows]
@@ -1278,6 +1284,13 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
                     entry[name] = {**counts, "tpr": counts["tp"] / counts["pos"] if counts["pos"] else None,
                                    "fpr": counts["fp"] / counts["neg"] if counts["neg"] else None,
                                    "hard_fpr": counts["hard_fp"] / counts["hard"] if counts["hard"] else None}
+                # Real rows: every real positive (positives never move a cut), the real negatives of the measurement part.
+                mixed = in_language & real & (part != "report")
+                pos, neg = mixed & positive, mixed & negative & (part == "measurement")
+                entry["real"] = {"pos": int(pos.sum()), "tp": int((hit & pos).sum()), "neg": int(neg.sum()),
+                                 "fp": int((hit & neg).sum())}
+                entry["real"].update(tpr=entry["real"]["tp"] / entry["real"]["pos"] if entry["real"]["pos"] else None,
+                                     fpr=entry["real"]["fp"] / entry["real"]["neg"] if entry["real"]["neg"] else None)
                 cell[f"{fpr:g}"] = entry
             out.setdefault(cls, {})[language] = cell
     return out
@@ -1384,6 +1397,26 @@ def fair_lines(report: dict[str, Any], fpr: str) -> list[str]:
     return lines
 
 
+def real_lines(report: dict[str, Any], fpr: str) -> list[str]:
+    """Markdown table of the real-world rows of the agent classes at one FPR level, per system of ``REAL_SYSTEMS``:
+    TPR on the real positives and FPR on the real benign rows (and other classes' real positives) of the
+    measurement part, at the cell's cut; empty when no real row is in the mix."""
+    systems = [(key, name) for key, name in REAL_SYSTEMS if key in report["systems"]]
+    header = ["class", "lang", "real pos", "real neg"] + [f"{name} TPR / FPR" for _, name in systems]
+    lines = []
+    for cls in REAL_CLASSES:
+        for language in LANGUAGES:
+            cells = [report["systems"][key].get(cls, {}).get(language) for key, _ in systems]
+            first = next((cell for cell in cells if cell is not None and "real" in cell[fpr]), None)
+            if first is None or not (first[fpr]["real"]["pos"] or first[fpr]["real"]["neg"]):
+                continue
+            real = first[fpr]["real"]
+            values = [cls, language, str(real["pos"]), str(real["neg"])]
+            values += [NO_CLASS if cell is None else _tpr_fpr(cell[fpr]["real"], fpr, cell[fpr]) for cell in cells]
+            lines.append("| " + " | ".join(values) + " |")
+    return ["| " + " | ".join(header) + " |", "|" + "---|" * len(header), *lines] if lines else []
+
+
 def render_fair(report: dict[str, Any], title: str, lead: list[str], source: str | None = None,
                 inputs: str | None = None) -> str:
     """A fair-measurement report: one table per FPR level (0.1 % first, the decisive one)."""
@@ -1424,6 +1457,15 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], source: str
     for fpr in GATE_FPRS[::-1]:
         lines += [f"## At {_fpr_label(fpr)} FPR" + (" (decisive)" if fpr == "0.001" else ""), "",
                   *fair_lines(report, fpr), ""]
+    real = {fpr: real_lines(report, fpr) for fpr in GATE_FPRS[::-1]}
+    if any(real.values()):
+        lines += ["## Real-world rows of the agent classes", "",
+                  "Hand-labelled real rules files, Copilot instruction and agent files, tool descriptions and memory "
+                  "conversations (benign) and poisoned artefacts quoted in public advisories and write-ups (positives), "
+                  "apart from the synthetic rows, at the cut of the tables above: TPR on every real positive (a "
+                  "positive never moves a cut), FPR on the real negatives of the measurement part. English only.", ""]
+        for fpr, table in real.items():
+            lines += [f"### At {_fpr_label(fpr)} FPR", "", *(table or ["No real row in the mix."]), ""]
     return "\n".join(lines)
 
 

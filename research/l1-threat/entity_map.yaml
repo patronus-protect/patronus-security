@@ -582,6 +582,58 @@ datasets:
       - {label: "unsafe agent action request", classes: [unsafe_action]}
       - {label: "clean twin, benign look-alike", benign: true}
   # ── train / dev ──────────────────────────────────────────────────────────────────────────────
+  - id: real_agent_quotes
+    name: Poisoned tool descriptions, rules files, config writes and memory writes quoted in public advisories and write-ups
+    source: per row (page URL and fetched document in research/l1-threat/labels/real_agent_quotes.jsonl)
+    licence: per row (MIT, ISC or quotation of a public write-up)
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "quoted poisoned tool description", classes: [tool_poisoning]}
+      - {label: "quoted rules file or config write", classes: [agent_config_tampering]}
+      - {label: "quoted memory write", classes: [memory_poisoning]}
+    note: real-world positives, hand-labelled per row; fetched by real_agent.py at evaluation time (span and SHA-256 per quote)
+  - id: real_cursorrules
+    name: awesome-cursorrules rules files (real Cursor rules files)
+    source: github:PatrickJS/awesome-cursorrules rules/*.mdc
+    licence: CC0-1.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "rules file", benign: true}
+    note: real agent-config files, hand-labelled per row (research/l1-threat/labels/real_agent.jsonl)
+  - id: real_copilot_customizations
+    name: awesome-copilot instructions and agent files
+    source: github:github/awesome-copilot instructions/*.instructions.md, agents/*.agent.md
+    licence: MIT
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "instructions or agent file", benign: true}
+    note: real agent-config files, hand-labelled per row (research/l1-threat/labels/real_agent.jsonl)
+  - id: real_bfcl_tools
+    name: BFCL live tool descriptions
+    source: github:ShishirPatil/gorilla berkeley-function-call-leaderboard BFCL_v4_live_simple/live_multiple
+    licence: Apache-2.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "tool description", benign: true}
+    note: user-contributed function definitions (no MCP server, so no repository of the MCP registry), hand-labelled per row
+  - id: real_bfcl_memory
+    name: BFCL memory conversations (user turns)
+    source: github:ShishirPatil/gorilla berkeley-function-call-leaderboard memory_prereq_conversation
+    licence: Apache-2.0
+    languages: [en]
+    split: train_dev
+    family: neutral
+    labels:
+      - {label: "user turn of a memory conversation", benign: true}
+    note: benchmark-authored conversations whose facts an agent stores in memory, hand-labelled per row
   - id: neuralchemy
     name: neuralchemy prompt-injection set
     source: hf:neuralchemy/Prompt-injection-dataset

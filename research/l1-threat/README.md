@@ -845,6 +845,26 @@ Quellen je Agenten-Klasse und Sprache, `exfiltration` DE 551. Owner-Befehl zum E
 anderen Generator-Sätze bleiben byte-gleich). Offen: eine nicht-generierte, lizenzgeprüfte Quelle mit gelabelten
 Positiven für diese Klassen auf der Dev-Seite; die bekannten offenen nativen Sätze (MCPTox, MalSkillBench, MemForm,
 autoredclaw, MCP-Registry) sind Holdout.
+E14b (2026-11-27, Quellensuche ohne Ergebnis): keine offene, lizenzgeprüfte, nicht generierte Quelle mit
+echten Positiven für die Agenten-Klassen gefunden; die geprüften Kandidaten (drei kleine Apache-2.0-Sätze, davon zwei
+aus Vorlagen bzw. selbst als synthetisch markiert, Scanner-Audits ohne Text, CC0-Rules-Dateien nur als Benign,
+CC-BY-NC-Teaser) mit Lizenz, Revision und Grund stehen in `scoreboard/gold.md` („Findings (E14b …)“);
+`resource_exhaustion` hat nur OverThink (MIT, eine Köder-Vorlage, nur EN); zweiter Suchdurchgang am selben Tag
+ohne neuen Treffer. Kein Satz registriert, keine Neubewertung; die Aufgabe braucht
+eine Owner-Entscheidung (handgelabelter Dev-Satz aus echten Dateien und Advisories oder Annahme der
+Drittanbieter-Sätze).
+E14b (2026-11-28, handgelabelter Satz aus echten Dateien und Advisories, Owner-Entscheidung): vier echte Benign-Sätze
+(`real_cursorrules` CC0, `real_copilot_customizations` MIT, `real_bfcl_tools` und `real_bfcl_memory` Apache-2.0; 678
+Agent-Config-, 1.094 Tool- und 323 Memory-Zeilen) und `real_agent_quotes` (57 wörtliche Zitate aus PoC-Repositories
+und Write-ups, je Zeile Quelle, Lizenz und Revision: `tool_poisoning` 17, `agent_config_tampering` 27,
+`memory_poisoning` 13, Ziel 30 je Klasse damit nicht erreicht), alle EN, alle handgelabelt, zweiter Durchgang über die
+feste 10-%-Stichprobe ohne Abweichung; Labels unter `labels/real_agent*.jsonl`, Werkzeug `scripts/l1_threat/real_agent.py`.
+Deutsch und `resource_exhaustion` bleiben synthetisch (keine echte offene Quelle). Kein geteiltes Repository mit den 44
+Holdout-Quellen der Entity-Map (`real_agent.py overlap`); die Holdout-Vorbereitung verwirft Holdout-Zeilen, die einer
+echten Zeile gleichen (auch den Zitaten). `gold.md` zählt die Zeilen als nativ; die fairen Berichte sind auf den Daten
+von E14 und E14b neu gerendert und zeigen die echten Zeilen getrennt („Real-world rows of the agent classes“: bei 0,1 %
+FPR Regeln allein 0/17, 1/27, 0/13, L1-Modell 0/17, 3/27, 0/13). Owner-Befehle, die die Sätze im geteilten `DEV`
+einfrieren, stehen in `scoreboard/gold.md`.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).

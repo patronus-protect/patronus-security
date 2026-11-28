@@ -79,6 +79,8 @@ BENIGN_CODE = _load_file("_ark_l1_dlp_benign_code", HERE.parent / "l1_dlp" / "be
 # Loaded under its own name: other script directories have an entity_map module too.
 entity_map = _load_file("_ark_l1_threat_entity_map", HERE / "entity_map.py")
 taxonomy = _load_file("_ark_l1_threat_taxonomy", HERE / "taxonomy.py")
+# The quoted real-world positives (``per_row``): the holdout drops what they hold, like a ready dev set.
+REAL_AGENT = _load_file("_ark_l1_threat_real_agent", HERE / "real_agent.py")
 
 REGISTRY_PATH = HERE / "datasets.yaml"
 SCHEMA = "ark-l1-threat-datasets-v1"
@@ -102,11 +104,12 @@ SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
 ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
 OPTIONAL_KEYS = {
-    "training", "internal", "pending", "dropped", "language", "language_field", "language_map", "language_cues", "cap", "keep",
+    "training", "internal", "pending", "dropped", "per_row", "language", "language_field", "language_map", "language_cues", "cap", "keep",
     "dedup_against", "records", "columns",
 }
-# Registry states besides a recipe: produced inside ARK, recipe not written yet, or left out for good (reason).
-STATES = ("internal", "pending", "dropped")
+# Registry states besides a recipe: produced inside ARK, recipe not written yet, left out for good (reason), or
+# rows that each carry their own source and are fetched by the tool the value names (real_agent.py quotes).
+STATES = ("internal", "pending", "dropped", "per_row")
 KEEP_KEYS = {"label", "pattern", "reason"}
 RULE_OPS = ("equals", "contains", "excludes", "matches", "not_matches", "at_least", "below")
 LIST_OPS = ("equals", "contains", "excludes", "matches", "not_matches")
@@ -227,8 +230,8 @@ def _check_recipe(where: str, entry: dict[str, Any], labels: set[str]) -> list[s
             problems.append(f"{where}: file {path!r} needs a SHA-256")
     if entry["format"] not in FORMATS:
         problems.append(f"{where}: format must be one of {FORMATS}")
-    if "records" in entry and (entry["format"] != "json" or not isinstance(entry["records"], str) or not entry["records"]):
-        problems.append(f"{where}: records needs format json and a field path ('.' for one record per file, '*' to expand)")
+    if "records" in entry and (entry["format"] not in ("json", "jsonl") or not isinstance(entry["records"], str) or not entry["records"]):
+        problems.append(f"{where}: records needs format json or jsonl and a field path ('.' for one record per document, '*' to expand)")
     if "columns" in entry and (entry["format"] != "csv" or not isinstance(entry["columns"], list) or not entry["columns"]
                                or not all(isinstance(name, str) and name for name in entry["columns"])):
         problems.append(f"{where}: columns needs format csv and a non-empty list of column names (for files without a header row)")
@@ -328,7 +331,7 @@ def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
             problems.append(f"{where}: an evaluation-only set (training: false) cannot be train_dev")
         kinds = [key for key in STATES if key in entry] + (["recipe"] if RECIPE_KEYS & set(entry) else [])
         if len(kinds) != 1:
-            problems.append(f"{where}: exactly one of internal, pending, dropped or a recipe (found {kinds or 'none'})")
+            problems.append(f"{where}: exactly one of internal, pending, dropped, per_row or a recipe (found {kinds or 'none'})")
             continue
         internal = dataset["family"] in INTERNAL_FAMILIES
         if internal != (kinds[0] == "internal"):
@@ -547,7 +550,9 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
         path = root / item["path"]
         if entry["format"] == "jsonl":
             with (gzip.open(path, "rt", encoding="utf-8") if path.suffix == ".gz" else path.open(encoding="utf-8")) as handle:
-                yield from (json.loads(line) for line in handle if line.strip())
+                lines = (json.loads(line) for line in handle if line.strip())
+                # With `records` every line is a document whose records sit at that path (BFCL: tools per line).
+                yield from (record for line in lines for record in _records(line, entry["records"])) if "records" in entry else lines
         elif entry["format"] == "json":
             data = json.loads(path.read_text(encoding="utf-8"))
             if "records" in entry:
@@ -690,6 +695,22 @@ def fetch(entry: dict[str, Any], sources: Path, offline: bool, download: Callabl
     return root
 
 
+def quote_rows(sources: Path, offline: bool, download: Callable[[str], bytes] = PRESIDIO.download) -> list[dict[str, Any]]:
+    """The quoted positives of ``real_agent.py``, their documents cached under ``sources`` like a set's files."""
+    cache = sources / REAL_AGENT.QUOTES_SET
+
+    def cached(url: str) -> bytes:
+        path = cache / hashlib.sha256(url.encode("utf-8")).hexdigest()
+        if not path.is_file():
+            if offline:
+                raise ValueError(f"{REAL_AGENT.QUOTES_SET}: {url} is not in the download cache (--offline)")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(download(url))
+        return path.read_bytes()
+
+    return REAL_AGENT.quote_rows(REAL_AGENT.load(REAL_AGENT.QUOTES_PATH), cached)[0]
+
+
 def cap_rows(rows: list[dict[str, Any]], cap: int, seed: str, dataset_id: str) -> list[dict[str, Any]]:
     """At most ``cap`` rows, stratified by (benign, classes, language); input order kept.
 
@@ -807,16 +828,19 @@ def build(
 
     members = [i for i, entry in entries.items() if datasets[i]["split"] == split and is_ready(entry)]
     skipped = {
-        i: entry.get("internal") or entry.get("pending") or f"dropped: {entry['dropped']}"
+        i: f"dropped: {entry['dropped']}" if "dropped" in entry else next(entry[state] for state in STATES if state in entry)
         for i, entry in entries.items()
         if datasets[i]["split"] == split and not is_ready(entry)
     }
     if not members:
         return None
-    # Cross-split: the holdout drops what a train_dev or report set already holds.
+    # Cross-split: the holdout drops what a train_dev or report set already holds, the quoted positives included.
     other = None
     if split == "holdout":
-        other = _index((row for i, e in entries.items() if datasets[i]["split"] != "holdout" and is_ready(e) for row in capped_of(i)), dedup)
+        quoted = REAL_AGENT.QUOTES_SET in entries and datasets[REAL_AGENT.QUOTES_SET]["split"] != "holdout"
+        quotes = quote_rows(sources, offline, download) if quoted else []
+        other = _index([*(row for i, e in entries.items() if datasets[i]["split"] != "holdout" and is_ready(e) for row in capped_of(i)),
+                        *quotes], dedup)
     # Holdout rows are only read by a call that prepares the holdout itself.
     visible = [
         i for i, entry in entries.items() if is_ready(entry) and (split == "holdout" or with_holdout or datasets[i]["split"] != "holdout")

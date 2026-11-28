@@ -444,6 +444,117 @@ carrier for each.
   unsafe_action DE 135), `approve_or_deny_de` 72 rows, `agent_scenarios` 1,229 rows (generator version 9 dropped the
   look-alikes of `kb_chunk`); the earlier reviews of those sets stand.
 
+## Findings (E14b: search for a real, non-generator source for the agent classes, 2026-11-27)
+
+No set added; the counts above are unchanged. The agent classes still have 0 native dev positives in either
+language (table "Dev targets per class and language"). Searched: the Hugging Face dataset index (tool poisoning, MCP
+security and injection, memory poisoning and injection, rules and agent-config files, CLAUDE.md and AGENTS.md, rug
+pull, unbounded consumption, agent loops, skills; second pass: AgentDojo, AgentPoison, overthinking and slowdown, sponge,
+indirect prompt injection, AGENTS.md) and the GitHub repositories the cards point to. Candidates opened,
+with licence and the revision looked at; none was registered:
+
+| Set | Licence, revision | Classes | Why not a native source |
+|---|---|---|---|
+| `fevziegeyurtsevenler/mcp-tool-poisoning` | Apache-2.0, `9b7a108` | tool_poisoning (exfiltration) | 25 rows, every benign description is the placeholder "<Tool> — performs its stated function." and every poisoned one "<Tool>. <instruction>": template output, and the benign side is no real counterpart |
+| `msaleme/mcp-tool-poisoning-fixtures` | Apache-2.0, `2cb0e0d` | tool_poisoning | 23 test fixtures of a red-team harness ("ground truth by construction"): 3 poisoned tool definitions, 2 drift versions, 5 encoded strings; EN only and far below a measurable count |
+| `vgudur/memory-poisoning-attack-corpus` | Apache-2.0, `02a9255` | memory_poisoning, exfiltration | 75 rows, all 75 marked `source: synthetic` by the set itself; mostly injection and secret strings, not memory writes |
+| `CieveHe/mcp-security-benchmark` | MIT, `1654086` | – | 14 probe cases against live servers and their scorecards; the tool surfaces of five real servers are benign, no poisoned description |
+| `MCPShield/mcp-security-scan-2026` | CC-BY-4.0, `69f4f62` | – | 1,900 repository grades from a regex and LLM-judge scanner; findings hold rule id and title only, no text, and the labels are a detector's output |
+| `fevziegeyurtsevenler/skills-in-the-wild` | CC-BY-4.0, `39633a5` | (agent_config_tampering, tool_poisoning) | real Skills, MCP and rules files from GitHub (3,168 files by its card), but only paths and 742 scanner findings ship; the evidence lines are almost all scanner false positives (Greek symbols in formulas, "developer mode" in docs), the files carry each repository's own licence, and the labels are a scanner's |
+| `justrunme/airlock-agent-security-corpus` | MIT, `a8a4af1` | (unsafe_action) | proposed Python and bash actions for a policy gate: unsafe actions, none of the five classes |
+| `PatrickJS/awesome-cursorrules` (GitHub) | CC0-1.0 | – | real rules files, usable as benign agent-config hard negatives, but no positive |
+| `emgena/*` (tool poisoning, rules tampering, agent loops, memory injection) | CC-BY-NC-4.0 | all five | non-commercial teasers: report only at best |
+| `invariantlabs-ai/mcp-injection-experiments` (GitHub) | none | tool_poisoning | no licence; three example servers |
+| `akumar0927/OverThink` | MIT, `8eaa479` | resource_exhaustion | the artefacts of the OverThink slowdown attack: 100 FreshQA and SQuAD questions with their real retrieved context (benign side) and 7 attack variants each that splice the same decoy MDP problem into that context; every positive is one decoy template placed by the attack's pipeline, EN only, about 36 KB per row: one source family of template output, not real-world agent traffic |
+| `pzarzycki/agents-claude-md-github-census-2026` | per repository, `7928665` | (agent_config_tampering) | census of the real root AGENTS.md and CLAUDE.md files of 6,006 popular GitHub repositories: benign agent-config counterparts (rows of MIT/Apache repositories only), but no positive and no label |
+| `nvidia/Nemotron-RL-Agentic-Indirect-Prompt-Injection-v1`, `thaki-AI/*trojan-return*` | CC-BY-4.0 | (instruction_injection, exfiltration) | generated agent environments and a seed-fixed template corpus (48 poisoned tool returns from six template families): synthetic, and tool returns are instruction_injection, not poisoned descriptions |
+| `lcycode/skill-injection` | gated, no licence on the card | (tool_poisoning) | access restricted; not usable without the owner's account and a licence |
+
+- **resource_exhaustion: no real-world source.** Outside the non-commercial teasers the only open set is OverThink
+  (MIT), whose positives are one decoy template spliced into real contexts by the attack; it could be registered as
+  a third-party EN attack source with its own base prompts as same-source benign counterparts, but it is template
+  output and closes neither DE nor the other four classes.
+- **Real-world positives for these classes are rare in the wild.** The one open audit of real agent extensions
+  (skills-in-the-wild) found no clear attack among its rules files; the open sets with real poisoned descriptions or
+  memory writes are the holdout sources (MCPTox, MalSkillBench, MemForm, autoredclaw, the MCP registry) and stay
+  there.
+- **What would close the gap (owner decision):** (1) a hand-labelled dev set built from real files: benign
+  counterparts from CC0 or MIT/Apache rules files and tool manifests (awesome-cursorrules, the MIT servers of
+  `modelcontextprotocol/servers`, whose descriptions may overlap the MCP registry holdout source, so leakage would
+  have to be checked), positives only from public incident reports and
+  advisories whose poisoned artefact is quoted verbatim (few per class, licence per advisory), or (2) accepting the
+  three Apache-2.0 sets above as third-party, non-ARK sources for tool_poisoning and memory_poisoning, knowing that
+  two of them are template or self-declared synthetic and that agent_config_tampering and resource_exhaustion stay
+  without one. Neither fits this task's accept as written.
+
+## Findings (E14b: hand-labelled real-world set for the agent classes, 2026-11-28)
+
+The owner chose the hand-labelled set over the third-party template sets. Five new train_dev sets, all English, all
+counted as native by `gold.py` (they are prepared corpora, not generator output); every row carries its source, and
+every label sits in `research/l1-threat/labels/` by text SHA-256, never with text:
+
+| Set | Licence, revision | Rows | Labels |
+|---|---|---|---|
+| `real_cursorrules` (PatrickJS/awesome-cursorrules `rules/*.mdc`) | CC0-1.0, `b044f95` | 257 rules files | benign: coding guidance 255, security guidance quoting attack strings 2 |
+| `real_copilot_customizations` (github/awesome-copilot instructions and agent files) | MIT, `93fc8b9` | 421 files | benign: coding guidance 191, agent profile 222, security guidance quoting attack strings 8 |
+| `real_bfcl_tools` (ShishirPatil/gorilla, BFCL live simple and live multiple) | Apache-2.0, `6ea5797` | 1,094 distinct tool descriptions | benign (user-contributed function definitions, no MCP server) |
+| `real_bfcl_memory` (gorilla, BFCL memory conversations) | Apache-2.0, `6ea5797` | 323 user turns | benign (users sharing facts for the agent to keep; written by the benchmark authors, not traffic) |
+| `real_agent_quotes` (per row, `real_agent_quotes.jsonl`) | per row: MIT 37, Apache-2.0 1, ISC 1, quotation of a public write-up or repository without licence 18 | 57 quotes | tool_poisoning 17, agent_config_tampering 27, memory_poisoning 13 |
+
+- **Benign per carrier family:** agent config 678, tool manifest 1,094, memory write 323 (target 300 each: met).
+- **Real positives in EN:** tool_poisoning 17, agent_config_tampering 27, memory_poisoning 13; the target of 30 per class
+  is not reached. Sources of the quotes: 12 repositories and 7 write-up pages (49 spans in GitHub files pinned to a
+  commit, 8 in HTML pages as served on 2026-11-28, whose rows drop out if the page changes). Concentration: 26 quotes
+  come from one red-team payload library (7h30th3r0n3/MindJack, MIT), so agent_config_tampering is dominated by one
+  author; the rest come from proof-of-concept MCP servers and labs (Invariant Labs, damn-vulnerable-MCP-server,
+  mcp-attack-labs, SlowMist MasterMCP, Repello, leash-poc, mcp-horror-stories, mcp-scan), the MINJA repository, a rules
+  file backdoor demo, two malicious SKILL.md demos, and Johann Rehberger's and Trail of Bits' write-ups. Several quotes
+  keep their source-code form (Python string concatenation, dict fragments): the carrier is code.
+- **Left out on review:** two quotes that inject through a tool result (instruction_injection, not a poisoned
+  description), an AgentPoison demonstration template with placeholders, and a blog copy of a tool description that the
+  set already holds from the repository.
+- **Second pass:** an independent agent labelled the fixed 10 % sample (SHA-256 of the text key modulo 10 is 0) without
+  the first labels: 213 rows (206 benign rows, 7 quotes), 0 disagreements
+  (`research/l1-threat/labels/real_agent_second_pass.jsonl`). One borderline note: a rules-file clause that denies the
+  existence of rules and memory was read as agent_config_tampering by both passes (memory_poisoning possible).
+- **Holdout overlap:** checked against all 44 holdout sources of `entity_map.yaml` with `real_agent.py overlap`: the 22
+  repositories and pages behind the real rows (label sources, quote pages and quoted documents) share none with a holdout
+  source (same GitHub or Hugging Face repository, an owner-only source such as `github:OWASP`, or the holdout set's name
+  in the locator for the free-text sources); in particular none is `modelcontextprotocol/registry`, the MCP registry
+  holdout source (the tool descriptions are BFCL function definitions, not MCP servers). Rows: preparing the holdout
+  drops every holdout row equal to or near (exact and MinHash) a row of a ready dev set, so of the four benign sets, and
+  since this round also of the quoted positives (`prepare_corpora.py` fetches the quotes into its download cache for
+  the holdout step), so no holdout row can share a row with these sets; the run that counts such drops sees the holdout
+  and is the owner's (`gold.py leakage` with `DEV/real` and `DEV/real_train_dev` among the dev directories).
+- **Counts in this report:** the five sets were frozen in a writable copy of the dev root (the shared one is read-only to
+  the runner) with the recipes of this branch: 4 sets by `prepare_corpora.py` (under `real_train_dev/`; the owner's
+  full preparation writes them to `train_dev/`) (dedup within and across these sets drops
+  60 BFCL tool descriptions and 7 rules files as near duplicates (MinHash): 250 rules files, 421 Copilot files, 1,034 tool
+  descriptions, 323 memory turns), the quotes by `real_agent.py fetch` (57 of 57 spans unchanged). Their 2,085 rows
+  are added to the dev summary as native rows (tables above: native EN positives tool_poisoning 17,
+  agent_config_tampering 27, memory_poisoning 13; 2,028 native benign rows), the other sets' counts unchanged. Spot-check
+  of the new sets: 50 rows each from `gold.py sample`, verdict from the hand label (and the second pass where the row is
+  in its sample): 250 rows, 0 wrong. Without the cross-set dedup against the other dev sets, which only the full
+  preparation does, the owner's freeze can drop a few more rows.
+- **Fair measurement on the real rows:** `scoreboard.py refresh` on the dev root with E14's generator families and these
+  sets (mix of 66,014 rows from 39 sources) reports the real rows apart from the synthetic ones in every fair report
+  (section "Real-world rows of the agent classes", rules only and L1 model at the cut of the tables). At 0.1 % FPR, EN:
+  tool_poisoning 17 real positives / 1,033 real negatives: rules 0.0 % TPR / 0.00 % FPR, L1 model 0.0 / 0.00;
+  agent_config_tampering 27 / 1,028: rules 3.7 / 0.00, L1 model 11.1 / 1.07; memory_poisoning 13 / 1,034: rules 0.0 /
+  0.00, L1 model 0.0 / 0.00. At 1 % FPR the L1 model reaches 25.9 % on agent_config_tampering at 9.73 % FPR on the real
+  config files. On the synthetic rows of the same mix rules only reach 16.6-26.7 % and the L1 model 39.9-63.0 % TPR at
+  0.1 % FPR (all languages): the rules and models fit the generator phrasing, not real poisoned artefacts, and the real
+  config files are hard negatives the models had not seen.
+- **Gaps:** German has no real source for these classes (the open repositories and write-ups are English; a translation
+  would not be real data), and resource_exhaustion has none (OverThink is one decoy template, see the E14b search
+  above); both stay synthetic.
+- **Owner commands to freeze in the shared DEV** (the runner's copy is not visible to the gate): `python3
+  scripts/l1_threat/generators.py generate --dev-out DEV --only agent_casebook advisory_shapes` (E14), `python3
+  scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out HOLDOUT --force` (corpus generation 26; the holdout
+  step now also drops rows of the quotes), `python3 scripts/l1_threat/real_agent.py fetch --out DEV/real`, then
+  `gold.py summary`/`leakage` (with `DEV/real` among the dev directories)/`render` and `python3
+  scripts/l1_threat/scoreboard.py refresh`.
+
 ## How this report is made
 
 ```bash
