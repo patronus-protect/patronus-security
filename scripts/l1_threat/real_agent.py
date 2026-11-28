@@ -22,7 +22,7 @@ output.
 
     python3 scripts/l1_threat/real_agent.py check            # Exit 1 bei jedem Problem
     python3 scripts/l1_threat/real_agent.py counts           # rows per family and label
-    python3 scripts/l1_threat/real_agent.py agree --check SECOND_PASS.jsonl
+    python3 scripts/l1_threat/real_agent.py agree --check research/l1-threat/labels/real_agent_second_pass.jsonl
     python3 scripts/l1_threat/real_agent.py fetch --out DEV/real   # quoted positives, frozen
 """
 

@@ -853,6 +853,15 @@ CC-BY-NC-Teaser) mit Lizenz, Revision und Grund stehen in `scoreboard/gold.md` (
 ohne neuen Treffer. Kein Satz registriert, keine Neubewertung; die Aufgabe braucht
 eine Owner-Entscheidung (handgelabelter Dev-Satz aus echten Dateien und Advisories oder Annahme der
 Drittanbieter-Sätze).
+E14b (2026-11-28, handgelabelter Satz aus echten Dateien und Advisories, Owner-Entscheidung): vier echte Benign-Sätze
+(`real_cursorrules` CC0, `real_copilot_customizations` MIT, `real_bfcl_tools` und `real_bfcl_memory` Apache-2.0; 678
+Agent-Config-, 1.094 Tool- und 323 Memory-Zeilen) und `real_agent_quotes` (57 wörtliche Zitate aus PoC-Repositories
+und Write-ups, je Zeile Quelle, Lizenz und Revision: `tool_poisoning` 17, `agent_config_tampering` 27,
+`memory_poisoning` 13, Ziel 30 je Klasse damit nicht erreicht), alle EN, alle handgelabelt, zweiter Durchgang über die
+feste 10-%-Stichprobe ohne Abweichung; Labels unter `labels/real_agent*.jsonl`, Werkzeug `scripts/l1_threat/real_agent.py`.
+Deutsch und `resource_exhaustion` bleiben synthetisch (keine echte offene Quelle). Owner-Befehle zum Einfrieren und
+Messen stehen in `scoreboard/gold.md` („Findings (E14b: hand-labelled …)“); erst danach zeigt der faire Bericht die
+echten Zeilen getrennt.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).

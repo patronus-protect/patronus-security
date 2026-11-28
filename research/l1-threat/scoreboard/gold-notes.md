@@ -487,6 +487,53 @@ with licence and the revision looked at; none was registered:
   two of them are template or self-declared synthetic and that agent_config_tampering and resource_exhaustion stay
   without one. Neither fits this task's accept as written.
 
+## Findings (E14b: hand-labelled real-world set for the agent classes, 2026-11-28)
+
+The owner chose the hand-labelled set over the third-party template sets. Five new train_dev sets, all English, all
+counted as native by `gold.py` (they are prepared corpora, not generator output); every row carries its source, and
+every label sits in `research/l1-threat/labels/` by text SHA-256, never with text:
+
+| Set | Licence, revision | Rows | Labels |
+|---|---|---|---|
+| `real_cursorrules` (PatrickJS/awesome-cursorrules `rules/*.mdc`) | CC0-1.0, `b044f95` | 257 rules files | benign: coding guidance 255, security guidance quoting attack strings 2 |
+| `real_copilot_customizations` (github/awesome-copilot instructions and agent files) | MIT, `93fc8b9` | 421 files | benign: coding guidance 191, agent profile 222, security guidance quoting attack strings 8 |
+| `real_bfcl_tools` (ShishirPatil/gorilla, BFCL live simple and live multiple) | Apache-2.0, `6ea5797` | 1,094 distinct tool descriptions | benign (user-contributed function definitions, no MCP server) |
+| `real_bfcl_memory` (gorilla, BFCL memory conversations) | Apache-2.0, `6ea5797` | 323 user turns | benign (users sharing facts for the agent to keep; written by the benchmark authors, not traffic) |
+| `real_agent_quotes` (per row, `real_agent_quotes.jsonl`) | per row: MIT 37, Apache-2.0 1, ISC 1, quotation of a public write-up or repository without licence 18 | 57 quotes | tool_poisoning 17, agent_config_tampering 27, memory_poisoning 13 |
+
+- **Benign per carrier family:** agent config 678, tool manifest 1,094, memory write 323 (target 300 each: met).
+- **Real positives in EN:** tool_poisoning 17, agent_config_tampering 27, memory_poisoning 13; the target of 30 per class
+  is not reached. Sources of the quotes: 12 repositories and 7 write-up pages (49 spans in GitHub files pinned to a
+  commit, 8 in HTML pages as served on 2026-11-28, whose rows drop out if the page changes). Concentration: 26 quotes
+  come from one red-team payload library (7h30th3r0n3/MindJack, MIT), so agent_config_tampering is dominated by one
+  author; the rest come from proof-of-concept MCP servers and labs (Invariant Labs, damn-vulnerable-MCP-server,
+  mcp-attack-labs, SlowMist MasterMCP, Repello, leash-poc, mcp-horror-stories, mcp-scan), the MINJA repository, a rules
+  file backdoor demo, two malicious SKILL.md demos, and Johann Rehberger's and Trail of Bits' write-ups. Several quotes
+  keep their source-code form (Python string concatenation, dict fragments): the carrier is code.
+- **Left out on review:** two quotes that inject through a tool result (instruction_injection, not a poisoned
+  description), an AgentPoison demonstration template with placeholders, and a blog copy of a tool description that the
+  set already holds from the repository.
+- **Second pass:** an independent agent labelled the fixed 10 % sample (SHA-256 of the text key modulo 10 is 0) without
+  the first labels: 213 rows (206 benign rows, 7 quotes), 0 disagreements
+  (`research/l1-threat/labels/real_agent_second_pass.jsonl`). One borderline note: a rules-file clause that denies the
+  existence of rules and memory was read as agent_config_tampering by both passes (memory_poisoning possible).
+- **Holdout overlap:** the four benign sets are prepared corpora, so preparing the holdout drops every holdout row equal
+  to or near a row of theirs (exact and MinHash), as for every train_dev set; the quotes are a dev directory that
+  `gold.py leakage` compares with the holdout. No repository is shared with the MCP registry source: the tool
+  descriptions come from BFCL function definitions, not from MCP servers, and no quote comes from
+  `modelcontextprotocol/registry` or from any holdout source of `entity_map.yaml` (MCPTox, MalSkillBench,
+  MaliciousSkillBench, MemForm, AutoRedClaw, agentapprove, NVD, OWASP, MITRE, the Radware IPI collection). The leakage
+  run itself needs the holdout and is part of the owner commands below.
+- **Gaps:** German has no real source for these classes (the open repositories and write-ups are English; a translation
+  would not be real data), and resource_exhaustion has none (OverThink is one decoy template, see the E14b search
+  above); both stay synthetic.
+- **Owner commands to freeze and measure:** `python3 scripts/l1_threat/generators.py generate --dev-out DEV --only
+  agent_casebook advisory_shapes` (E14), `python3 scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out
+  HOLDOUT --force` (corpus generation 26), `python3 scripts/l1_threat/real_agent.py fetch --out DEV/real`, then
+  `gold.py summary`/`leakage`/`render` and `python3 scripts/l1_threat/scoreboard.py refresh`: the fair reports then
+  carry the section "Real-world rows of the agent classes" (rules only and L1 model, TPR on the real positives, FPR on
+  the real benign rows).
+
 ## How this report is made
 
 ```bash

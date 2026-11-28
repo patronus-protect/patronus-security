@@ -66,6 +66,15 @@ def _quote(text: str, document: str, **change):
     return {**quote, **change}
 
 
+def test_checked_in_second_pass_covers_the_fixed_sample():
+    quotes = MODULE.load(MODULE.QUOTES_PATH)
+    first = MODULE.load() + [{"sha256": quote["sha256"], "label": quote["class"]} for quote in quotes]
+    second = MODULE.load(MODULE.LABELS_PATH.with_name("real_agent_second_pass.jsonl"))
+    result = MODULE.agree(first, second)
+    assert result["missing"] == [] and result["checked"] == result["sample"] > 0
+    assert all(set(row) == {"sha256", "label"} for row in second)
+
+
 def test_checked_in_quotes_hold_no_text_and_pass_the_check():
     quotes = MODULE.load(MODULE.QUOTES_PATH)
     assert quotes and MODULE.check_quotes(quotes) == []

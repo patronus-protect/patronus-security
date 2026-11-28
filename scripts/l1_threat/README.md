@@ -141,6 +141,8 @@ Quellfamilie und die Bedeutung der Labels stehen nur in der Entity-Map. Die Roll
 ist immer `report`. Sätze aus ARK selbst (`ark_blind`, `ark_authored`) sind `internal`. Holdout-Rezepte
 stehen nie im Repo: Sie sind `pending` und kommen beim Holdout-Setup über `--overlay` aus
 `~/ark-threat/holdout`.
+Sätze, deren Zeilen je eine eigene Quelle tragen (wörtliche Zitate aus Advisories), stehen als `per_row` mit dem
+Werkzeug, das sie holt (`real_agent.py`).
 Ein Satz, der dauerhaft draußen bleibt, steht als `dropped` mit Grund (Lizenz, Qualität, Überlappung mit dem
 Holdout) in der Registry; er wird nie geholt und kann nicht per Overlay ersetzt werden.
 
@@ -189,6 +191,33 @@ mindestens drei Sätzen und keine Zeile mit unbekannter Kontamination. Braucht
 `numpy` und PyYAML; Downloads und Parquet-Leser kommen aus `scripts/l1_presidio/prepare_corpora.py`.
 
 Tests: `scripts/tests/test_l1_threat_prepare_corpora.py`.
+
+## Echte Dev-Sätze der Agenten-Klassen
+
+`real_agent.py` prüft die Handlabels der echten Dev-Sätze für `tool_poisoning`, `agent_config_tampering` und
+`memory_poisoning` und holt deren Positive. Benign sind echte Rules-Dateien (`real_cursorrules`, CC0), Copilot-
+Instructions und Agent-Dateien (`real_copilot_customizations`, MIT), BFCL-Tool-Beschreibungen und -Memory-Gespräche
+(`real_bfcl_tools`, `real_bfcl_memory`, Apache-2.0): gewöhnliche Rezepte in `datasets.yaml`, Label je Text-SHA-256 in
+`research/l1-threat/labels/real_agent.jsonl` (Satz, Datei an der gepinnten Revision, Trägerfamilie, Label, Grund; nie
+Text). Positive sind vergiftete Tool-Beschreibungen, Rules-Dateien, Config- und Memory-Schreibvorgänge, wörtlich zitiert
+aus öffentlichen Advisories, Write-ups und PoC-Repositories: `research/l1-threat/labels/real_agent_quotes.jsonl` nennt
+je Zitat Seite, geholtes Dokument (GitHub-Dateien an einem Commit), Lizenz, Commercial-Flag, Klasse, Grund, Spanne und
+SHA-256, nie das Zitat. In `datasets.yaml` steht der Satz `real_agent_quotes` im Zustand `per_row` (jede Zeile hat
+ihre eigene Quelle); `fetch` schneidet die Spannen zur Auswertungszeit aus, verwirft Zitate, deren Seite sich
+geändert hat (`dropped.changed`), und friert ein natives Dev-Verzeichnis ein, das `gold.py` und `scoreboard.py` wie
+vorbereitete Korpora lesen. Ein zweiter, unabhängiger Durchgang labelt die feste 10-%-Stichprobe (SHA-256 des
+Textschlüssels modulo 10 ist 0); `agree` nennt Abweichungen. `scoreboard.py fair` berichtet diese Zeilen getrennt
+von den synthetischen („Real-world rows of the agent classes“: TPR auf allen echten Positiven, FPR auf den echten
+Negativen des Mess-Teils, Regeln allein und L1-Modell).
+
+```bash
+python3 scripts/l1_threat/real_agent.py check            # Exit 1 bei jedem Problem
+python3 scripts/l1_threat/real_agent.py counts
+python3 scripts/l1_threat/real_agent.py agree --check research/l1-threat/labels/real_agent_second_pass.jsonl
+python3 scripts/l1_threat/real_agent.py fetch --out DEV/real
+```
+
+Tests: `scripts/tests/test_l1_threat_real_agent.py`.
 
 ## Gold-Validierung
 
