@@ -865,6 +865,18 @@ echten Zeile gleichen (auch den Zitaten). `gold.md` zählt die Zeilen als nativ;
 von E14 und E14b neu gerendert und zeigen die echten Zeilen getrennt („Real-world rows of the agent classes“: bei 0,1 %
 FPR Regeln allein 0/17, 1/27, 0/13, L1-Modell 0/17, 3/27, 0/13). Owner-Befehle, die die Sätze im geteilten `DEV`
 einfrieren, stehen in `scoreboard/gold.md`.
+T39 (2026-11-28, Regeln aus echten Advisory-Artefakten): die handgelabelten echten Zeilen (2.095 Benign + 57 Zitate) sind
+einmal fest in `train` (1.079) und `evaluation` (1.073) geteilt, geschichtet nach Label und Satz, innerhalb nach Quelle
+(`real_agent.py split`, `labels/real_agent_split.jsonl`; Test rot bei Überschneidung oder veralteter Teilung). Der
+Evaluationsteil bewegt keinen Schnitt (`scoreboard.py` nimmt ihn aus den Kalibrier-Negativen und berichtet die echten Zeilen
+nur auf ihm). Elf neue Punkte-Regeln (`own_carrier`, `own_phrase`) in neun neuen Familien plus `permission_widening`, nur
+aus den Train-Zitaten abgeleitet; `memory_poisoning` läuft jetzt auch über die Threat-Regeln. Gemessen mit
+`threat_cascade` (Regeln allein = `flagged`; L1-Modell = `cascade-config.json`, unverändert, nicht neu trainiert):
+Evaluationsteil Regeln allein `tool_poisoning` 1/8, `agent_config_tampering` 1/13, `memory_poisoning` 1/6 bei FPR 0/1.035,
+1/1.030 (ein `memory_poisoning`-Zitat), 0/1.037; L1-Modell 1/8, 3/13, 1/6 bei FPR 0,19 %, 0,58 %, 0,00 % (über dem Budget:
+die Modelle sind nicht mit den echten Benign-Train-Zeilen neu trainiert). Train-Teil Regeln 8/9, 7/14, 6/7 bei 0 FP. Auf dem
+ganzen DEV (88.677 Zeilen) erzeugen die neuen Regeln keinen neuen FP und 15 neue TP (`tool_poisoning`, generiert). Offen:
+Neutraining der drei L1-Modelle mit den echten Benign-Train-Zeilen und der Scoreboard-Refresh.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).
