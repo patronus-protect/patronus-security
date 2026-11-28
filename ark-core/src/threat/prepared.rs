@@ -12,7 +12,10 @@ pub struct NativeText<'a> {
     lower: OnceLock<MatchText>,
     windows: OnceLock<Vec<(Range<usize>, MatchText)>>,
     hidden: OnceLock<Vec<HiddenView<'a>>>,
-    anchors: OnceLock<crate::detectors::lexical_anchors::AnchorPresence>,
+    anchors: OnceLock<(
+        crate::detectors::lexical_anchors::AnchorPresence,
+        Option<Vec<crate::detectors::lexical_anchors::AnchorHit>>,
+    )>,
     structure: OnceLock<crate::detectors::structure::Fields>,
     sql: OnceLock<Vec<crate::detectors::dlp::sql_rows::Statement>>,
     sql_dump: OnceLock<bool>,
@@ -47,10 +50,43 @@ impl<'a> NativeText<'a> {
     }
 
     pub fn anchors(&self) -> &crate::detectors::lexical_anchors::AnchorPresence {
+        &self.located_anchors().0
+    }
+
+    /// The one Aho-Corasick pass of the anchor words over the lowercase view:
+    /// which anchors the text holds and where (byte ranges of the original
+    /// text, sorted by end).
+    fn located_anchors(
+        &self,
+    ) -> &(
+        crate::detectors::lexical_anchors::AnchorPresence,
+        Option<Vec<crate::detectors::lexical_anchors::AnchorHit>>,
+    ) {
         self.anchors.get_or_init(|| {
-            crate::detectors::lexical_anchors::LexicalAnchorScanner::shared()
-                .presence_lowercase(&self.lower().text)
+            let lower = self.lower();
+            let (presence, mut hits) =
+                crate::detectors::lexical_anchors::LexicalAnchorScanner::shared()
+                    .located_lowercase(&lower.text);
+            for hit in hits.iter_mut().flatten() {
+                hit.range = lower.original(hit.range.clone());
+            }
+            (presence, hits)
         })
+    }
+
+    /// The anchors whose words lie inside `window` (original bytes), from the
+    /// same pass as [`Self::anchors`]: a rule match inside the window holds its
+    /// required literals there. `None` when the pass has no positions (a long
+    /// s in the text); the whole-text presence then stands for every window.
+    pub fn anchors_within(
+        &self,
+        window: Range<usize>,
+    ) -> Option<crate::detectors::lexical_anchors::AnchorPresence> {
+        let hits = self.located_anchors().1.as_deref()?;
+        Some(
+            crate::detectors::lexical_anchors::LexicalAnchorScanner::shared()
+                .presence_within(hits, window),
+        )
     }
 
     /// Whether the text's anchors allow a rule behind `gate`: the one

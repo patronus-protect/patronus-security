@@ -2,7 +2,7 @@
 //! Independent lexical signals, also reused by necessary-condition rule gates.
 use aho_corasick::AhoCorasick;
 use serde::Deserialize;
-use std::{collections::HashMap, sync::OnceLock};
+use std::{collections::HashMap, ops::Range, sync::OnceLock};
 
 #[derive(Debug, Deserialize)]
 pub struct LexicalAnchor {
@@ -41,15 +41,30 @@ pub struct LexicalAnchorScanner {
     definitions: Vec<LexicalAnchor>,
     matcher: AhoCorasick,
     pattern_anchors: Vec<Vec<usize>>,
+    word_indices: HashMap<String, usize>,
+}
+
+/// One occurrence of an anchor word.
+#[derive(Debug, Clone)]
+pub struct AnchorHit {
+    pub range: Range<usize>,
+    pattern: usize,
 }
 
 pub struct AnchorPresence {
     present: Vec<bool>,
+    /// Per word of the automaton (lexicon words and rule words) whether it
+    /// occurs.
+    words: Vec<bool>,
 }
 
 impl AnchorPresence {
     pub fn contains_index(&self, index: usize) -> bool {
         self.present[index]
+    }
+
+    pub fn contains_word(&self, word: usize) -> bool {
+        self.words[word]
     }
 }
 
@@ -102,8 +117,18 @@ impl LexicalAnchorScanner {
                     }
                 }
             }
+            // The necessary words of the threat rules ride on the same pass as
+            // gates only: they belong to no anchor.
+            for word in crate::detectors::threat::rule_words().iter().flatten() {
+                if !indices.contains_key(word) {
+                    indices.insert(word.clone(), words.len());
+                    words.push(word.clone());
+                    pattern_anchors.push(Vec::new());
+                }
+            }
             Self {
                 matcher: AhoCorasick::new(words).expect("valid anchor automaton"),
+                word_indices: indices,
                 definitions,
                 pattern_anchors,
             }
@@ -116,6 +141,11 @@ impl LexicalAnchorScanner {
 
     pub fn pattern_count(&self) -> usize {
         self.pattern_anchors.len()
+    }
+
+    /// The automaton's index of the folded `word`, if it is one of its words.
+    pub fn word_index(&self, word: &str) -> Option<usize> {
+        self.word_indices.get(word).copied()
     }
 
     /// Lowercase once, then find all lexical signals. Substrings are signals too.
@@ -135,22 +165,65 @@ impl LexicalAnchorScanner {
     }
 
     pub fn presence_lowercase(&self, text: &str) -> AnchorPresence {
+        self.scan_located(text, false).0
+    }
+
+    /// The presence of [`Self::presence_lowercase`] and, from the same pass,
+    /// where each anchor word occurs: byte ranges of `text` with the word's
+    /// pattern, sorted by end. Without positions when the text holds a long s
+    /// (its folding shifts the offsets).
+    pub fn located_lowercase(&self, text: &str) -> (AnchorPresence, Option<Vec<AnchorHit>>) {
+        self.scan_located(text, true)
+    }
+
+    fn scan_located(&self, text: &str, locate: bool) -> (AnchorPresence, Option<Vec<AnchorHit>>) {
         // Unicode regex case folding includes long s. Lowercase alone does not;
         // normalize this rare variant without allocating on ordinary input.
         let folded;
-        let text = if text.contains('ſ') {
+        let (text, locate) = if text.contains('ſ') {
             folded = text.replace('ſ', "s");
-            &folded
+            (folded.as_str(), false)
         } else {
-            text
+            (text, locate)
         };
         let mut present = vec![false; self.definitions.len()];
+        let mut words = vec![false; self.pattern_anchors.len()];
+        let mut hits = Vec::new();
         for hit in self.matcher.find_overlapping_iter(text) {
-            for &anchor in &self.pattern_anchors[hit.pattern().as_usize()] {
+            let pattern = hit.pattern().as_usize();
+            words[pattern] = true;
+            for &anchor in &self.pattern_anchors[pattern] {
                 present[anchor] = true;
             }
+            if locate {
+                hits.push(AnchorHit {
+                    range: hit.range(),
+                    pattern,
+                });
+            }
         }
-        AnchorPresence { present }
+        hits.sort_unstable_by_key(|hit| hit.range.end);
+        (AnchorPresence { present, words }, locate.then_some(hits))
+    }
+
+    /// The anchors of the `hits` (of [`Self::located_lowercase`]) that lie
+    /// inside `window`.
+    pub fn presence_within(&self, hits: &[AnchorHit], window: Range<usize>) -> AnchorPresence {
+        let mut present = vec![false; self.definitions.len()];
+        let mut words = vec![false; self.pattern_anchors.len()];
+        let first = hits.partition_point(|hit| hit.range.end <= window.start);
+        for hit in hits[first..]
+            .iter()
+            .take_while(|hit| hit.range.end <= window.end)
+        {
+            if hit.range.start >= window.start {
+                words[hit.pattern] = true;
+                for &anchor in &self.pattern_anchors[hit.pattern] {
+                    present[anchor] = true;
+                }
+            }
+        }
+        AnchorPresence { present, words }
     }
 
     pub fn indices_in_literal(&self, literal: &str) -> Vec<usize> {

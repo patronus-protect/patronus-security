@@ -152,7 +152,10 @@ struct CompiledRule {
     /// off, or of a class no engine runs, costs no memory
     /// ([`ThreatPipeline::prepare`]).
     regexes: OnceLock<RuleRegexes>,
-    anchor_gate: super::anchor_gate::AnchorGate,
+    /// The rule's anchor gate and its necessary words: the literal
+    /// prefilter of the text and of each window, from the one Aho-Corasick
+    /// pass of the anchor automaton.
+    prefilter: super::anchor_gate::AnchorGate,
     points: RulePoints,
 }
 
@@ -205,6 +208,23 @@ impl CompiledRule {
     }
 }
 
+/// Per rule of the catalog (in its order) the folded words one of which every
+/// match holds; empty when the rule has no such set. They join the anchor
+/// automaton, so this reads the patterns only, not [`catalog`].
+pub(crate) fn rule_words() -> &'static [Vec<String>] {
+    static WORDS: OnceLock<Vec<Vec<String>>> = OnceLock::new();
+    WORDS.get_or_init(|| {
+        let catalog: Catalog = serde_json::from_str(RULES).expect("valid Threat L1 catalog");
+        catalog
+            .rules
+            .iter()
+            .map(|rule| {
+                super::anchor_gate::necessary_words(&rule.pattern, true).unwrap_or_default()
+            })
+            .collect()
+    })
+}
+
 fn catalog() -> &'static (String, Vec<CompiledRule>) {
     static COMPILED: OnceLock<(String, Vec<CompiledRule>)> = OnceLock::new();
     COMPILED.get_or_init(|| {
@@ -214,9 +234,14 @@ fn catalog() -> &'static (String, Vec<CompiledRule>) {
         let rules = catalog
             .rules
             .into_iter()
-            .map(|rule| {
+            .zip(rule_words())
+            .map(|(rule, words)| {
                 assert!(ids.insert(rule.id.clone()), "duplicate Threat rule");
                 let anchor_gate = super::anchor_gate::AnchorGate::regex(&rule.pattern, true);
+                let prefilter = super::anchor_gate::AnchorGate::all(vec![
+                    anchor_gate.clone(),
+                    super::anchor_gate::AnchorGate::words(words),
+                ]);
                 let points = match &rule.points {
                     Some(spec) => {
                         assert!((1..=100).contains(&spec.base_score));
@@ -255,7 +280,7 @@ fn catalog() -> &'static (String, Vec<CompiledRule>) {
                     category,
                     rule,
                     regexes: OnceLock::new(),
-                    anchor_gate,
+                    prefilter,
                     points,
                 }
             })
@@ -330,7 +355,7 @@ impl ThreatPipeline {
         let mut enabled: Vec<_> = rules
             .iter()
             .filter(|r| {
-                r.category == category && allows_rule(&r.rule.id) && prepared.admits(&r.anchor_gate)
+                r.category == category && allows_rule(&r.rule.id) && prepared.admits(&r.prefilter)
             })
             .map(|r| (r, r.regexes()))
             .collect();
@@ -369,7 +394,17 @@ impl ThreatPipeline {
             }
             let window = &text[window_start..window_end];
             let ascii = window.is_ascii();
+            // The anchor words of the window, from the text's one
+            // Aho-Corasick pass: a rule whose required literals are not in
+            // this window cannot match in it and does not read it.
+            let anchors = prepared.anchors_within(window_start..window_end);
             for &(compiled, regexes) in &enabled {
+                if anchors
+                    .as_ref()
+                    .is_some_and(|anchors| !compiled.prefilter.allows(anchors))
+                {
+                    continue;
+                }
                 let mut from = 0;
                 while let Some(captures) = regexes.captures_at(window, from, ascii) {
                     let m = captures.get(0).unwrap();
@@ -2063,6 +2098,74 @@ mod tests {
     }
 
     #[test]
+    fn every_rule_has_a_literal_prefilter_on_the_shared_pass() {
+        let (_, rules) = catalog();
+        let ungated: Vec<_> = rules
+            .iter()
+            .filter(|r| r.prefilter.is_unconditional())
+            .map(|r| r.rule.id.as_str())
+            .collect();
+        assert!(ungated.is_empty(), "{ungated:?}");
+        // Rules without a lexicon anchor are gated by their necessary words.
+        for id in [
+            "ark.threat.hc_howto_hazard",
+            "ark.threat.ex_send_directive",
+            "ark.threat.ex_dns_channel",
+        ] {
+            let index = rules.iter().position(|r| r.rule.id == id).unwrap();
+            assert!(!rule_words()[index].is_empty(), "{id}");
+        }
+    }
+
+    /// Every match of a rule lies in a range whose anchor words, from the
+    /// text's one Aho-Corasick pass, admit the rule: skipping a window
+    /// without them never loses a match. Goldens with umlauts, a long s and
+    /// a size-changing lowercase letter around them, after 9 KiB of prose.
+    #[test]
+    fn the_window_prefilter_admits_every_match() {
+        let goldens =
+            include_str!("../../../../python/patronus_ark/benchmark_data/threat_l1.jsonl");
+        let prose = "Das Wetter war mild. The weather was fine. ".repeat(220);
+        let texts: Vec<String> = goldens
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .flat_map(|row| {
+                let text = row["text"].as_str().unwrap();
+                [
+                    format!("{prose}Grüße – {text}"),
+                    format!("İ {text} Kelvin \u{212a}"),
+                    format!("ſ {text}"),
+                ]
+            })
+            .collect();
+        let (_, rules) = catalog();
+        let mut checked = 0;
+        for text in &texts {
+            let prepared = NativeText::new(text);
+            for rule in rules {
+                for m in rule.regexes().regex.find_iter(text) {
+                    assert!(
+                        prepared.admits(&rule.prefilter),
+                        "{} on {text:.80}",
+                        rule.rule.id
+                    );
+                    if let Some(anchors) = prepared.anchors_within(m.range()) {
+                        assert!(
+                            rule.prefilter.allows(&anchors),
+                            "{} at {:?}: {}",
+                            rule.rule.id,
+                            m.range(),
+                            m.as_str()
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(checked > 100, "{checked}");
+    }
+
+    #[test]
     fn every_rule_belongs_to_one_attack_class_and_runs_only_there() {
         let (_, rules) = catalog();
         assert!(rules
@@ -2274,7 +2377,7 @@ mod tests {
             .iter()
             .find(|r| r.rule.id == finding["rule_id"])
             .unwrap();
-        let anchors = compiled.anchor_gate.required_anchors();
+        let anchors = compiled.prefilter.required_anchors();
         assert!(anchors > 0);
         assert_eq!(finding["validator_strength"], json!("none"));
         assert_eq!(finding["context"]["anchors"], json!(anchors));
@@ -2809,9 +2912,9 @@ mod tests {
             ),
         ] {
             let rule = rules.iter().find(|r| r.rule.id == id).unwrap();
-            assert!(!rule.anchor_gate.is_unconditional(), "{id}");
+            assert!(!rule.prefilter.is_unconditional(), "{id}");
             assert!(
-                !rule.anchor_gate.allows(NativeText::new(without).anchors()),
+                !rule.prefilter.allows(NativeText::new(without).anchors()),
                 "{id}: {without}"
             );
         }
@@ -2993,9 +3096,9 @@ mod tests {
             ),
         ] {
             let rule = rules.iter().find(|r| r.rule.id == id).unwrap();
-            assert!(!rule.anchor_gate.is_unconditional(), "{id}");
+            assert!(!rule.prefilter.is_unconditional(), "{id}");
             assert!(
-                !rule.anchor_gate.allows(NativeText::new(without).anchors()),
+                !rule.prefilter.allows(NativeText::new(without).anchors()),
                 "{id}: {without}"
             );
         }
@@ -3324,7 +3427,7 @@ mod tests {
             .find(|r| r.rule.id == "ark.threat.ac_config_write")
             .unwrap();
         // The agent config path literals gate the regex.
-        assert!(!rule.anchor_gate.is_unconditional());
+        assert!(!rule.prefilter.is_unconditional());
         for text in [
             "tool: shell\nargs: sed -i 's/require_approval = true/require_approval = false/' ~/.config/ops_agent/config.toml",
             "tool: shell\nargs: {\"cmd\": [\"bash\", \"-c\", \"printf '\\\\n[sandbox]\\\\nenabled = false\\\\n' >> ~/.codex/config.toml\"]}",
@@ -3538,9 +3641,9 @@ mod tests {
             ),
         ] {
             let rule = rules.iter().find(|r| r.rule.id == id).unwrap();
-            assert!(!rule.anchor_gate.is_unconditional(), "{id}");
+            assert!(!rule.prefilter.is_unconditional(), "{id}");
             assert!(
-                !rule.anchor_gate.allows(NativeText::new(without).anchors()),
+                !rule.prefilter.allows(NativeText::new(without).anchors()),
                 "{id}: {without}"
             );
         }
@@ -4666,21 +4769,18 @@ mod tests {
     #[test]
     fn exhaustion_rules_are_gated_by_their_anchors() {
         let (_, rules) = catalog();
-        // re_recursive_spawn and re_tool_flood have no anchor gate yet ("for
-        // each" and "as many" span a whitespace class).
-        for rule in rules.iter().filter(|r| {
-            r.rule.class_name == "resource_exhaustion"
-                && !["ark.threat.re_recursive_spawn", "ark.threat.re_tool_flood"]
-                    .contains(&r.rule.id.as_str())
-        }) {
+        for rule in rules
+            .iter()
+            .filter(|r| r.rule.class_name == "resource_exhaustion")
+        {
             let id = &rule.rule.id;
-            assert!(!rule.anchor_gate.is_unconditional(), "{id}");
+            assert!(!rule.prefilter.is_unconditional(), "{id}");
             for prose in [
                 "The weather was mild and sunny today.",
                 "Das Wetter war heute mild und sonnig.",
             ] {
                 assert!(
-                    !rule.anchor_gate.allows(NativeText::new(prose).anchors()),
+                    !rule.prefilter.allows(NativeText::new(prose).anchors()),
                     "{id}: {prose}"
                 );
             }
@@ -4788,7 +4888,7 @@ mod tests {
             .collect();
         assert_eq!(toxic.len(), 7);
         for rule in toxic {
-            assert!(!rule.anchor_gate.is_unconditional(), "{}", rule.rule.id);
+            assert!(!rule.prefilter.is_unconditional(), "{}", rule.rule.id);
         }
         for (text, rule) in [
             (
