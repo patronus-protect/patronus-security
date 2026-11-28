@@ -1110,6 +1110,7 @@ tasks:
   # model flags 9-10% of real benign agent configs and memory conversations at its 1% cut: rules and models
   # fit the synthetic generator families, not real files.
   - id: T39
+    status: done
     title: "Agent classes on real artefacts: on E14b's hand-labelled real rows tool_poisoning finds 0 of 17, memory_poisoning 0 of 13 and agent_config_tampering 1 of 27 at 0.1% FPR, and the L1 model flags 9-10% of real benign configs and memory conversations at 1% FPR; rules from the real advisory patterns and real benign files as hard negatives"
     type: recall-fix
     deps: []
