@@ -321,5 +321,18 @@ Qualität: `threat_cascade` (Release) von `main` (`6ebdbd4c`) und diesem Branch 
 Zeilen unter `$ARK_L1_DEV_DATA` (`train_dev`, `generated`, `translated`, `report`), mit der
 Regel-Konfiguration und mit `cascade-config.json`: 0 abweichende Vorhersagen (Scores, `flagged`,
 Kaskadenentscheidung; nur `ms` ausgenommen), je 12 290 markierte Zeilen. Holdout ist in der Sandbox
-nicht zugänglich; bei identischen Treffern ändert er sich nicht. `scripts/benchmark_injection_l1.py`
-ist in dieser Runde nicht gelaufen.
+nicht zugänglich; bei identischen Treffern ändert er sich nicht.
+
+`scripts/benchmark_injection_l1.py` (Injection-Pfad des Gateways über die Python-Bindung, Release,
+50 Läufe nach 10 Aufwärmläufen; nur Nachher, zwei Läufe; p50 / p95 ms):
+
+| Größe | gutartig (Lauf 1, 2) | mit eingebettetem Angriff (Lauf 1, 2) |
+|---|---:|---:|
+| 1 KiB | 0.305 / 0.434, 0.273 / 0.388 | 1.684 / 2.181, 1.655 / 2.011 |
+| 10 KiB | 1.161 / 1.753, 1.123 / 1.633 | 4.179 / 5.604, 3.137 / 3.602 |
+| 100 KiB | 9.704 / 13.014, 9.575 / 14.098 | 16.805 / 27.244, 17.055 / 23.288 |
+
+Gegen die T38-Zahlen (100 KiB gutartig 9.022 / 12.377, Angriff 16.792 / 22.604) im Rahmen der
+Streuung zwischen Läufen; ein Base-Lauf in derselben Sitzung fehlt. Der Injection-Pfad nutzt die
+Fenster-Prefilter nicht, zahlt aber den einen Anker-Pass mit Positionen und den zusätzlichen
+Wörtern der Threat-Regeln im Automaten; das gehört in der nächsten Runde gegen `main` gemessen.
