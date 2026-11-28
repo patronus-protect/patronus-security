@@ -1472,8 +1472,8 @@ def real_detect_lines(report: dict[str, Any]) -> list[str]:
     measurement part; empty when no system has such cells."""
     detect = report.get("detect") or {}
     systems = [(key, name) for key, name in REAL_SYSTEMS if detect.get(key)]
-    header = ["class", "lang", "real pos", "real neg"] + [f"{name} real TPR / FPR" for _, name in systems]
-    header += [f"{name} synthetic TPR / FPR" for _, name in systems]
+    header = ["class", "lang", "real pos", "real neg", "synthetic pos", "synthetic neg"]
+    header += [f"{name} {scope} TPR / FPR" for scope in ("real", "synthetic") for _, name in systems]
     lines = []
     for cls in REAL_CLASSES:
         for language in LANGUAGES:
@@ -1481,7 +1481,7 @@ def real_detect_lines(report: dict[str, Any]) -> list[str]:
             first = next((cell for cell in cells if cell is not None), None)
             if first is None:
                 continue
-            values = [cls, language, str(first["real"]["pos"]), str(first["real"]["neg"])]
+            values = [cls, language, *(str(first[name][n]) for name in ("real", "measurement") for n in ("pos", "neg"))]
             for name in ("real", "measurement"):
                 values += [NO_CLASS if cell is None else _tpr_fpr_text(cell[name]) for cell in cells]
             lines.append("| " + " | ".join(values) + " |")

@@ -430,6 +430,7 @@ def test_real_rows_are_reported_at_each_systems_own_detect_cut_next_to_the_synth
     assert "de" not in cells["tool_poisoning"]
     report = {"systems": {}, "detect": {"rules": cells, "l1_model": {}}}
     lines = MODULE.real_detect_lines(report)
-    assert lines[0] == "| class | lang | real pos | real neg | Rules only real TPR / FPR | Rules only synthetic TPR / FPR |"
-    assert "| tool_poisoning | en | 1 | 2 | 100.0 / 50.00 | 100.0 / 0.00 |" in lines
+    assert lines[0] == ("| class | lang | real pos | real neg | synthetic pos | synthetic neg | Rules only real TPR / FPR "
+                        "| Rules only synthetic TPR / FPR |")
+    assert "| tool_poisoning | en | 1 | 2 | 1 | 1 | 100.0 / 50.00 | 100.0 / 0.00 |" in lines
     assert MODULE.real_detect_lines({"systems": {}}) == []
