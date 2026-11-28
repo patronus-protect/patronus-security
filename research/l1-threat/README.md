@@ -875,8 +875,20 @@ aus den Train-Zitaten abgeleitet; `memory_poisoning` läuft jetzt auch über die
 Evaluationsteil Regeln allein `tool_poisoning` 1/8, `agent_config_tampering` 1/13, `memory_poisoning` 1/6 bei FPR 0/1.035,
 1/1.030 (ein `memory_poisoning`-Zitat), 0/1.037; L1-Modell 1/8, 3/13, 1/6 bei FPR 0,19 %, 0,58 %, 0,00 % (über dem Budget:
 die Modelle sind nicht mit den echten Benign-Train-Zeilen neu trainiert). Train-Teil Regeln 8/9, 7/14, 6/7 bei 0 FP. Auf dem
-ganzen DEV (88.677 Zeilen) erzeugen die neuen Regeln keinen neuen FP und 15 neue TP (`tool_poisoning`, generiert). Offen:
-Neutraining der drei L1-Modelle mit den echten Benign-Train-Zeilen und der Scoreboard-Refresh.
+ganzen DEV (88.677 Zeilen) erzeugen die neuen Regeln keinen neuen FP und 15 neue TP (`tool_poisoning`, generiert).
+Runde 2: die drei L1-Modelle sind neu trainiert — fester synthetischer Train-Split (`ablation.split_rows` über
+`MIX.FASTTEXT_TRAIN_SETS`, `--oversample-de 4`) unverändert, dazu die 1.012 echten Benign-Zeilen des Train-Teils
+(`real_agent.py train-rows`, `ablation.py calibrate --train-only-rows … --train-only-repeat 10`). `scoreboard.trained_keys`
+zählt sie als Trainingszeilen der drei Modelle (raus aus Kalibrierung und Messung; Test in `test_l1_threat_mix.py`). Mit
+einfacher Gewichtung lag die echte FPR am fairen Schnitt bei 1,06 / 3,11 / 1,74 %, mit Gewicht 10 (Refresh
+`fasttext-all-classes.md`, DEV vom 28.11.): Evaluationsteil bei 0,1 % FPR Regeln allein 1/8, 1/13, 1/6 bei FPR 0,00 / 0,10 /
+0,00 %, L1-Modell 1/8, 5/13, 1/6 bei FPR 0,87 / 4,17 / 0,19 % — über dem Budget. Am eigenen Detect-Schnitt der Modelle
+(synthetische Kalibrierhälfte) flaggen sie 1/1.035, 0/1.030, 0/1.037 echte Benign-Zeilen (vorher 11, 17, 3); der faire Schnitt
+kommt aber nur aus synthetischen Kalibrier-Negativen, die echten Konfigurationen nicht ähneln, und liegt tiefer. Synthetisch
+(Messteil, L1-Modell bei 0,1 %): `tool_poisoning` 91,3 / 0,15, `agent_config_tampering` 86,4 / 0,15, `memory_poisoning`
+93,3 / 0,09 (TPR / FPR); die übrigen Klassen sind zwischen beiden Refreshs gleich. Offen (BLOCKED): echte Benign-Zeilen in der
+Kalibrierung (z. B. eine Kalibrierhälfte des Train-Teils, die nicht trainiert) oder ein Schnitt je Träger, damit der faire
+Detect-Schnitt auf echten Dateien 0,1 % hält — beides ändert Teilung oder Kalibrierregel und braucht den Owner.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).
