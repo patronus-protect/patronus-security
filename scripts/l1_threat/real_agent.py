@@ -26,12 +26,14 @@ output.
     python3 scripts/l1_threat/real_agent.py fetch --out DEV/real   # quoted positives, frozen
     python3 scripts/l1_threat/real_agent.py overlap          # shared repositories with the holdout sources, exit 1 on one
     python3 scripts/l1_threat/real_agent.py split [--write]  # the frozen train/evaluation split, exit 1 if stale
+    python3 scripts/l1_threat/real_agent.py train-rows --dev DEV --out real_train.jsonl  # benign train rows
 
 ``research/l1-threat/labels/real_agent_split.jsonl`` freezes one split of every labelled row and quote into a
 ``train`` part (rules, model training) and an ``evaluation`` part (only measured, never used for rules, training
 or cuts): ``{"sha256", "part"}``. ``split_parts`` deals it once, stratified by label and set: per stratum the keys
 are ordered by source (repository or file) and a seeded SHA-256 and dealt alternately, train first, so every
-class and set sits in both parts in proportion and every source is spread over them.
+class and set sits in both parts in proportion and every source is spread over them. The benign rows of the train
+part (``train_benign_keys``) are negatives of the L1 models of the three agent classes.
 """
 
 from __future__ import annotations
@@ -138,6 +140,26 @@ def split_parts(rows: list[dict[str, Any]], quotes: list[dict[str, Any]]) -> lis
 def evaluation_keys(path: Path = SPLIT_PATH) -> frozenset[str]:
     """SHA-256 keys (of the raw row text) of the frozen evaluation part."""
     return frozenset(row["sha256"] for row in load(path) if row["part"] == "evaluation")
+
+
+def train_benign_keys(labels: Path = LABELS_PATH, split: Path = SPLIT_PATH) -> frozenset[str]:
+    """SHA-256 keys (of the raw row text) of the benign rows in the frozen train part: the real negatives the L1
+    models of the agent classes (``LABELS[1:]``) train on besides their synthetic train rows."""
+    train = {row["sha256"] for row in load(split) if row["part"] == "train"}
+    return frozenset(row["sha256"] for row in load(labels) if row["label"] == "benign" and row["sha256"] in train)
+
+
+def train_benign_rows(dev: Path, labels: Path = LABELS_PATH, split: Path = SPLIT_PATH) -> list[dict[str, Any]]:
+    """The rows of the real sets under the dev split root ``dev`` whose raw text is a benign row of the train part
+    (``train_benign_keys``), in set and file order."""
+    keys = train_benign_keys(labels, split)
+    sets = {row["dataset"] for row in load(labels)}
+    out = []
+    for path in sorted(dev.glob("*/*.jsonl")):
+        if path.stem in sets:
+            out += [row for row in load(path)
+                    if hashlib.sha256(str(row.get("text") or "").encode("utf-8")).hexdigest() in keys]
+    return out
 
 
 def repository(locator: str) -> str:
@@ -267,6 +289,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("overlap")
     split_parser = sub.add_parser("split")
     split_parser.add_argument("--write", action="store_true", help="freeze the split (only once, or after a relabel)")
+    train_parser = sub.add_parser("train-rows", help="the dev rows of the benign train part (model negatives)")
+    train_parser.add_argument("--dev", type=Path, required=True)
+    train_parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     rows, quotes = load(), load(QUOTES_PATH)
     if args.command == "check":
@@ -290,6 +315,12 @@ def main(argv: list[str] | None = None) -> int:
         stale = not SPLIT_PATH.is_file() or load(SPLIT_PATH) != parts
         print(json.dumps(Counter(row["part"] for row in parts)) + (" (stale: run split --write)" if stale else ""))
         return 1 if stale else 0
+    if args.command == "train-rows":
+        chosen = train_benign_rows(args.dev)
+        args.out.write_text("".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in chosen),
+                            encoding="utf-8")
+        print(f"{len(chosen)} benign train rows written to {args.out}")
+        return 0
     if args.command == "fetch":
         print(json.dumps(fetch(quotes, args.out), indent=1, sort_keys=True))
         return 0

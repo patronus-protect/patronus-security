@@ -335,6 +335,36 @@ def test_no_training_row_of_a_shipped_model_is_in_calibration_or_measurement(tmp
     assert copied and document["excluded"]["unseen_new_set"] == copied
 
 
+def test_real_benign_train_rows_train_the_agent_models_and_the_evaluation_part_stays_measured(tmp_path, monkeypatch):
+    real = [{**r, "reported_classes": []} for r in rows("real_cursorrules", 40)]
+    quotes = [{**r, "reported_classes": []} for r in rows("real_agent_quotes", 4, ["tool_poisoning"])]
+    freeze_dev(tmp_path / "dev" / "train_dev", {"dolly_15k": [{**r, "reported_classes": []} for r in rows("dolly_15k", 60)],
+                                                "real_cursorrules": real, "real_agent_quotes": quotes})
+    key = {r["id"]: MODULE.hashlib.sha256(r["text"].encode("utf-8")).hexdigest() for r in real + quotes}
+    labels, split = tmp_path / "labels.jsonl", tmp_path / "split.jsonl"
+    labels.write_text("".join(json.dumps({"dataset": r["dataset"], "sha256": key[r["id"]],
+                                          "label": "benign" if r["benign"] else "tool_poisoning"}) + "\n"
+                              for r in real), encoding="utf-8")
+    parts = {r["id"]: ("train", "evaluation")[i % 2] for i, r in enumerate(real + quotes)}
+    split.write_text("".join(json.dumps({"sha256": key[rid], "part": part}) + "\n" for rid, part in parts.items()),
+                     encoding="utf-8")
+    monkeypatch.setattr(MODULE.REAL_AGENT, "evaluation_keys", lambda path=split: frozenset(
+        key[rid] for rid, part in parts.items() if part == "evaluation"))
+    original = MODULE.REAL_AGENT.train_benign_rows
+    monkeypatch.setattr(MODULE.REAL_AGENT, "train_benign_rows", lambda dev: original(dev, labels, split))
+    document, trained = assert_no_training_row_is_measured(tmp_path / "dev", tmp_path / "mix")
+    benign_train = {MIX.text_sha(r) for r in real if parts[r["id"]] == "train"}
+    # The agent classes train on the benign train part (and only on it), the other classes never see a real row.
+    assert len(benign_train) == 20
+    for cls in MODULE.REAL_CLASSES:
+        assert benign_train <= trained[cls]
+        assert not {MIX.text_sha(r) for r in real + quotes if parts[r["id"]] == "evaluation"} & trained[cls]
+    assert not benign_train & trained["instruction_injection"]
+    # Every row of the evaluation part stays in the mix and is measured, never trained on.
+    evaluation = [r["id"] for r in real + quotes if parts[r["id"]] == "evaluation"]
+    assert set(evaluation) <= set(document["parts"]) and document["excluded"]["real_cursorrules"] == 20
+
+
 @pytest.mark.skipif(not os.environ.get("ARK_L1_DEV_DATA"), reason="needs the dev split (ARK_L1_DEV_DATA)")
 def test_no_training_row_of_a_shipped_model_is_measured_on_the_dev_split(tmp_path):
     assert_no_training_row_is_measured(Path(os.environ["ARK_L1_DEV_DATA"]), tmp_path / "mix")

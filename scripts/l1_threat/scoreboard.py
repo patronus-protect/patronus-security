@@ -1168,7 +1168,8 @@ def mix_files() -> dict[str, bytes]:
 def trained_keys(dev: Path, labels: Path = HARMFUL_SUBCLASS.LABELS_PATH) -> dict[str, frozenset[str]]:
     """Built-in L1 model -> ``MIX.text_sha`` keys of the rows it was trained on. None of them recorded its rows, so
     each training script's split is redone on ``dev``: the eleven fastText-type models trained on the train side of
-    ``ablation.split_rows`` over ``MIX.FASTTEXT_TRAIN_SETS`` (a class's positives and the benign rows), the
+    ``ablation.split_rows`` over ``MIX.FASTTEXT_TRAIN_SETS`` (a class's positives and the benign rows; the agent classes
+    also on the real benign rows of the train part, ``real_agent.train_benign_rows``), the
     harmful_content subclass model on every labelled harmful_content positive (``harmful_subclass.training_rows``)."""
     ablation = sys.modules.get("_ark_l1_threat_ablation") or _load_file("_ark_l1_threat_ablation",
                                                                          HERE / "ablation.py")
@@ -1176,6 +1177,9 @@ def trained_keys(dev: Path, labels: Path = HARMFUL_SUBCLASS.LABELS_PATH) -> dict
             for row in BASELINES.read_rows(entry.path)]
     train, _ = ablation.split_rows(rows)
     out = {cls: frozenset(MIX.text_sha(row) for row, _ in ablation.labelled(train, cls)) for cls in CLASSES}
+    real = frozenset(MIX.text_sha(row) for row in REAL_AGENT.train_benign_rows(dev))
+    for cls in REAL_CLASSES:
+        out[cls] |= real
     out["harmful_subclass"] = frozenset(MIX.text_sha({"text": text}) for text, _, _ in
                                         HARMFUL_SUBCLASS.training_rows(dev, HARMFUL_SUBCLASS.load(labels)))
     return out

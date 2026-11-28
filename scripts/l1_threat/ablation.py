@@ -57,6 +57,7 @@ language here is the one Core detects in its text (the facts' ``language``), the
 its label; a detect cut rises above its language's FPR cut where that keeps a labelled language within the budget
 (``routed_detect_cuts``), and ``routed`` gives the TPR and FPR per labelled language with each row at Core's cut
 (its detected language's, else the strictest).
+``--train-only-rows`` adds rows to the train half whole (the agent classes' real benign train rows).
 ``--oversample-de N`` repeats every German train positive ``N`` times. ``--baseline-rows`` (some of the
 ``--rows`` files) also trains a baseline, without oversampling, on the candidate's train rows from those files
 alone (the candidate's split, not one of their own) and calibrates it on the candidate's calibration rows, so a
@@ -737,6 +738,9 @@ def main(argv: list[str] | None = None) -> int:
                      help="further calibration rows with facts (gated dev sets)")
     cal.add_argument("--report-rows", type=Path, action="append", default=[],
                      help="rows of report sets: scored at the cuts, never calibrate")
+    cal.add_argument("--train-only-rows", type=Path, action="append", default=[],
+                     help="rows with facts that join the train half whole and never calibrate "
+                          "(the real benign train rows, `real_agent.py train-rows`)")
     cal.add_argument("--class", dest="classes", action="append", required=True, choices=SCOREBOARD.CLASSES)
     cal.add_argument("--stage", default="FT", choices=sorted(TOKENS))
     cal.add_argument("--target-fpr", type=float, default=SCOREBOARD.TARGET_FPR)
@@ -759,6 +763,7 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--baseline-rows must be among --rows")
         sources = {path: MODEL.read_rows(path) for path in args.rows}
         train, held_out = split_rows([row for rows in sources.values() for row in rows])
+        train += [row for path in args.train_only_rows for row in MODEL.read_rows(path)]
         test = held_out + [row for path in args.eval_rows for row in MODEL.read_rows(path)]
         reported = [row for path in args.report_rows for row in MODEL.read_rows(path)]
         # The baseline keeps the candidate's split: a family that the extra files push to the eval side stays there.
