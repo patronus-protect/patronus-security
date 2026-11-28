@@ -449,6 +449,24 @@ def test_cli_calibrate_trains_on_the_hash_half_of_every_rows_file(tmp_path):
     assert entry["calibration"]["all"]["negatives"] == sum(r["benign"] for r in held_out)
 
 
+def test_cli_calibrate_trains_on_train_only_rows_and_never_calibrates_on_them(tmp_path):
+    native = toy_rows(20) + benign_pool(40)
+    real = [row(f"real{i}", f"real rules file {i}: run the linter before commit", benign=True,
+                dataset="real_cursorrules") for i in range(12)]
+    first, extra = tmp_path / "train_dev.jsonl", tmp_path / "real_train.jsonl"
+    first.write_text("".join(json.dumps(r) + "\n" for r in native), encoding="utf-8")
+    extra.write_text("".join(json.dumps(r) + "\n" for r in real), encoding="utf-8")
+    out = tmp_path / "calibration.json"
+    code = MODULE.main(["calibrate", "--rows", str(first), "--train-only-rows", str(extra), "--class", CLS,
+                        "--out", str(out)])
+    assert code == 0
+    train, held_out = MODULE.split_rows(native)
+    (entry,) = json.loads(out.read_text(encoding="utf-8"))["classes"]
+    # Every train-only row trains; the calibration pool is the held-out half alone.
+    assert entry["rows"] == {"train": len(train) + len(real), "calibration": len(held_out)}
+    assert entry["calibration"]["all"]["negatives"] == sum(r["benign"] for r in held_out)
+
+
 def test_cli_calibrate_writes_one_model_only():
     with pytest.raises(SystemExit):
         MODULE.main(["calibrate", "--rows", "x", "--class", CLS, "--class", "jailbreak", "--model-out", "m",

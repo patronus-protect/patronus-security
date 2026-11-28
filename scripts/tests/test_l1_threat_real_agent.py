@@ -171,3 +171,22 @@ def test_split_parts_deals_each_stratum_alternately_and_rejects_a_key_labelled_t
         assert "labelled twice" in str(error)
     else:
         raise AssertionError("a key in two strata must fail")
+
+
+def test_train_benign_rows_are_the_benign_rows_of_the_train_part(tmp_path):
+    texts = {name: f"real text {name}" for name in ("bt", "be", "pt")}
+    key = {name: MODULE.hashlib.sha256(text.encode("utf-8")).hexdigest() for name, text in texts.items()}
+    labels, split = tmp_path / "labels.jsonl", tmp_path / "split.jsonl"
+    labels.write_text("".join(json.dumps({"dataset": "real_x", "sha256": key[n], "label": label}) + "\n"
+                              for n, label in (("bt", "benign"), ("be", "benign"), ("pt", "tool_poisoning"))),
+                      encoding="utf-8")
+    split.write_text("".join(json.dumps({"sha256": key[n], "part": part}) + "\n"
+                             for n, part in (("bt", "train"), ("be", "evaluation"), ("pt", "train"))), encoding="utf-8")
+    (tmp_path / "dev" / "train_dev").mkdir(parents=True)
+    (tmp_path / "dev" / "train_dev" / "real_x.jsonl").write_text(
+        "".join(json.dumps({"id": n, "text": t}) + "\n" for n, t in texts.items()), encoding="utf-8")
+    (tmp_path / "dev" / "train_dev" / "other.jsonl").write_text(json.dumps({"id": "o", "text": texts["bt"]}) + "\n",
+                                                                encoding="utf-8")
+    assert MODULE.train_benign_keys(labels, split) == {key["bt"]}
+    # Only the benign train row of a labelled set: no evaluation row, no positive, no copy in an unlabelled set.
+    assert [r["id"] for r in MODULE.train_benign_rows(tmp_path / "dev", labels, split)] == ["bt"]
