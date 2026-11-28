@@ -400,3 +400,36 @@ def test_real_rows_are_reported_apart_with_every_positive_and_measured_negatives
     assert "L1 model" not in real_part.split("\n### At 1% FPR")[0].split("| class")[1].split("\n")[0]
     without = {**report, "systems": {"rules": MODULE.fair_cells(tool, tool_scores, ["tool_poisoning"])}}
     assert "Real-world rows" not in MODULE.render_fair(without, "T", [])
+
+
+def test_real_rows_are_reported_at_each_systems_own_detect_cut_next_to_the_synthetic_rows(monkeypatch):
+    def item(rid, source, part, classes=(), text=None):
+        row = {"id": rid, "text": text or rid, "dataset": source, "benign": not classes, "language": "en",
+               "classes": list(classes)}
+        return MODULE.MixRow(row, source, part)
+
+    def answer(detected):
+        return {"cascade": {"tool_poisoning": {"l1": "escalate", "l1_score": 0.0, "decided_by": "l1_model",
+                                               "decision": "detected" if detected else "clear", "score": 0.0}}}
+
+    rows = [item("rp", "real_agent_quotes", "calibration", ["tool_poisoning"]),
+            item("rn", "real_cursorrules", "measurement"), item("rm", "real_cursorrules", "calibration"),
+            # A real train row and a report-set row are not real evaluation rows.
+            item("rt", "real_cursorrules", "measurement"), item("rr", "real_cursorrules", "report"),
+            item("sp", "generators", "measurement", ["tool_poisoning"]), item("sn", "dolly_15k", "measurement"),
+            item("sc", "dolly_15k", "calibration")]
+    evaluation = frozenset(MODULE.hashlib.sha256(r.row["text"].encode("utf-8")).hexdigest() for r in rows
+                           if r.row["id"] in {"rp", "rn", "rm", "rr"})
+    monkeypatch.setattr(MODULE.REAL_AGENT, "evaluation_keys", lambda: evaluation)
+    predictions = {"rp": answer(True), "rn": answer(True), "rm": answer(False), "rt": answer(True),
+                   "rr": answer(True), "sp": answer(True), "sn": answer(False), "sc": answer(True)}
+    cells = MODULE.detect_cells(rows, predictions, ["tool_poisoning"])
+    cell = cells["tool_poisoning"]["en"]
+    assert cell["real"] == {"pos": 1, "tp": 1, "neg": 2, "fp": 1, "tpr": 1.0, "fpr": 0.5}
+    assert cell["measurement"] == {"pos": 1, "tp": 1, "neg": 1, "fp": 0, "tpr": 1.0, "fpr": 0.0}
+    assert "de" not in cells["tool_poisoning"]
+    report = {"systems": {}, "detect": {"rules": cells, "l1_model": {}}}
+    lines = MODULE.real_detect_lines(report)
+    assert lines[0] == "| class | lang | real pos | real neg | Rules only real TPR / FPR | Rules only synthetic TPR / FPR |"
+    assert "| tool_poisoning | en | 1 | 2 | 100.0 / 50.00 | 100.0 / 0.00 |" in lines
+    assert MODULE.real_detect_lines({"systems": {}}) == []

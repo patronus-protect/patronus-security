@@ -1251,6 +1251,47 @@ def ladder_cut(negatives: list[float], top: float, target: float) -> tuple[float
     return target, mix_cut(negatives, target), False
 
 
+def real_evaluation_mask(rows: list[MixRow]) -> np.ndarray:
+    """True for the rows of the real sets that lie in the frozen evaluation part (``real_agent.evaluation_keys``)."""
+    evaluation = REAL_AGENT.evaluation_keys()
+    return np.asarray([r.source in REAL_SETS and hashlib.sha256(str(r.row.get("text") or "").encode("utf-8"))
+                       .hexdigest() in evaluation for r in rows], dtype=bool)
+
+
+def _counts(hit: np.ndarray, positive: np.ndarray, negative: np.ndarray) -> dict[str, Any]:
+    counts = {"pos": int(positive.sum()), "tp": int((hit & positive).sum()), "neg": int(negative.sum()),
+              "fp": int((hit & negative).sum())}
+    return {**counts, "tpr": counts["tp"] / counts["pos"] if counts["pos"] else None,
+            "fpr": counts["fp"] / counts["neg"] if counts["neg"] else None}
+
+
+def detect_cells(rows: list[MixRow], predictions: dict[str, dict[str, Any]],
+                 classes: Iterable[str] = REAL_CLASSES) -> dict[str, Any]:
+    """Per class and language: TPR and FPR at the system's own detect cut (a row counts when its cascade answer of the
+    class is ``detected``, the cut the shipped config applies) on the frozen evaluation part of the real rows
+    (``real``) and on the synthetic rows of the measurement part (``measurement``). Neither part sets that cut.
+    ``predictions`` maps a row id to its Core prediction."""
+    language_of = np.asarray([r.row.get("language") or "unknown" for r in rows])
+    part = np.asarray([r.part for r in rows])
+    real_evaluation = real_evaluation_mask(rows)
+    real = np.asarray([r.source in REAL_SETS for r in rows], dtype=bool)
+    out: dict[str, Any] = {}
+    for cls in classes:
+        labels = [mix_label(r.row, cls) for r in rows]
+        positive = np.asarray([label is True for label in labels])
+        negative = np.asarray([label is False for label in labels])
+        hit = np.asarray([((predictions.get(r.row["id"]) or {}).get("cascade") or {}).get(cls, NO_DECISION)
+                          ["decision"] == "detected" for r in rows], dtype=bool)
+        for language in LANGUAGES:
+            in_language = np.ones(len(rows), dtype=bool) if language == "all" else language_of == language
+            scopes = {"real": in_language & real_evaluation & (part != "report"),
+                      "measurement": in_language & ~real & (part == "measurement")}
+            cell = {name: _counts(hit, scope & positive, scope & negative) for name, scope in scopes.items()}
+            if cell["real"]["pos"] or cell["real"]["neg"]:
+                out.setdefault(cls, {})[language] = cell
+    return out
+
+
 def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes: Iterable[str]) -> dict[str, Any]:
     """Per class, language and FPR level: the cut from the calibration part's negatives only (at the first reachable
     level of ``ladder_cut``, named under ``level``), TPR, FPR and hard-negative FPR on the measurement part at that
@@ -1261,11 +1302,8 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
     language_of = np.asarray([r.row.get("language") or "unknown" for r in rows])
     source = np.asarray([r.source for r in rows])
     hard = np.asarray([is_hard_benign(r.row) for r in rows], dtype=bool)
-    real = np.isin(source, list(REAL_SETS))
     # The frozen evaluation part of the real rows is only measured: it never moves a level or a cut.
-    evaluation = REAL_AGENT.evaluation_keys()
-    real_evaluation = real & np.asarray([hashlib.sha256(str(r.row.get("text") or "").encode("utf-8")).hexdigest()
-                                         in evaluation for r in rows], dtype=bool)
+    real_evaluation = real_evaluation_mask(rows)
     out: dict[str, Any] = {}
     for cls in classes:
         labels = [mix_label(r.row, cls) for r in rows]
@@ -1296,11 +1334,7 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
                                    "hard_fpr": counts["hard_fp"] / counts["hard"] if counts["hard"] else None}
                 # Real rows: the frozen evaluation part of the hand-labelled rows, outside every cut.
                 mixed = in_language & real_evaluation & (part != "report")
-                pos, neg = mixed & positive, mixed & negative
-                entry["real"] = {"pos": int(pos.sum()), "tp": int((hit & pos).sum()), "neg": int(neg.sum()),
-                                 "fp": int((hit & neg).sum())}
-                entry["real"].update(tpr=entry["real"]["tp"] / entry["real"]["pos"] if entry["real"]["pos"] else None,
-                                     fpr=entry["real"]["fp"] / entry["real"]["neg"] if entry["real"]["neg"] else None)
+                entry["real"] = _counts(hit, mixed & positive, mixed & negative)
                 cell[f"{fpr:g}"] = entry
             out.setdefault(cls, {})[language] = cell
     return out
@@ -1366,14 +1400,19 @@ FAIR_SYSTEMS = (("rules", "rules only"), ("l1_model", "L1 model"), ("cascade", "
 NOT_RUN, NO_CLASS, NO_BUDGET = "n/r: not run", "n/r: class", "n/r: budget"
 
 
+def _tpr_fpr_text(part: dict[str, Any]) -> str:
+    """``TPR / FPR`` in percent of counted rows; the FPR with two decimals, so 0.1 % budgets stay readable."""
+    measured = "–" if part["fpr"] is None else f"{part['fpr'] * 100:.2f}"
+    return f"{_pct(part['tpr'])} / {measured}"
+
+
 def _tpr_fpr(part: dict[str, Any], fpr: str, entry: dict[str, Any]) -> str:
-    """``TPR / FPR`` in percent of ``part`` of a cell's ``entry`` at level ``fpr``; the FPR with two decimals, so
-    0.1 % budgets stay readable. A cut from a higher ladder level names it and is set in italics
+    """``TPR / FPR`` (``_tpr_fpr_text``) of ``part`` of a cell's ``entry`` at level ``fpr``. A cut from a higher
+    ladder level names it and is set in italics
     (``*41.2 / 0.18 @0.2%*``); ``NO_BUDGET`` when no level is reachable."""
     if not entry["reachable"]:
         return NO_BUDGET
-    measured = "–" if part["fpr"] is None else f"{part['fpr'] * 100:.2f}"
-    text = f"{_pct(part['tpr'])} / {measured}"
+    text = _tpr_fpr_text(part)
     return text if entry["level"] == fpr else f"*{text} @{_fpr_label(entry['level'])}*"
 
 
@@ -1423,6 +1462,28 @@ def real_lines(report: dict[str, Any], fpr: str) -> list[str]:
             real = first[fpr]["real"]
             values = [cls, language, str(real["pos"]), str(real["neg"])]
             values += [NO_CLASS if cell is None else _tpr_fpr(cell[fpr]["real"], fpr, cell[fpr]) for cell in cells]
+            lines.append("| " + " | ".join(values) + " |")
+    return ["| " + " | ".join(header) + " |", "|" + "---|" * len(header), *lines] if lines else []
+
+
+def real_detect_lines(report: dict[str, Any]) -> list[str]:
+    """Markdown table of the real-world rows of the agent classes at each system's own detect cut (``detect_cells``),
+    per system of ``REAL_SYSTEMS``: TPR / FPR on the real evaluation part next to TPR / FPR on the synthetic
+    measurement part; empty when no system has such cells."""
+    detect = report.get("detect") or {}
+    systems = [(key, name) for key, name in REAL_SYSTEMS if detect.get(key)]
+    header = ["class", "lang", "real pos", "real neg"] + [f"{name} real TPR / FPR" for _, name in systems]
+    header += [f"{name} synthetic TPR / FPR" for _, name in systems]
+    lines = []
+    for cls in REAL_CLASSES:
+        for language in LANGUAGES:
+            cells = [detect[key].get(cls, {}).get(language) for key, _ in systems]
+            first = next((cell for cell in cells if cell is not None), None)
+            if first is None:
+                continue
+            values = [cls, language, str(first["real"]["pos"]), str(first["real"]["neg"])]
+            for name in ("real", "measurement"):
+                values += [NO_CLASS if cell is None else _tpr_fpr_text(cell[name]) for cell in cells]
             lines.append("| " + " | ".join(values) + " |")
     return ["| " + " | ".join(header) + " |", "|" + "---|" * len(header), *lines] if lines else []
 
@@ -1477,6 +1538,13 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], source: str
                   "English only.", ""]
         for fpr, table in real.items():
             lines += [f"### At {_fpr_label(fpr)} FPR", "", *(table or ["No real row in the mix."]), ""]
+        detect = real_detect_lines(report)
+        if detect:
+            lines += ["### At the detect cut", "",
+                      "At each system's own detect cut, the one the shipped config applies (the L1 heuristic's "
+                      "acceptance; the L1 models' detect thresholds, calibrated on synthetic rows only): TPR / FPR on "
+                      "the real evaluation part next to TPR / FPR on the synthetic rows of the measurement part. "
+                      "Neither part sets the cut.", "", *detect, ""]
     return "\n".join(lines)
 
 
@@ -1531,6 +1599,7 @@ def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baselin
     everything = sets + report_sets
     rows = mix_rows(sets, report_sets, parts)
     systems: dict[str, Any] = {}
+    detect: dict[str, Any] = {}
     missing = {name: "no Core predictions of a config with a later layer than the L1 model" if name == "cascade"
                else "no Core predictions" for name in ("rules", "l1_model", "cascade") if name not in predictions}
     for name, directory in predictions.items():
@@ -1540,6 +1609,8 @@ def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baselin
             continue
         systems[name] = fair_cells(rows, core_scores(everything, found, name == "rules"),
                                    CLASSES)
+        detect[name] = detect_cells(rows, {prediction["id"]: prediction for entry in everything
+                                           for prediction in BASELINES.read_rows(found[entry.set_id])})
     heuristics = {}
     for baseline_id in BASELINES.baseline_ids(BASELINES.entity_map.load()):
         cached = None if baseline_cache is None else cached_scores(everything, baseline_cache, baseline_id)
@@ -1558,7 +1629,7 @@ def fair_report(dev: Path, mix_root: Path, predictions: dict[str, Path], baselin
     return {"seed": MIX.SEED, "parts_hash": hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()[:12],
             "report_sets": [s.set_id for s in report_sets], "short_sources": document["short_sources"],
             "excluded": document["excluded"], "trained": document["trained"],
-            "systems": systems, "missing": missing,
+            "systems": systems, "detect": detect, "missing": missing,
             "parts": {**{p: counted[p] for p in (*MIX.PARTS, "report")}, "rows": sum(counted[p] for p in MIX.PARTS),
                       "sources": len(sets)}}
 
