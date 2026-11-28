@@ -59,8 +59,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
   of German prose, the ten opt-in attack classes together take about 40 ms (p95) instead of about
   170 ms; on German text with many imperative requests, `harmful_content` drops from about 160 ms
   to about 5 ms. Findings are unchanged.
+- **Breaking (Rust API of Ark Core):** a built-in L1 model now reads the text as the scan already
+  prepared it for the rules, so decoding and folding run once per text. `L1TextModel::evaluate`,
+  `L1TextModel::evaluate_with`, `SharedFacts::of`, `Cascade::l1_scan_answer`,
+  `Cascade::l1_model_stage` and `text::extract_with` take a
+  `&threat::NativeText` instead of a `&str`; wrap a plain string with `NativeText::new(text)`.
+  Scores are unchanged.
 
 ### Detection changes
+
+- **Detection change (built-in L1 models, opt-in cascade):** the built-in L1 models no longer react to
+  obfuscation itself. Before, zero-width characters alone made them flag most ordinary text; now each model
+  reads the same prepared text the rules read (encoded base64, hex, ROT13 and Unicode tag text decoded in
+  place, look-alike letters, leetspeak and letter spacing folded, zero-width characters removed), and the
+  fact that a text was obfuscated is no model feature. Obfuscated text scores like its plain form; plain
+  text scores exactly as before.
+- **Detection change (decoded text, rules and built-in L1 models):** a base64 or hex run is now decoded
+  up to 64 KiB instead of its first 1 KiB, so a long encoded prompt is read whole; before, its undecoded rest
+  stayed in the text the L1 models score and could tip ordinary encoded text into a finding.
 
 - **Detection change (crash fix):** the threat scan no longer fails on text where a `\u` escape marker is
   followed by a multi-byte character (for example a Cyrillic look-alike letter); the request used to end with

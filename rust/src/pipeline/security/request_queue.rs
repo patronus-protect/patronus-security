@@ -1375,9 +1375,13 @@ pub(super) fn l1_undecided_inputs(
     let Some(cascade) = &execution.gates().cascade else {
         return inputs.to_vec();
     };
+    let prepared: Vec<_> = inputs
+        .iter()
+        .map(|input| patronus_ark_core::threat::NativeText::new(&input.text))
+        .collect();
     let facts = patronus_ark_core::detectors::text::SharedFacts::default();
     let mut undecided = Vec::new();
-    for input in inputs {
+    for (input, prepared) in inputs.iter().zip(&prepared) {
         let module = input.category;
         let mut has_result = l1_results
             .iter()
@@ -1389,7 +1393,7 @@ pub(super) fn l1_undecided_inputs(
             module,
             has_result || native.runs(module, execution.gates()),
             l1_results.iter().map(|result| &result.native),
-            &input.text,
+            prepared,
             &facts,
         );
         if !l1_failed && !has_result && !stage.layers().is_empty() {

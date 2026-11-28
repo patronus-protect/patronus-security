@@ -709,6 +709,37 @@ ein Teil der Report-Sätze), 86M und ProtectAI v2 sind nicht für
 alle Sätze des Mixes gecacht (Owner-Befehl oben); die Wolf-Stufe (L3) fehlt in der Kaskaden-Spalte, solange auf dem
 Host kein Wolf-Edge-fp32-Bundle vorbereitet ist.
 
+**L1-Modelle unter Verschleierung (T36).** Die eingebauten L1-Modelle lasen den Rohtext samt der Fakt-Tokens
+`F:OBF`/`F:DEC`; Nullbreitenzeichen allein ließen sie 65–99 % gutartiger Texte melden
+([`scoreboard/model-obfuscation-raw-text.md`](scoreboard/model-obfuscation-raw-text.md), Stand vor T36). Seit T36 liest
+jedes Modell `TextViews::model_text` (dieselben Sichten wie die Regeln, einmal je Text gebaut: dekodierte Sichten an
+Stelle ihrer Quelle, gefaltete bzw. entschleierte Sicht, ohne Nullbreiten- und Tag-Zeichen); Carrier-Gate, Sprache,
+Carrier und Terme lesen denselben Text, `obfuscated`/`decoded` geben kein Modell-Token mehr. Training liest denselben
+Text über das `text_facts`-Beispiel (Feld `model_text`). Messung je Modell, sauber und unter fünf Verschleierungen:
+[`scoreboard/model-obfuscation.md`](scoreboard/model-obfuscation.md) (`model_obfuscation.py run --mix MIX`): Zeilen aus
+dem Mess-Teil des Mixes, Schnitt je Modell und Sprache bei 0,1 % FPR auf den sauberen Negativen des Kalibrier-Teils
+(wie `scoreboard.py fair`; die verschleierten Texte setzen keinen Schnitt). Base64- und Hex-Fragmente werden seit der
+zweiten T36-Runde bis 64 KiB dekodiert (vorher 1 KiB; der undekodierte Rest blieb als Rauschen im Modelltext:
+instruction_injection DE benign unter base64 0,03 → 0,80 %, jackhhao base64 −14 Punkte). Offen: Zellen, deren
+saubere Rate schon über 0,1 % liegt (vor allem Hard-Benigns: tool_poisoning EN 4,2 %, DE 3,0 %, agent_config_tampering
+EN 2,1 %, jailbreak DE 1,2 %; benign exfiltration DE 0,33 %); das ist Kalibrierung der Modelle, nicht Verschleierung.
+Leetspeak hebt agent_config_tampering DE hard 0,30 → 1,49 % und senkt unsafe_action DE TPR um 11,5 Punkte.
+Eine Aufbereitung je Text: `NativeText` hält die `TextViews` (dekodierte und gefaltete Sichten, Entschleierung lazy);
+die versteckten Sichten der Regeln, die Fakten (samt Kontext-Scan) und die Modelle lesen sie, und die Kaskade reicht
+die Aufbereitung des Regel-Scans an das Modell weiter (`L1TextModel::evaluate`, `Cascade::l1_scan_answer` nehmen
+`&NativeText`). E12-Benchmarks nach T36 (`competitors.py run`, Kaskade „ARK L1 model“, TPR-Verlust in Punkten,
+zw / tags / b64 / leet / homoglyph; vorher in [`scoreboard/competitors.md`](scoreboard/competitors.md)): PromptShield
+−9,7 / −4,6 / −4,8 / −4,8 / −9,8 (vorher −89,4 bei zw), deepset
+−6,1 / −0,4 / 0,0 / 0,0 / −6,1 (vorher −70,7 bei zw), jackhhao −1,5 / −1,8 / −1,5 / −2,0 / −1,8 (vorher −77,2 bei zw;
+base64 14,0 vor der 64-KiB-Dekodiergrenze), OpenAI-Moderation 0,0 / −0,2 / 0,0 / 1,9 / 0,0, RP-Mod
+0,0 / 0,0 / 0,1 / 0,4 / 0,0.
+Saubere Messung nach T36 (`scoreboard.py refresh` auf `15b2c86f`, gegen den Stand `c7498eb6` vor T36): TPR bei
+0,1 % FPR des L1-Modells je Klasse und Sprache unverändert bis auf instruction_injection all/EN +0,1 Punkte;
+Regeln allein unverändert. Latenz (100 KiB, 19 Fenster aus deutschen gutartigen Dev-Zeilen, je 3 Wiederholungen,
+eine CPU, `threat_cascade` von main und Head abwechselnd, Median der p95 aus drei Läufen): Regeln 340 → 332 ms
+(−2,4 %), mit L1-Modell (`cascade-config.json`) 756 → 720 ms (−4,7 %); die geteilte Aufbereitung spart die zweite
+Normalisierung des Modells.
+
 **Kopf an Kopf auf den Benchmarks der Konkurrenz (E12).** Neben dem Mix misst `competitors.py` ARK auf den eigenen
 Sätzen der offenen Konkurrenten, nach deren Protokoll (Metrik und Schwellenregel des Papers), und stellt die
 veröffentlichten Zahlen daneben: [`scoreboard/competitors.md`](scoreboard/competitors.md) (`scoreboard.py

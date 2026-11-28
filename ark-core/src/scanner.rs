@@ -286,10 +286,12 @@ impl Scanner {
         }
         control.check()?;
         self.check_input(text)?;
+        // One preparation per text, shared by the rules and the L1 models.
+        let prepared = NativeText::new(text);
         // With L1 switched off, no native producer runs.
         let native = if self.execution.allows_level(SecurityLevel::L1) {
             catch_unwind(AssertUnwindSafe(|| {
-                self.scan_native(text, categories, control)
+                self.scan_native(&prepared, categories, control)
             }))
             .map_err(|_| ScanError::Detector("native scanner panicked".into()))??
         } else {
@@ -298,7 +300,8 @@ impl Scanner {
         control.check()?;
         let (decision, cascade_wolf) = match self.execution.gates().cascade {
             Some(_) => {
-                let (decisions, wolf) = self.run_cascade(text, categories, &native, control)?;
+                let (decisions, wolf) =
+                    self.run_cascade(&prepared, categories, &native, control)?;
                 (Some(decisions), Some(wolf))
             }
             None => (None, None),
@@ -334,7 +337,7 @@ impl Scanner {
     /// Returns the module decisions and Wolf's result when it ran.
     fn run_cascade(
         &mut self,
-        text: &str,
+        prepared: &NativeText<'_>,
         categories: &[SecurityCategory],
         native: &[NativeResult],
         control: &crate::ScanControl,
@@ -391,14 +394,14 @@ impl Scanner {
                 module,
                 self.native.runs(module, execution.gates()),
                 native.iter(),
-                text,
+                prepared,
                 &facts,
             );
             // A module no stage ran for (L1 off, nothing later) has no decision.
             decisions.extend(cascade.decide(
                 execution,
                 module,
-                text,
+                prepared.text(),
                 stage,
                 &l1_results,
                 &mut [],
@@ -457,11 +460,11 @@ impl Scanner {
     }
     fn scan_native(
         &self,
-        text: &str,
+        prepared: &NativeText<'_>,
         categories: &[SecurityCategory],
         control: &crate::ScanControl,
     ) -> Result<Vec<NativeResult>, ScanError> {
-        let prepared = NativeText::new(text);
+        let text = prepared.text();
         let mut scanned = Vec::new();
         let mut grouped = Vec::new();
         for &category in &self.config.categories {
@@ -470,7 +473,7 @@ impl Scanner {
                 scanned.push(category);
                 grouped.push(self.native.scan_module(
                     category,
-                    &prepared,
+                    prepared,
                     self.execution.gates(),
                     control,
                 )?);
@@ -1310,7 +1313,11 @@ mod cascade_tests {
         let layer = &injection_decision(&report).layers[0];
         assert_eq!(
             layer.details["score"],
-            serde_json::json!(model.evaluate(text, &findings, &[]).score)
+            serde_json::json!(
+                model
+                    .evaluate(&crate::threat::NativeText::new(text), &findings, &[])
+                    .score
+            )
         );
         std::fs::remove_dir_all(bundle.bundle_dir.as_ref().unwrap()).ok();
     }

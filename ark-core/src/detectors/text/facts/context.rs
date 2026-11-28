@@ -51,12 +51,10 @@ pub(super) fn modifiers(
 ) -> Vec<&'static str> {
     let clause = scan.at(text, span.clone());
     let decoded = views
-        .decoded
-        .iter()
+        .prose()
         .any(|view| view.source.start < span.end && span.start < view.source.end);
     let obfuscated = views
-        .deobfuscated
-        .as_ref()
+        .deobfuscated(text)
         .is_some_and(|view| !view.kinds(span).is_empty());
     [
         ("decoded", decoded),

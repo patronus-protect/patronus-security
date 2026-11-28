@@ -308,7 +308,7 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
         b1_doc = MODEL.train(model_rows, f"ablation-{cls}-b1", min_df=min_df, iterations=iterations,
                              tokens=no_tokens)
         b1 = MODEL.Model(b1_doc)
-        fitted.append(Stage("B1", lambda row: sigmoid(b1.score(row["text"], [])[0]), model=b1_doc,
+        fitted.append(Stage("B1", lambda row: sigmoid(b1.score(MODEL.model_text(row), [])[0]), model=b1_doc,
                             tokens=no_tokens, ram_bytes=model_ram_bytes(b1_doc)))
     if wanted & {"B4", "B5"}:
         b4_doc = MODEL.train(model_rows, f"ablation-{cls}-b4", char_buckets=buckets[0], token_buckets=buckets[1],
@@ -316,7 +316,7 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
         b4 = MODEL.Model(b4_doc)
 
         def b4_logit(row: dict) -> float:
-            return b4.score(row["text"], word_tokens(row))[0]
+            return b4.score(MODEL.model_text(row), word_tokens(row))[0]
 
         def hybrid(row: dict) -> int:
             ngram = min(max(int(round(b4_logit(row) * NGRAM_POINTS_PER_LOGIT)), 0), NGRAM_CAP)
@@ -331,7 +331,7 @@ def fit_stages(rows: list[dict], cls: str, *, buckets: tuple[int, int] = BUCKETS
         ft_doc = MODEL.train_fasttext(model_rows, f"ablation-{cls}-fasttext", buckets=FASTTEXT_SHAPE[0],
                                       dim=FASTTEXT_SHAPE[1])
         ft = MODEL.FastTextModel(ft_doc)
-        fitted.append(Stage("FT", lambda row: sigmoid(ft.logit(row["text"], MODEL.fasttext_tokens(row))), model=ft_doc,
+        fitted.append(Stage("FT", lambda row: sigmoid(ft.logit(MODEL.model_text(row), MODEL.fasttext_tokens(row))), model=ft_doc,
                             tokens=MODEL.fasttext_tokens, ram_bytes=model_ram_bytes(ft_doc)))
     return [stage for stage in fitted if stage.name in wanted]
 
@@ -523,7 +523,7 @@ def calibrate(document: dict, rows: list[dict], cls: str, *, tokens: Callable[[d
     model = MODEL.load_model(document)
 
     def scored(chosen: Iterable[dict]) -> list[tuple[dict, int, float]]:
-        return [(row, label, model.score(row["text"], tokens(row))[0]) for row, label in labelled(chosen, cls)]
+        return [(row, label, model.score(MODEL.model_text(row), tokens(row))[0]) for row, label in labelled(chosen, cls)]
 
     calibration = scored(rows)
     benign = [score for _, label, score in calibration if not label]

@@ -30,7 +30,8 @@ fn facts_match_the_goldens() {
     let rows = goldens();
     let mut failures = Vec::new();
     for row in &rows {
-        let facts = TextViews::new(row["text"].as_str().expect("text")).facts();
+        let text = row["text"].as_str().expect("text");
+        let facts = TextViews::new(text).facts(text);
         let expected = &row["expected_facts"];
         if facts.obfuscated != names(&expected["obfuscated"])
             || facts.decoded != names(&expected["decoded"])

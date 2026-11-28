@@ -826,7 +826,7 @@ pub fn l1_scan_answer<'a, 't>(
     module: SecurityCategory,
     ran: bool,
     scan: impl Iterator<Item = &'a crate::NativeResult> + Clone,
-    text: &'t str,
+    text: &'t crate::threat::NativeText<'_>,
     facts: &SharedFacts<'t>,
 ) -> L1Stage;
 ```
@@ -840,15 +840,16 @@ and a host's own L1 producers; also when they reported no result: the
 module is then clear of evidence), else [`Self::l1_off`]; then the
 module's L1 model ([`Self::l1_model`]) on an escalation
 ([`Self::l1_model_stage`]). `scan` holds every native L1 result of the
-scan: the model reads their rule findings, as in training. `facts`
-are shared by the L1 models of every module of the scan.
+scan: the model reads their rule findings, as in training, and `text`
+as the scan prepared it. `facts` are shared by the L1 models of every
+module of the scan.
 
 ```rust
 pub fn l1_model_stage<'t>(
     &self,
     mut stage: L1Stage,
     model: Option<&L1TextModel>,
-    text: &'t str,
+    text: &'t crate::threat::NativeText<'_>,
     findings: Vec<Finding<'static>>,
     facts: &SharedFacts<'t>,
 ) -> L1Stage;

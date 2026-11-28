@@ -17,7 +17,9 @@ use crate::detectors::shell::pyre::{py_regex, Anchor};
 /// lowercased text.
 static WORD: LazyLock<Regex> = LazyLock::new(|| py_regex(r"\w+", false, Anchor::Search));
 
-/// Deterministic flattening of the facts of one text into model tokens.
+/// Deterministic flattening of the facts of one text into model tokens. The
+/// `obfuscated` and `decoded` facts give no token: the models read the text
+/// with its obfuscation undone, and the obfuscation alone is no attack.
 pub(crate) fn fact_tokens(facts: &TextFacts) -> BTreeSet<String> {
     let mut out = FactTokens::default();
     out.value("LANG", facts.language);
@@ -38,8 +40,6 @@ pub(crate) fn fact_tokens(facts: &TextFacts) -> BTreeSet<String> {
         out.value("PAT", f.finding.pattern);
         out.values("MOD", f.modifiers.iter().map(|m| format!("{category}:{m}")));
     }
-    out.values("OBF", &facts.obfuscated);
-    out.values("DEC", &facts.decoded);
     out.values("SUP", &facts.support);
     out.values("CTR", &facts.counter);
     if !facts.addressee.is_empty() && !facts.sinks.is_empty() {

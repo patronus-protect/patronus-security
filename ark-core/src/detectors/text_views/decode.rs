@@ -4,8 +4,10 @@
 //! bytes are printable UTF-8, so digests, keys and binary data stay undecoded.
 
 /// Longest prefix of a fragment that is decoded; a multiple of 4 and 2, so a
-/// cut base64 or hex run still decodes.
-const MAX_FRAGMENT: usize = 1024;
+/// cut base64 or hex run still decodes. Large enough that a whole encoded
+/// prompt decodes (an undecoded tail would leave encoding noise in the model
+/// text); fragments never overlap, so decoding stays linear in the text.
+const MAX_FRAGMENT: usize = 64 * 1024;
 
 /// Candidate fragments of at least 8 bytes; the value of a `key=value` pair
 /// counts on its own (base64 padding stays), and a longer run yields its first
@@ -160,12 +162,12 @@ mod tests {
 
     #[test]
     fn long_runs_decode_their_first_bytes() {
-        let hex = "41".repeat(2000);
+        let hex = "41".repeat(MAX_FRAGMENT);
         let fragments: Vec<_> = split_fragments(&hex).collect();
         assert_eq!(fragments, vec![&hex[..MAX_FRAGMENT]]);
         assert_eq!(
             continuous_hex_decode(fragments[0]).map(|text| text.len()),
-            Some(512)
+            Some(MAX_FRAGMENT / 2)
         );
         // "ü" (c3 bc) cut after its first byte loses only that character.
         assert_eq!(continuous_hex_decode("41424344c3").as_deref(), Some("ABCD"));

@@ -14,11 +14,12 @@
 //! Findings and data references come from the caller (the category patterns
 //! and the PII/DLP detectors); the facts add what the text says around them.
 
+use std::borrow::Cow;
 use std::ops::Range;
 
 use super::super::context_lexica::ContextLexica;
-use super::super::text_views::TextViews;
 use super::super::NativeDetection;
+use crate::threat::NativeText;
 
 mod carrier;
 pub(crate) use carrier::{carries_class, is_agent_config, is_tool_metadata, owning_tool_name};
@@ -101,14 +102,33 @@ pub fn data_refs<'a>(
 
 /// The facts of `text` with the pattern `findings` and PII/DLP `data` found in it.
 pub fn extract<'a>(text: &str, findings: &[Finding<'a>], data: &[DataRef<'a>]) -> TextFacts<'a> {
-    let views = TextViews::new(text);
-    let view_facts = views.facts();
-    let scan = ContextLexica::shared().scan(text);
-    let terms = context::TextContext::of(&scan);
+    extract_with(&NativeText::new(text), findings, data)
+}
+
+/// [`extract`] on the text as the scan prepared it (its views and context
+/// scan, built once per text). Language, carriers and the addressee, support
+/// and counter terms are read from the text the models read
+/// ([`NativeText::model_text`]), so obfuscation does not hide them; findings,
+/// data and sinks keep their offsets in the text.
+pub fn extract_with<'a>(
+    prepared: &NativeText<'_>,
+    findings: &[Finding<'a>],
+    data: &[DataRef<'a>],
+) -> TextFacts<'a> {
+    let text = prepared.text();
+    let views = prepared.views();
+    let view_facts = views.facts(text);
+    let scan = prepared.context();
+    let read = prepared.model_text();
+    let read_scan = match &read {
+        Cow::Owned(read) => Some(ContextLexica::shared().scan(read)),
+        Cow::Borrowed(_) => None,
+    };
+    let terms = context::TextContext::of(read_scan.as_ref().unwrap_or(scan));
     let mut findings: Vec<FindingFacts<'a>> = findings
         .iter()
         .map(|finding| FindingFacts {
-            modifiers: context::modifiers(text, &scan, &views, finding.span.clone()),
+            modifiers: context::modifiers(text, scan, views, finding.span.clone()),
             finding: finding.clone(),
         })
         .collect();
@@ -126,10 +146,10 @@ pub fn extract<'a>(text: &str, findings: &[Finding<'a>], data: &[DataRef<'a>]) -
     });
     data.dedup();
     TextFacts {
-        language: language::detect(text),
-        carrier: carrier::carriers(text),
+        language: language::detect(&read),
+        carrier: carrier::carriers(&read),
         addressee: terms.addressee,
-        sinks: sinks::sinks(text, &scan),
+        sinks: sinks::sinks(text, scan),
         data,
         findings,
         obfuscated: view_facts.obfuscated,
