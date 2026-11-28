@@ -1138,7 +1138,9 @@ tasks:
       Wolf's cost per row reported; the cascade column of cascade.md has a number (or a named reason) in
       every cell, with the report-set column; the baseline cache is refilled whenever the DEV set hashes
       change (a runner or refresh step, documented in research/l1-threat/README.md), so Prompt Guard 2,
-      ProtectAI v2 and the heuristic columns never fall back to "not run" after a re-freeze
+      ProtectAI v2 and the heuristic columns never fall back to "not run" after a re-freeze; a per-source
+      breakdown per class and language (TPR of rules only, L1 model and cascade at the same cut, split by
+      origin: native, translated, synthetic, hand-labelled real) shows where the DE and EN numbers come from
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
