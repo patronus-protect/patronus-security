@@ -859,9 +859,12 @@ Agent-Config-, 1.094 Tool- und 323 Memory-Zeilen) und `real_agent_quotes` (57 w�
 und Write-ups, je Zeile Quelle, Lizenz und Revision: `tool_poisoning` 17, `agent_config_tampering` 27,
 `memory_poisoning` 13, Ziel 30 je Klasse damit nicht erreicht), alle EN, alle handgelabelt, zweiter Durchgang über die
 feste 10-%-Stichprobe ohne Abweichung; Labels unter `labels/real_agent*.jsonl`, Werkzeug `scripts/l1_threat/real_agent.py`.
-Deutsch und `resource_exhaustion` bleiben synthetisch (keine echte offene Quelle). Owner-Befehle zum Einfrieren und
-Messen stehen in `scoreboard/gold.md` („Findings (E14b: hand-labelled …)“); erst danach zeigt der faire Bericht die
-echten Zeilen getrennt.
+Deutsch und `resource_exhaustion` bleiben synthetisch (keine echte offene Quelle). Kein geteiltes Repository mit den 44
+Holdout-Quellen der Entity-Map (`real_agent.py overlap`); die Holdout-Vorbereitung verwirft Holdout-Zeilen, die einer
+echten Zeile gleichen (auch den Zitaten). `gold.md` zählt die Zeilen als nativ; die fairen Berichte sind auf den Daten
+von E14 und E14b neu gerendert und zeigen die echten Zeilen getrennt („Real-world rows of the agent classes“: bei 0,1 %
+FPR Regeln allein 0/17, 1/27, 0/13, L1-Modell 0/17, 3/27, 0/13). Owner-Befehle, die die Sätze im geteilten `DEV`
+einfrieren, stehen in `scoreboard/gold.md`.
 Kandidaten, die in den Kategorie-Dokumenten als „Kandidat“ markiert sind, sind noch nicht stichprobengeprüft.
 Alles wird zur Laufzeit geladen und nie committet; das Repo enthält nur Rezepte, Manifeste und eigene Goldens.
 Hintergrund und Stichproben: [`research-2026-11.md` §5](research-2026-11.md#5-daten).

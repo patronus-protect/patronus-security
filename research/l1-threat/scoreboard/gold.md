@@ -783,7 +783,8 @@ every label sits in `research/l1-threat/labels/` by text SHA-256, never with tex
   the holdout step), so no holdout row can share a row with these sets; the run that counts such drops sees the holdout
   and is the owner's (`gold.py leakage` with `DEV/real` and `DEV/real_train_dev` among the dev directories).
 - **Counts in this report:** the five sets were frozen in a writable copy of the dev root (the shared one is read-only to
-  the runner) with the recipes of this branch: 4 sets by `prepare_corpora.py` (dedup within and across these sets drops
+  the runner) with the recipes of this branch: 4 sets by `prepare_corpora.py` (under `real_train_dev/`; the owner's
+  full preparation writes them to `train_dev/`) (dedup within and across these sets drops
   60 BFCL tool descriptions and 7 rules files as near duplicates (MinHash): 250 rules files, 421 Copilot files, 1,034 tool
   descriptions, 323 memory turns), the quotes by `real_agent.py fetch` (57 of 57 spans unchanged). Their 2,085 rows
   are added to the dev summary as native rows (tables above: native EN positives tool_poisoning 17,
@@ -791,25 +792,24 @@ every label sits in `research/l1-threat/labels/` by text SHA-256, never with tex
   of the new sets: 50 rows each from `gold.py sample`, verdict from the hand label (and the second pass where the row is
   in its sample): 250 rows, 0 wrong. Without the cross-set dedup against the other dev sets, which only the full
   preparation does, the owner's freeze can drop a few more rows.
-- **Preview on the real rows (not the fair measurement):** this checkout's Core predictor (`threat_cascade`) over all
-  2,152 real rows, at Core's own decisions, not at a cut from the calibration part (the fair reports need the frozen
-  sets). Rules alone (L1 heuristic detected): tool_poisoning 0 of 17, agent_config_tampering 1 of 27, memory_poisoning
-  0 of 13; 0 of 2,095 real benign rows flagged for any of the three, 6 flagged for some other class. With the built-in L1
-  models of `cascade-config.json` (up to L1, shipped cuts): tool_poisoning 0 of 17 (2 of 678 agent-config files
-  flagged), agent_config_tampering 3 of 27 (15 of 678 agent-config files flagged, 2.2 %), memory_poisoning 0 of 13 (0
-  flagged); 221 real benign rows are flagged for some class. On the synthetic positives the current `baseline.md`
-  shows rules-only TPR 100.0 % at 0.1 % FPR for all three classes in EN (18-25 measured positives): the rules and
-  models fit the generator phrasing, not real poisoned artefacts, and the real config files are hard negatives the
-  models had not seen.
+- **Fair measurement on the real rows:** `scoreboard.py refresh` on the dev root with E14's generator families and these
+  sets (mix of 66,014 rows from 39 sources) reports the real rows apart from the synthetic ones in every fair report
+  (section "Real-world rows of the agent classes", rules only and L1 model at the cut of the tables). At 0.1 % FPR, EN:
+  tool_poisoning 17 real positives / 1,033 real negatives: rules 0.0 % TPR / 0.00 % FPR, L1 model 0.0 / 0.00;
+  agent_config_tampering 27 / 1,028: rules 3.7 / 0.00, L1 model 11.1 / 1.07; memory_poisoning 13 / 1,034: rules 0.0 /
+  0.00, L1 model 0.0 / 0.00. At 1 % FPR the L1 model reaches 25.9 % on agent_config_tampering at 9.73 % FPR on the real
+  config files. On the synthetic rows of the same mix rules only reach 16.6-26.7 % and the L1 model 39.9-63.0 % TPR at
+  0.1 % FPR (all languages): the rules and models fit the generator phrasing, not real poisoned artefacts, and the real
+  config files are hard negatives the models had not seen.
 - **Gaps:** German has no real source for these classes (the open repositories and write-ups are English; a translation
   would not be real data), and resource_exhaustion has none (OverThink is one decoy template, see the E14b search
   above); both stay synthetic.
-- **Owner commands to freeze and measure:** `python3 scripts/l1_threat/generators.py generate --dev-out DEV --only
-  agent_casebook advisory_shapes` (E14), `python3 scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out
-  HOLDOUT --force` (corpus generation 26), `python3 scripts/l1_threat/real_agent.py fetch --out DEV/real`, then
-  `gold.py summary`/`leakage`/`render` and `python3 scripts/l1_threat/scoreboard.py refresh`: the fair reports then
-  carry the section "Real-world rows of the agent classes" (rules only and L1 model, TPR on the real positives, FPR on
-  the real benign rows).
+- **Owner commands to freeze in the shared DEV** (the runner's copy is not visible to the gate): `python3
+  scripts/l1_threat/generators.py generate --dev-out DEV --only agent_casebook advisory_shapes` (E14), `python3
+  scripts/l1_threat/prepare_corpora.py --dev-out DEV --holdout-out HOLDOUT --force` (corpus generation 26; the holdout
+  step now also drops rows of the quotes), `python3 scripts/l1_threat/real_agent.py fetch --out DEV/real`, then
+  `gold.py summary`/`leakage` (with `DEV/real` among the dev directories)/`render` and `python3
+  scripts/l1_threat/scoreboard.py refresh`.
 
 ## How this report is made
 
