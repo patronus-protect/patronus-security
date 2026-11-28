@@ -1141,11 +1141,52 @@ tasks:
       ProtectAI v2 and the heuristic columns never fall back to "not run" after a re-freeze; a per-source
       breakdown per class and language (TPR of rules only, L1 model and cascade at the same cut, split by
       origin: native, translated, synthetic, hand-labelled real) shows where the DE and EN numbers come from
+  # Owner, 2026-11-28 (data analysis): the L1 models score 68 % on injection EN sources they were trained on and
+  # 14 % on sources they never saw (gentel, neuralchemy, polyguardprompts, satml_ctf: 46 % of the EN measurement
+  # positives); German looks better only because its positives come from sources that are also in training
+  # (jailbreak DE 89 % seen vs 6 % unseen). The evaluation still leaks: 121 of 266 agent-translated measurement
+  # rows have their English source row in training, and 36 of 57 generator template families sit in both
+  # calibration and measurement.
+  - id: E16
+    title: "Close the remaining evaluation leaks and measure unseen sources: translation pairs and generator template families each go to one part only, and a leave-one-source-out measurement gives every class and language a number on sources the model never saw"
+    type: eval-infra
+    deps: [E15]
+    accept: >-
+      mix.py deals every translation pair (translation and its source row, by source_id, including upstream
+      EN/DE pairs) and every generator template family to exactly one part, and no measurement or calibration
+      row has its translation partner or template family in the models' training split; a test in
+      scripts/tests fails on any such overlap; a leave-one-source-out report per class and language (train
+      without the source, cut from calibration, TPR and FPR on that source) for rules only and L1 model, next
+      to the seen-source numbers; the clean evaluation re-rendered, with the changed numbers named
+  - id: M10
+    title: "Retrain the built-in L1 models on every licensed dev source: today's training split misses gentel, neuralchemy, polyguardprompts and satml_ctf, jailbreak EN is 94 % wildjailbreak, prompt_extraction EN 99 % mosscap, and the negatives are 95 % two corpora per language; a new frozen training split with all sources, other classes' positives as negatives and more varied benign text"
+    type: scorer
+    deps: [E16]
+    accept: >-
+      a new training split, frozen like the old one and recorded (row keys), drawn from every licensed dev source
+      (satml_ctf only if its licence is settled) with its own share per source, never from the calibration or
+      measurement parts (test fails on overlap) and with translation pairs and template families kept on one
+      side; training negatives include the other classes' positives (multi-label gold respected) and benign
+      text beyond germanquad / massive / dolly; every built-in model retrained and its bundle re-pinned; on the
+      clean evaluation and the E16 leave-one-source-out report: TPR at 0.1 % FPR per class and language before
+      and after, with no class losing more than 0.5 pp on seen sources and the unseen-source TPR reported;
+      Python training and Rust inference bit-identical (parity goldens); L1 100 KiB p95 within +5 %
+  - id: D01
+    title: "Native German data: no class has native German attack text from more than one real source, harmful_content DE has a single machine-translated source, toxic DE and every agent class have under 100 German training positives, and German benign text is mostly germanquad and massive_de; add licensed native German attack and benign sources (no external machine translation)"
+    type: eval-infra
+    deps: []
+    accept: >-
+      for jailbreak, instruction_injection, toxic_language and harmful_content at least one additional licensed
+      native German source each (recipe with source, licence, revision, commercial flag in datasets.yaml), or
+      the search named per class with the candidates and why each fails; at least three new native German
+      benign sources beyond germanquad and massive_de (mail, documents, code comments, chat); nothing from the
+      holdout sources; gold spot-check <= 5 % errors per new set; gold.md shows the native German counts per
+      class; no external machine translation (owner rule unchanged)
   - {id: H01, title: "Hard-negative mining across classes (security docs, CTF write-ups, code review, defensive system prompts, moderation logs) → 1,000 hard benign DE/EN", type: precision-fix, deps: [IJ02, PX02, JB02, TP02, AC02, EX02, UA02, MP02, RE01, TX02, HC02, HC03], status: done}
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T36b, T38, T38b, T38c, T38d, T39, E15]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T36b, T38, T38b, T38c, T38d, T39, E15, E16, M10, D01]}
 
 recurring:
   - id: TRIAGE
