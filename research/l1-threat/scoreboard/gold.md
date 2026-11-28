@@ -781,9 +781,10 @@ every label sits in `research/l1-threat/labels/` by text SHA-256, never with tex
   0 of 13; 0 of 2,095 real benign rows flagged for any of the three, 6 flagged for some other class. With the built-in L1
   models of `cascade-config.json` (up to L1, shipped cuts): tool_poisoning 0 of 17 (2 of 678 agent-config files
   flagged), agent_config_tampering 3 of 27 (15 of 678 agent-config files flagged, 2.2 %), memory_poisoning 0 of 13 (0
-  flagged); 221 real benign rows are flagged for some class. The synthetic positives of these classes are detected far
-  more often: the rules and models fit the generator phrasing, not real poisoned artefacts, and the real config files are
-  the hard negatives the models had not seen.
+  flagged); 221 real benign rows are flagged for some class. On the synthetic positives the current `baseline.md`
+  shows rules-only TPR 100.0 % at 0.1 % FPR for all three classes in EN (18-25 measured positives): the rules and
+  models fit the generator phrasing, not real poisoned artefacts, and the real config files are hard negatives the
+  models had not seen.
 - **Gaps:** German has no real source for these classes (the open repositories and write-ups are English; a translation
   would not be real data), and resource_exhaustion has none (OverThink is one decoy template, see the E14b search
   above); both stay synthetic.
