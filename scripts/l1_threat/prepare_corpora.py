@@ -102,11 +102,12 @@ SOURCE_PREFIXES = ("https://huggingface.co/datasets/", "https://github.com/")
 ENTRY_KEYS = {"id", "commercial"}
 RECIPE_KEYS = {"source", "revision", "files", "format", "text", "labels"}
 OPTIONAL_KEYS = {
-    "training", "internal", "pending", "dropped", "language", "language_field", "language_map", "language_cues", "cap", "keep",
+    "training", "internal", "pending", "dropped", "per_row", "language", "language_field", "language_map", "language_cues", "cap", "keep",
     "dedup_against", "records", "columns",
 }
-# Registry states besides a recipe: produced inside ARK, recipe not written yet, or left out for good (reason).
-STATES = ("internal", "pending", "dropped")
+# Registry states besides a recipe: produced inside ARK, recipe not written yet, left out for good (reason), or
+# rows that each carry their own source and are fetched by the tool the value names (real_agent.py quotes).
+STATES = ("internal", "pending", "dropped", "per_row")
 KEEP_KEYS = {"label", "pattern", "reason"}
 RULE_OPS = ("equals", "contains", "excludes", "matches", "not_matches", "at_least", "below")
 LIST_OPS = ("equals", "contains", "excludes", "matches", "not_matches")
@@ -328,7 +329,7 @@ def check(registry: dict[str, Any], emap: dict[str, Any]) -> list[str]:
             problems.append(f"{where}: an evaluation-only set (training: false) cannot be train_dev")
         kinds = [key for key in STATES if key in entry] + (["recipe"] if RECIPE_KEYS & set(entry) else [])
         if len(kinds) != 1:
-            problems.append(f"{where}: exactly one of internal, pending, dropped or a recipe (found {kinds or 'none'})")
+            problems.append(f"{where}: exactly one of internal, pending, dropped, per_row or a recipe (found {kinds or 'none'})")
             continue
         internal = dataset["family"] in INTERNAL_FAMILIES
         if internal != (kinds[0] == "internal"):
@@ -809,7 +810,7 @@ def build(
 
     members = [i for i, entry in entries.items() if datasets[i]["split"] == split and is_ready(entry)]
     skipped = {
-        i: entry.get("internal") or entry.get("pending") or f"dropped: {entry['dropped']}"
+        i: f"dropped: {entry['dropped']}" if "dropped" in entry else next(entry[state] for state in STATES if state in entry)
         for i, entry in entries.items()
         if datasets[i]["split"] == split and not is_ready(entry)
     }

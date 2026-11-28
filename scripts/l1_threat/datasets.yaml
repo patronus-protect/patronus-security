@@ -17,6 +17,7 @@
 #   pending     recipe not written yet (reason); holdout recipes come from the holdout setup
 #               through --overlay and never live in the repository
 #   dropped     left out for good (reason: licence, quality, overlap with the holdout); never fetched
+#   per_row     rows that each carry their own source, licence and revision, fetched by the named tool (quoted positives)
 #   source      https://huggingface.co/datasets/<repo> or https://github.com/<owner>/<repo>
 #   revision    pinned commit (40 hex), files: [{path, sha256}] verified on every fetch
 #   format      jsonl (gzip when the file ends in .gz; `records` reads each line as a document) | json (list of records; `records` names the field holding them, '.' = one record per file, '*' expands list items or dict values) | text (one record per file: fields text and path) | csv | parquet (UTF-8, plain integer, floating-point and boolean columns) |
@@ -1477,6 +1478,9 @@ datasets:
 # `dropped` name why a benchmark is not measured.
   # Real agent customisation files and tool manifests (E14b): benign counterparts for tool_poisoning,
   # agent_config_tampering and memory_poisoning; every row is hand-labelled in research/l1-threat/labels/real_agent.jsonl.
+  - id: real_agent_quotes
+    commercial: unknown
+    per_row: fetched by scripts/l1_threat/real_agent.py (source, licence, revision and quote SHA-256 per row in research/l1-threat/labels/real_agent_quotes.jsonl)
   - id: real_cursorrules
     commercial: true
     source: https://github.com/PatrickJS/awesome-cursorrules
