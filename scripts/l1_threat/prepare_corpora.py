@@ -227,8 +227,8 @@ def _check_recipe(where: str, entry: dict[str, Any], labels: set[str]) -> list[s
             problems.append(f"{where}: file {path!r} needs a SHA-256")
     if entry["format"] not in FORMATS:
         problems.append(f"{where}: format must be one of {FORMATS}")
-    if "records" in entry and (entry["format"] != "json" or not isinstance(entry["records"], str) or not entry["records"]):
-        problems.append(f"{where}: records needs format json and a field path ('.' for one record per file, '*' to expand)")
+    if "records" in entry and (entry["format"] not in ("json", "jsonl") or not isinstance(entry["records"], str) or not entry["records"]):
+        problems.append(f"{where}: records needs format json or jsonl and a field path ('.' for one record per document, '*' to expand)")
     if "columns" in entry and (entry["format"] != "csv" or not isinstance(entry["columns"], list) or not entry["columns"]
                                or not all(isinstance(name, str) and name for name in entry["columns"])):
         problems.append(f"{where}: columns needs format csv and a non-empty list of column names (for files without a header row)")
@@ -547,7 +547,9 @@ def read_records(entry: dict[str, Any], root: Path) -> Iterable[dict[str, Any]]:
         path = root / item["path"]
         if entry["format"] == "jsonl":
             with (gzip.open(path, "rt", encoding="utf-8") if path.suffix == ".gz" else path.open(encoding="utf-8")) as handle:
-                yield from (json.loads(line) for line in handle if line.strip())
+                lines = (json.loads(line) for line in handle if line.strip())
+                # With `records` every line is a document whose records sit at that path (BFCL: tools per line).
+                yield from (record for line in lines for record in _records(line, entry["records"])) if "records" in entry else lines
         elif entry["format"] == "json":
             data = json.loads(path.read_text(encoding="utf-8"))
             if "records" in entry:

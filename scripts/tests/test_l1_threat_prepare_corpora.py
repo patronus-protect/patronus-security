@@ -275,6 +275,16 @@ def test_json_records_field_reads_nested_lists_and_single_documents(tmp_path):
         list(MODULE.read_records(wrong, tmp_path))
 
 
+def test_jsonl_records_expand_each_line(tmp_path):
+    # BFCL: every line is one test case whose tool definitions sit in a list.
+    lines = [{"id": 1, "function": [{"description": "a"}, {"description": "b"}]}, {"id": 2, "function": [{"description": "c"}]}]
+    (tmp_path / "cases.jsonl").write_text("\n".join(json.dumps(line) for line in lines), encoding="utf-8")
+    entry = {"format": "jsonl", "text": "description", "labels": [], "records": "function.*", "files": [{"path": "cases.jsonl"}]}
+    assert [r["description"] for r in MODULE.read_records(entry, tmp_path)] == ["a", "b", "c"]
+    plain = {key: value for key, value in entry.items() if key != "records"}
+    assert [r["id"] for r in MODULE.read_records(plain, tmp_path)] == [1, 2]
+
+
 def test_json_records_star_expands_list_items_and_dict_values(tmp_path):
     # MCPTox: a list of servers, each a dict {tool id: tool}.
     doc = [{"FS_1": {"tool_content": "a"}, "FS_2": {"tool_content": "b"}}, {"Map_1": {"tool_content": "c"}}]
@@ -320,13 +330,14 @@ def test_not_matches_is_the_complement_of_matches():
     assert MODULE._check_condition("x", {"field": "path", "matches": "a", "not_matches": "b"})
 
 
-def test_records_needs_format_json_and_a_path():
+def test_records_needs_format_json_or_jsonl_and_a_path():
     labels = {"l"}
     base = {"source": "https://huggingface.co/datasets/o/r", "revision": "a" * 40,
             "files": [{"path": "f.json", "sha256": "b" * 64}], "text": "t", "language": "en",
             "labels": [{"label": "l"}]}
     assert not [p for p in MODULE._check_recipe("x", {**base, "format": "json", "records": "items"}, labels) if "records" in p]
-    assert [p for p in MODULE._check_recipe("x", {**base, "format": "jsonl", "records": "items"}, labels) if "records" in p]
+    assert not [p for p in MODULE._check_recipe("x", {**base, "format": "jsonl", "records": "items"}, labels) if "records" in p]
+    assert [p for p in MODULE._check_recipe("x", {**base, "format": "csv", "records": "items"}, labels) if "records" in p]
     assert [p for p in MODULE._check_recipe("x", {**base, "format": "json", "records": ""}, labels) if "records" in p]
 
 
