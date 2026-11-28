@@ -62,6 +62,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Detection changes
 
+- **Detection change (opt-in `tool_poisoning`, `agent_config_tampering` and `memory_poisoning`,
+  all modes):** new rules flag the forms of poisoned tool descriptions, agent rules files and memory
+  entries published in security advisories, also where the text is a quoted snippet without a tool
+  definition or config file around it: an `<IMPORTANT>` block that tells the model to read, call or
+  send something before or after using a tool, a description that forwards data from other connected
+  services, a rules file that drops the confirmation step, hides itself from the user, reads secrets
+  or runs a downloaded script before every task, asks for weakened code or an unauthenticated admin
+  endpoint, or switches the sandbox off, and a memory note with a highest-priority trigger, a feed
+  into the memory tool, a forged memory entry that turns off safety checks or follows a remote URL,
+  or a hidden call on every conversation. `memory_poisoning` now also runs the threat rules. Real
+  rules files, tool docs and memory notes that only mention these topics stay clear.
 - **Detection change (crash fix):** the threat scan no longer fails on text where a `\u` escape marker is
   followed by a multi-byte character (for example a Cyrillic look-alike letter); the request used to end with
   a detector error instead of a result.

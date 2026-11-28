@@ -655,7 +655,7 @@ Each rule reports under the category of its attack class: a jailbreak rule under
 | `ark.injection.tool_call.injected` | `injection` | `tool_call_injection` | Native producer gate for native:tool_call_injection. | `ark-native-injection-71ff48e` |
 | `ark.injection.tool_output.override` | `injection` | `tool_output_instruction` | Native producer gate for native:tool_output_instruction. | `ark-native-injection-71ff48e` |
 
-## Threat rules (98)
+## Threat rules (109)
 
 Each rule reports under its attack-class category and runs when that category is selected. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.
 
@@ -759,6 +759,17 @@ Each rule reports under its attack-class category and runs when that category is
 | `ark.threat.tx_dehumanisation` | `toxic_language` | `dehumanisation` |  |
 | `ark.threat.tx_threat` | `toxic_language` | `threat` |  |
 | `ark.threat.tx_harassment` | `toxic_language` | `harassment` |  |
+| `ark.threat.tp_tagged_tool_directive` | `tool_poisoning` | `tagged_tool_directive` |  |
+| `ark.threat.tp_connected_forward` | `tool_poisoning` | `cross_server_forward` |  |
+| `ark.threat.ac_no_confirmation` | `agent_config_tampering` | `approval_bypass` |  |
+| `ark.threat.ac_stealth_rules` | `agent_config_tampering` | `concealment` |  |
+| `ark.threat.ac_secret_read_directive` | `agent_config_tampering` | `secret_harvest` |  |
+| `ark.threat.ac_code_sabotage` | `agent_config_tampering` | `code_sabotage` |  |
+| `ark.threat.ac_sandbox_off` | `agent_config_tampering` | `permission_widening` |  |
+| `ark.threat.mp_persistent_trigger` | `memory_poisoning` | `persistent_trigger` |  |
+| `ark.threat.mp_memory_tool_feed` | `memory_poisoning` | `memory_tool_write` |  |
+| `ark.threat.mp_forged_memory_entry` | `memory_poisoning` | `forged_memory_entry` |  |
+| `ark.threat.mp_every_turn_beacon` | `memory_poisoning` | `memory_beacon` |  |
 
 ## Shell command policies (117) { #shell-command-policies }
 
