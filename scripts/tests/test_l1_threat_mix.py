@@ -338,8 +338,8 @@ def test_no_training_row_of_a_shipped_model_is_in_calibration_or_measurement(tmp
 def test_real_benign_train_rows_train_the_agent_models_and_the_evaluation_part_stays_measured(tmp_path, monkeypatch):
     real = [{**r, "reported_classes": []} for r in rows("real_cursorrules", 40)]
     quotes = [{**r, "reported_classes": []} for r in rows("real_agent_quotes", 4, ["tool_poisoning"])]
-    freeze_dev(tmp_path / "dev" / "train_dev", {"dolly_15k": [{**r, "reported_classes": []} for r in rows("dolly_15k", 60)],
-                                                "real_cursorrules": real, "real_agent_quotes": quotes})
+    dolly = [{**r, "reported_classes": []} for r in rows("dolly_15k", 60)]
+    freeze_dev(tmp_path / "dev" / "train_dev", {"dolly_15k": dolly, "real_cursorrules": real, "real_agent_quotes": quotes})
     key = {r["id"]: MODULE.hashlib.sha256(r["text"].encode("utf-8")).hexdigest() for r in real + quotes}
     labels, split = tmp_path / "labels.jsonl", tmp_path / "split.jsonl"
     labels.write_text("".join(json.dumps({"dataset": r["dataset"], "sha256": key[r["id"]],
@@ -370,21 +370,25 @@ def test_no_training_row_of_a_shipped_model_is_measured_on_the_dev_split(tmp_pat
     assert_no_training_row_is_measured(Path(os.environ["ARK_L1_DEV_DATA"]), tmp_path / "mix")
 
 
-def test_real_rows_are_reported_apart_with_every_positive_and_measured_negatives():
+def test_real_rows_are_reported_apart_with_every_positive_and_measured_negatives(monkeypatch):
     synthetic, scores = mix_rows({"calibration": ([0.9] * 10, [0.0] * 1000), "measurement": ([0.9] * 10, [0.0] * 1000)})
     real = []
     for part, label, value in (("calibration", "p", 0.9), ("measurement", "p", 0.0), ("calibration", "n", 0.0),
                                ("measurement", "n", 0.95), ("measurement", "n", 0.0), ("report", "p", 0.9)):
         rid = f"real:{part}:{label}:{len(real)}"
-        row = {"id": rid, "dataset": "real_cursorrules", "benign": label == "n", "language": "en",
+        row = {"id": rid, "text": rid, "dataset": "real_cursorrules", "benign": label == "n", "language": "en",
                "classes": ["tool_poisoning"] if label == "p" else []}
         real.append(MODULE.MixRow(row, "real_cursorrules", part))
         scores[rid] = {"tool_poisoning": value}
+    # The real calibration negative is a row of the frozen train part; every other real row is in the evaluation part.
+    evaluation = frozenset(MODULE.hashlib.sha256(r.row["text"].encode("utf-8")).hexdigest() for r in real
+                           if r.row["id"] != "real:calibration:n:2")
+    monkeypatch.setattr(MODULE.REAL_AGENT, "evaluation_keys", lambda: evaluation)
     tool = [MODULE.MixRow({**r.row, "classes": ["tool_poisoning"] if r.row["classes"] else []}, r.source, r.part) for r in synthetic]
     tool_scores = {rid: {"tool_poisoning": s.get("jailbreak", s.get("tool_poisoning"))} for rid, s in scores.items()}
     cells = MODULE.fair_cells(tool + real, tool_scores, ["tool_poisoning"])
     entry = cells["tool_poisoning"]["en"]["0.001"]
-    # Both real positives (calibration and measurement, never the report sets), the two measured real negatives.
+    # Both real positives (calibration and measurement, never the report sets), the two real evaluation negatives.
     assert entry["real"] == {"pos": 2, "tp": 1, "neg": 2, "fp": 1, "tpr": 0.5, "fpr": 0.5}
     report = {"seed": MIX.SEED, "parts_hash": "abc", "report_sets": [], "missing": {}, "short_sources": [],
               "excluded": {}, "trained": {"models": {}, "keys": 0},

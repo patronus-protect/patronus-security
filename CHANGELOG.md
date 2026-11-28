@@ -73,6 +73,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   into the memory tool, a forged memory entry that turns off safety checks or follows a remote URL,
   or a hidden call on every conversation. `memory_poisoning` now also runs the threat rules. Real
   rules files, tool docs and memory notes that only mention these topics stay clear.
+- **Detection change (opt-in cascade, built-in L1 models of `tool_poisoning`, `agent_config_tampering`
+  and `memory_poisoning`):** the three models are retrained with real rules files, Copilot instruction
+  files, tool descriptions and memory conversations from open repositories as benign examples, so they
+  flag far fewer ordinary agent configs, tool manifests and memory chats. Scans without a cascade that
+  names these models are unchanged.
 - **Detection change (crash fix):** the threat scan no longer fails on text where a `\u` escape marker is
   followed by a multi-byte character (for example a Cyrillic look-alike letter); the request used to end with
   a detector error instead of a result.
