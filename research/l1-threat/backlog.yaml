@@ -1053,14 +1053,15 @@ tasks:
       at 100 KiB p95 measured natively on the VPS before and after, rules only and rules + L1 models, both
       numbers in the PR; no quality change on dev, holdout and goldens
   - id: T38b
-    title: "One Aho-Corasick pass for the threat rules: after T38 all threat categories still take about 167 ms (rules) at 100 KiB p95 on the VPS against 9-11 ms for pii + dlp; every threat rule moves behind a literal or structural prefilter on one shared Aho-Corasick pass, like the RuleMeta gates and lexical anchors of PII and DLP"
+    title: "Threat rules gated per window on the shared anchor pass (part a, split 2026-11-28): the injection catalogue rules run only in 8 KiB windows the shared anchor pass lets through, windows shared with the other threat rules; no prediction change"
     type: perf
     deps: [T38]
     accept: >-
-      every threat rule has a literal or structural prefilter on one shared Aho-Corasick pass per text (no
-      per-rule scan of the whole text), regexes compiled once, linear and bounded; all threat categories at
-      100 KiB p95 <= 10 ms (rules only) on the VPS, measured natively with the threat_profile example and
-      scripts/benchmark_injection_l1.py; latency.md updated; no quality change on dev, holdout and goldens
+      the injection catalogue and the threat rules use one shared anchor pass per text and run only inside
+      the windows it lets through; 0 prediction changes on the full dev set (row count in the PR); 100 KiB
+      p50 and p95 for all threat categories (rules only) before and after, measured natively on the VPS
+      with the threat_profile example, and the per-producer split in latency.md; no quality change on dev,
+      holdout and goldens
   - id: T38c
     title: "Exact model pruning with the models' own n-grams: the built-in L1 models still read the whole text (about 239 ms with models at 100 KiB p95 after T38); build one automaton from each model's positive-weight n-grams and use it as the anchor, so texts whose score bound stays below the cut skip the model and long texts are scored only where those n-grams occur — with exactly the same score as full scoring"
     type: perf
@@ -1072,6 +1073,17 @@ tasks:
       dev and goldens shows the pruned decision and score equal full scoring on every row (no TPR or FPR
       change at all); all threat categories with L1 models at 100 KiB p95 <= 15 ms on the VPS, measured
       natively; latency.md updated
+  - id: T38d
+    title: "Threat rules to 10 ms at 100 KiB: after T38b about 132-148 ms p95 remain, almost all regex search inside windows the prefilter correctly lets through (injection about 40 ms, toxic 10, jailbreak 9.5, unsafe_action 9, exfiltration 7); search only around candidate word positions bounded by each rule's maximum match length, add two-word proximity prefilters, and merge the injection catalogue into fewer rules"
+    type: perf
+    deps: [T38b]
+    accept: >-
+      every threat rule's regex runs only on spans around its candidate anchor positions, bounded by the
+      rule's maximum match length (no window-wide search), with proximity prefilters where a rule needs two
+      words; the injection catalogue merged where rules share their anchors; all threat categories at 100 KiB
+      p95 <= 10 ms (rules only) on the VPS, measured natively with the threat_profile example and
+      scripts/benchmark_injection_l1.py; 0 prediction changes on the full dev set; latency.md updated; no
+      quality change on dev, holdout and goldens
   # Owner, 2026-11-27: E14b's first rounds found no open, licence-checked, non-generator source with real
   # positives for the agent classes outside the holdout (resource_exhaustion has none at all). Decision:
   # build a hand-labelled dev set from real files and verbatim advisory artefacts; small positive counts
@@ -1097,7 +1109,7 @@ tasks:
   - {id: H02, title: "Property/fuzz tests (no panic, valid offsets after normalisation, monotone points) + latency check on E03 (threat + injection within budget)", type: test, deps: [H01, E03], status: done}
   # Owner, 2026-11-25: H03 is the last task of the programme. It waits for every other task; a task added
   # later goes before it and into its deps, so the final report uses the E10 numbers and the full data.
-  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T36b, T38, T38b, T38c]}
+  - {id: H03, title: "Docs (classes, families, points semantics, OSS catalogs with attribution) + final report M1–M4 on holdout (neutral family decisive)", type: report, deps: [H02, E10, E10b, E11, E12, T29, T32, T33, T34, T35, E13, E14, E14b, T36, T36b, T38, T38b, T38c, T38d]}
 
 recurring:
   - id: TRIAGE
