@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 import yaml
@@ -138,3 +139,35 @@ def test_overlap_names_shared_repositories_and_the_checked_in_rows_share_none():
     assert sorted((item["holdout"], item["real"]) for item in shared) == [
         ("browsesafe", "example.org/browsesafe-notes"), ("mcp_registry", "github:modelcontextprotocol/registry"),
         ("owasp_docs", "github:owasp/cheatsheetseries")]
+
+
+def test_checked_in_split_is_frozen_disjoint_and_stratified_by_class_and_set():
+    rows, quotes = MODULE.load(), MODULE.load(MODULE.QUOTES_PATH)
+    frozen = MODULE.load(MODULE.SPLIT_PATH)
+    # Frozen: the checked-in split is the one split_parts deals, one part per key, no key in both parts.
+    assert frozen == MODULE.split_parts(rows, quotes)
+    keys = [row["sha256"] for row in frozen]
+    assert len(keys) == len(set(keys)) == len({row["sha256"] for row in rows} | {q["sha256"] for q in quotes})
+    train = {row["sha256"] for row in frozen if row["part"] == "train"}
+    assert not train & MODULE.evaluation_keys() and train | MODULE.evaluation_keys() == set(keys)
+    part = {row["sha256"]: row["part"] for row in frozen}
+    strata = [(row["label"], row["dataset"], row["sha256"]) for row in rows]
+    strata += [(q["class"], MODULE.QUOTES_SET, q["sha256"]) for q in quotes]
+    for stratum in {s[:2] for s in strata}:
+        counts = Counter(part[key] for *head, key in strata if tuple(head) == stratum)
+        assert abs(counts["train"] - counts["evaluation"]) <= 1 and counts["evaluation"], stratum
+
+
+def test_split_parts_deals_each_stratum_alternately_and_rejects_a_key_labelled_twice():
+    rows = [_row(f"{n:064x}") for n in range(5)] + [_row(f"{n + 9:064x}", family="memory_write") for n in range(2)]
+    parts = MODULE.split_parts(rows, [])
+    assert Counter(row["part"] for row in parts) == {"train": 4, "evaluation": 3}
+    assert MODULE.split_parts(rows, []) == parts
+    clash = [{"class": "tool_poisoning", "repo": "o/r", "page_url": "u", "sha256": rows[0]["sha256"]},
+             {"class": "tool_poisoning", "repo": "o/r", "page_url": "u", "sha256": "f" * 64}]
+    try:
+        MODULE.split_parts(rows, clash)
+    except ValueError as error:
+        assert "labelled twice" in str(error)
+    else:
+        raise AssertionError("a key in two strata must fail")

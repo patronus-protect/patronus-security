@@ -25,6 +25,13 @@ output.
     python3 scripts/l1_threat/real_agent.py agree --check research/l1-threat/labels/real_agent_second_pass.jsonl
     python3 scripts/l1_threat/real_agent.py fetch --out DEV/real   # quoted positives, frozen
     python3 scripts/l1_threat/real_agent.py overlap          # shared repositories with the holdout sources, exit 1 on one
+    python3 scripts/l1_threat/real_agent.py split [--write]  # the frozen train/evaluation split, exit 1 if stale
+
+``research/l1-threat/labels/real_agent_split.jsonl`` freezes one split of every labelled row and quote into a
+``train`` part (rules, model training) and an ``evaluation`` part (only measured, never used for rules, training
+or cuts): ``{"sha256", "part"}``. ``split_parts`` deals it once, stratified by label and set: per stratum the keys
+are ordered by source (repository or file) and a seeded SHA-256 and dealt alternately, train first, so every
+class and set sits in both parts in proportion and every source is spread over them.
 """
 
 from __future__ import annotations
@@ -58,6 +65,9 @@ KEYS = {"dataset", "sha256", "source", "family", "label", "reason"}
 REASON = re.compile(r"[a-z][a-z0-9_]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 SAMPLE_MODULUS = 10
+SPLIT_PATH = ROOT / "research/l1-threat/labels/real_agent_split.jsonl"
+SPLIT_SEED = "ark-l1-threat-t39-real-split-v1"
+SPLIT_PARTS = ("train", "evaluation")
 # Real benign rows each carrier family needs.
 MIN_BENIGN_PER_FAMILY = 300
 
@@ -106,6 +116,28 @@ def agree(rows: list[dict[str, Any]], second: list[dict[str, Any]]) -> dict[str,
     missing = sorted(set(first) - set(given))
     disagreements = [{"sha256": key, "first": first[key], "second": given[key]} for key in sorted(first) if key in given and given[key] != first[key]]
     return {"sample": len(first), "checked": len(set(first) & set(given)), "missing": missing, "disagreements": disagreements}
+
+
+def split_parts(rows: list[dict[str, Any]], quotes: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """The train/evaluation split of every labelled row and quote (see the module docstring), sorted by key."""
+    strata: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for row in rows:
+        strata.setdefault((row["label"], row["dataset"]), []).append((row["source"], row["sha256"]))
+    for quote in quotes:
+        strata.setdefault((quote["class"], QUOTES_SET), []).append((quote["repo"] or quote["page_url"], quote["sha256"]))
+    parts: dict[str, str] = {}
+    for _, members in sorted(strata.items()):
+        ordered = sorted(members, key=lambda m: (m[0], hashlib.sha256(f"{SPLIT_SEED}:{m[1]}".encode("ascii")).hexdigest()))
+        for index, (_, key) in enumerate(ordered):
+            if key in parts:
+                raise ValueError(f"text {key[:12]} is labelled twice")
+            parts[key] = SPLIT_PARTS[index % len(SPLIT_PARTS)]
+    return [{"sha256": key, "part": part} for key, part in sorted(parts.items())]
+
+
+def evaluation_keys(path: Path = SPLIT_PATH) -> frozenset[str]:
+    """SHA-256 keys (of the raw row text) of the frozen evaluation part."""
+    return frozenset(row["sha256"] for row in load(path) if row["part"] == "evaluation")
 
 
 def repository(locator: str) -> str:
@@ -233,6 +265,8 @@ def main(argv: list[str] | None = None) -> int:
     fetch_parser = sub.add_parser("fetch")
     fetch_parser.add_argument("--out", type=Path, required=True)
     sub.add_parser("overlap")
+    split_parser = sub.add_parser("split")
+    split_parser.add_argument("--write", action="store_true", help="freeze the split (only once, or after a relabel)")
     args = parser.parse_args(argv)
     rows, quotes = load(), load(QUOTES_PATH)
     if args.command == "check":
@@ -249,6 +283,13 @@ def main(argv: list[str] | None = None) -> int:
         result = overlap(rows, quotes, yaml.safe_load(ENTITY_MAP_PATH.read_text(encoding="utf-8")))
         print(json.dumps(result, indent=1))
         return 1 if result["shared"] else 0
+    if args.command == "split":
+        parts = split_parts(rows, quotes)
+        if args.write:
+            SPLIT_PATH.write_text("".join(json.dumps(row, sort_keys=True) + "\n" for row in parts), encoding="utf-8")
+        stale = not SPLIT_PATH.is_file() or load(SPLIT_PATH) != parts
+        print(json.dumps(Counter(row["part"] for row in parts)) + (" (stale: run split --write)" if stale else ""))
+        return 1 if stale else 0
     if args.command == "fetch":
         print(json.dumps(fetch(quotes, args.out), indent=1, sort_keys=True))
         return 0

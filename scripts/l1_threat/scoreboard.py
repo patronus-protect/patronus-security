@@ -147,6 +147,8 @@ DLP_SCOREBOARD = sys.modules.get("_ark_l1_dlp_scoreboard") or _load_file(
 HARMFUL_SUBCLASS = sys.modules.get("_ark_l1_threat_harmful_subclass") or _load_file(
     "_ark_l1_threat_harmful_subclass", HERE / "harmful_subclass.py")
 MIX = sys.modules.get("_ark_l1_threat_mix") or _load_file("_ark_l1_threat_mix", HERE / "mix.py")
+REAL_AGENT = sys.modules.get("_ark_l1_threat_real_agent") or _load_file(
+    "_ark_l1_threat_real_agent", HERE / "real_agent.py")
 MULTI_LABEL = sys.modules.get("_ark_l1_threat_multi_label") or _load_file(
     "_ark_l1_threat_multi_label", HERE / "multi_label.py")
 
@@ -1256,6 +1258,10 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
     source = np.asarray([r.source for r in rows])
     hard = np.asarray([is_hard_benign(r.row) for r in rows], dtype=bool)
     real = np.isin(source, list(REAL_SETS))
+    # The frozen evaluation part of the real rows is only measured: it never moves a level or a cut.
+    evaluation = REAL_AGENT.evaluation_keys()
+    real_evaluation = real & np.asarray([hashlib.sha256(str(r.row.get("text") or "").encode("utf-8")).hexdigest()
+                                         in evaluation for r in rows], dtype=bool)
     out: dict[str, Any] = {}
     for cls in classes:
         labels = [mix_label(r.row, cls) for r in rows]
@@ -1264,7 +1270,7 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
         values = np.asarray([float(scores.get(r.row["id"], {}).get(cls, 0.0)) for r in rows])
         for language in LANGUAGES:
             in_language = np.ones(len(rows), dtype=bool) if language == "all" else language_of == language
-            calibration = in_language & (part == "calibration")
+            calibration = in_language & (part == "calibration") & ~real_evaluation
             calibration_neg = values[negative & calibration]
             if not len(calibration_neg):
                 continue
@@ -1284,9 +1290,9 @@ def fair_cells(rows: list[MixRow], scores: dict[str, dict[str, float]], classes:
                     entry[name] = {**counts, "tpr": counts["tp"] / counts["pos"] if counts["pos"] else None,
                                    "fpr": counts["fp"] / counts["neg"] if counts["neg"] else None,
                                    "hard_fpr": counts["hard_fp"] / counts["hard"] if counts["hard"] else None}
-                # Real rows: every real positive (positives never move a cut), the real negatives of the measurement part.
-                mixed = in_language & real & (part != "report")
-                pos, neg = mixed & positive, mixed & negative & (part == "measurement")
+                # Real rows: the frozen evaluation part of the hand-labelled rows, outside every cut.
+                mixed = in_language & real_evaluation & (part != "report")
+                pos, neg = mixed & positive, mixed & negative
                 entry["real"] = {"pos": int(pos.sum()), "tp": int((hit & pos).sum()), "neg": int(neg.sum()),
                                  "fp": int((hit & neg).sum())}
                 entry["real"].update(tpr=entry["real"]["tp"] / entry["real"]["pos"] if entry["real"]["pos"] else None,
@@ -1462,8 +1468,9 @@ def render_fair(report: dict[str, Any], title: str, lead: list[str], source: str
         lines += ["## Real-world rows of the agent classes", "",
                   "Hand-labelled real rules files, Copilot instruction and agent files, tool descriptions and memory "
                   "conversations (benign) and poisoned artefacts quoted in public advisories and write-ups (positives), "
-                  "apart from the synthetic rows, at the cut of the tables above: TPR on every real positive (a "
-                  "positive never moves a cut), FPR on the real negatives of the measurement part. English only.", ""]
+                  "apart from the synthetic rows, at the cut of the tables above, on the frozen evaluation part of the "
+                  "real rows (never used for rules, training or cuts): TPR on its positives, FPR on its benign rows. "
+                  "English only.", ""]
         for fpr, table in real.items():
             lines += [f"### At {_fpr_label(fpr)} FPR", "", *(table or ["No real row in the mix."]), ""]
     return "\n".join(lines)

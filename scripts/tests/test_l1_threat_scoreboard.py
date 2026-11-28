@@ -1053,3 +1053,27 @@ def test_multi_label_gold_makes_a_row_a_positive_of_every_label_and_no_negative(
     report = MODULE.score_pairs(MODULE.load_pairs(sets, predictions), classes=["instruction_injection"])
     cell = report["gated"]["instruction_injection"]["all"]["all"]
     assert (cell["positives"], cell["negatives"]) == (1, 1)
+
+
+def test_fair_cells_measure_the_real_evaluation_part_outside_every_cut(monkeypatch):
+    def row(row_id, text, classes=(), language="en"):
+        return {"id": row_id, "text": text, "classes": list(classes), "benign": not classes, "language": language,
+                "dataset": "s"}
+
+    evaluated = ["real config a", "real config b", "real poisoned tool"]
+    monkeypatch.setattr(MODULE.REAL_AGENT, "evaluation_keys",
+                        lambda: frozenset(hashlib.sha256(t.encode("utf-8")).hexdigest() for t in evaluated))
+    rows = [MODULE.MixRow(row(f"n{i}", f"synthetic benign {i}"), "s", "calibration") for i in range(10)]
+    rows += [MODULE.MixRow(row("p", "synthetic attack", ["tool_poisoning"]), "s", "measurement"),
+             # Real evaluation rows in the calibration part: they score highest but never set the cut.
+             MODULE.MixRow(row("ra", "real config a"), "real_cursorrules", "calibration"),
+             MODULE.MixRow(row("rb", "real config b"), "real_cursorrules", "measurement"),
+             MODULE.MixRow(row("rp", "real poisoned tool", ["tool_poisoning"]), "real_agent_quotes", "calibration"),
+             # A real train row is not reported among the real rows.
+             MODULE.MixRow(row("rt", "real config train"), "real_cursorrules", "measurement")]
+    scores = {"ra": {"tool_poisoning": 0.9}, "rp": {"tool_poisoning": 0.8}, "p": {"tool_poisoning": 0.7},
+              "rt": {"tool_poisoning": 0.95}}
+    scores.update({f"n{i}": {"tool_poisoning": 0.01 * i} for i in range(10)})
+    cell = MODULE.fair_cells(rows, scores, ["tool_poisoning"])["tool_poisoning"]["en"]["0.001"]
+    assert cell["cut"] < 0.7
+    assert cell["real"] == {"pos": 1, "tp": 1, "neg": 2, "fp": 1, "tpr": 1.0, "fpr": 0.5}
