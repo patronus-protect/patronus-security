@@ -9,6 +9,8 @@ pub enum AnchorGate {
     #[default]
     Always,
     Present(Vec<usize>),
+    /// One of these words of the anchor automaton occurs.
+    Words(Vec<usize>),
     All(Vec<Self>),
     Any(Vec<Self>),
 }
@@ -33,6 +35,17 @@ impl AnchorGate {
             Self::Always
         } else {
             Self::Present(indices)
+        }
+    }
+
+    /// A gate on the words of [`necessary_words`] (in the anchor automaton);
+    /// unconditional without them.
+    pub fn words(words: &[String]) -> Self {
+        let scanner = LexicalAnchorScanner::shared();
+        let indices: Option<Vec<usize>> = words.iter().map(|w| scanner.word_index(w)).collect();
+        match indices {
+            Some(indices) if !indices.is_empty() => Self::Words(indices),
+            _ => Self::Always,
         }
     }
 
@@ -68,6 +81,7 @@ impl AnchorGate {
         match self {
             Self::Always => 0,
             Self::Present(_) => 1,
+            Self::Words(_) => 0,
             Self::All(gates) => gates.iter().map(Self::required_anchors).sum(),
             Self::Any(gates) => gates.iter().map(Self::required_anchors).min().unwrap_or(0),
         }
@@ -77,6 +91,7 @@ impl AnchorGate {
         match self {
             Self::Always => true,
             Self::Present(indices) => indices.iter().any(|&i| presence.contains_index(i)),
+            Self::Words(words) => words.iter().any(|&w| presence.contains_word(w)),
             Self::All(gates) => gates.iter().all(|gate| gate.allows(presence)),
             Self::Any(gates) => gates.iter().any(|gate| gate.allows(presence)),
         }
@@ -110,6 +125,86 @@ impl AnchorGate {
             _ => Self::Always,
         }
     }
+}
+
+/// Folded words one of which every match of `pattern` holds (each at least
+/// two characters), or `None` when no such set is known.
+pub fn necessary_words(pattern: &str, case_insensitive: bool) -> Option<Vec<String>> {
+    let hir = regex_syntax::ParserBuilder::new()
+        .case_insensitive(case_insensitive)
+        .build()
+        .parse(pattern)
+        .ok()?;
+    let mut words = words_of(&hir)?;
+    words.sort();
+    words.dedup();
+    Some(words)
+}
+
+const MIN_WORD_CHARS: usize = 2;
+
+fn words_of(hir: &Hir) -> Option<Vec<String>> {
+    words_after(String::new(), std::slice::from_ref(hir))
+}
+
+/// Words of the concatenation of the literal `prefix` and `parts`. The parser
+/// factors common prefixes out of alternations ("r(?:m…|emove-item…)"), so a
+/// literal run before an alternation joins each of its branches.
+fn words_after(prefix: String, parts: &[Hir]) -> Option<Vec<String>> {
+    let long_enough = |word: &str| word.chars().count() >= MIN_WORD_CHARS;
+    // Any required part's set will do; keep the one whose shortest word is
+    // longest (fewest chance hits).
+    let shortest = |set: &Vec<String>| set.iter().map(|w| w.chars().count()).min();
+    let mut best: Option<Vec<String>> = None;
+    let mut consider = |candidate: Option<Vec<String>>| {
+        if let Some(candidate) = candidate.filter(|set| !set.is_empty()) {
+            if best
+                .as_ref()
+                .is_none_or(|b| shortest(&candidate) > shortest(b))
+            {
+                best = Some(candidate);
+            }
+        }
+    };
+    let mut run = prefix;
+    let mut stack: Vec<&Hir> = parts.iter().rev().collect();
+    while let Some(part) = stack.pop() {
+        if let Some(fragment) = fixed_text(part) {
+            run.push_str(&fragment);
+            continue;
+        }
+        match part.kind() {
+            HirKind::Capture(capture) => {
+                stack.push(&capture.sub);
+                continue;
+            }
+            HirKind::Concat(inner) => {
+                stack.extend(inner.iter().rev());
+                continue;
+            }
+            HirKind::Alternation(branches) if !run.is_empty() => consider(
+                branches
+                    .iter()
+                    .map(|branch| words_after(run.clone(), std::slice::from_ref(branch)))
+                    .collect::<Option<Vec<_>>>()
+                    .map(|sets| sets.concat()),
+            ),
+            _ => {}
+        }
+        consider(long_enough(&run).then(|| vec![run.clone()]));
+        run.clear();
+        consider(match part.kind() {
+            HirKind::Repetition(repeat) if repeat.min > 0 => words_of(&repeat.sub),
+            HirKind::Alternation(branches) => branches
+                .iter()
+                .map(words_of)
+                .collect::<Option<Vec<_>>>()
+                .map(|sets| sets.concat()),
+            _ => None,
+        });
+    }
+    consider(long_enough(&run).then_some(vec![run]));
+    best
 }
 
 // Return an exact string only when every alternative has the same lexical
@@ -204,6 +299,36 @@ mod tests {
             AnchorGate::regex(r"ignore", true),
         ]);
         assert_eq!(any.required_anchors(), 1);
+    }
+
+    #[test]
+    fn necessary_words_join_factored_prefixes_and_take_the_longest_set() {
+        // The parser factors "r" out of the branches; each branch keeps it.
+        let pattern = r"(?:\brmtree\(|\brm\s+-r|\bremove-item\s+-recurse)\s*(?:~|/home/)";
+        assert_eq!(
+            necessary_words(pattern, true),
+            Some(vec!["remove-item".into(), "rm".into(), "rmtree(".into()])
+        );
+        // The required part with the longest shortest word wins.
+        assert_eq!(
+            necessary_words(r"(?:send|mail)\s+(?:password|secret)", true),
+            Some(vec!["password".into(), "secret".into()])
+        );
+        // A branch without any literal makes the alternation unknown.
+        assert_eq!(necessary_words(r"(?:send|\d+)\s+x", true), None);
+        for (pattern, text) in [
+            (pattern, "Rm -r ~/"),
+            (r"(?:send|mail)\s+(?:password|secret)", "SEND  Secret"),
+        ] {
+            let regex = regex::RegexBuilder::new(pattern)
+                .case_insensitive(true)
+                .build()
+                .unwrap();
+            assert!(regex.is_match(text));
+            let words = necessary_words(pattern, true).unwrap();
+            let lower = text.to_lowercase();
+            assert!(words.iter().any(|w| lower.contains(w.as_str())), "{text}");
+        }
     }
 
     #[test]
